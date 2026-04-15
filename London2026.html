@@ -2188,20 +2188,8 @@ async function init() {
   if (!cloudLoaded) {
     const saved = tryLoadSaved();
     if (!saved) {
-      prepareBreakfasts();
-      [0,1,2,3].forEach(di => {
-        const tmp = currentDay;
-        currentDay = di;
-        optimizeRouteForDay(di);
-        currentDay = tmp;
-      });
-    } else {
-      // Loaded from local — still reassign times correctly for each day
-      [0,1,2,3].forEach(di => reassignTimesForDay(di));
+      // Times are set in the data — no auto-optimize on first load
     }
-  } else {
-    // Loaded from cloud — still reassign times correctly for each day
-    [0,1,2,3].forEach(di => reassignTimesForDay(di));
   }
   switchDay(0);
   renderPrebook();
