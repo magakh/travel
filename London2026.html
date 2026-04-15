@@ -1695,18 +1695,22 @@ function startSyncPolling() {
 
 function saveToStorage() { syncSave(); }
 
+function autoSave() {
+  // Save locally immediately on every change — push to cloud only on explicit 💾
+  try { localStorage.setItem('london_tour_v2', getSaveData()); } catch(e) {}
+}
+
 function tryLoadSaved() {
   try {
     const raw = localStorage.getItem('london_tour_v2');
     if (!raw) return false;
     const data = JSON.parse(raw);
     if (data.days && Array.isArray(data.days) && data.days.length >= 3) {
-      data.days.forEach((d, i) => { if (days[i]) days[i].stops = d.stops; });
+      data.days.forEach((d, i) => { if (days[i] && d.stops && d.stops.length) days[i].stops = d.stops; });
       completed = data.completed || [];
-      showToast('Loaded your saved plan ✓');
       return true;
     }
-  } catch(e) { /* ignore corrupt data */ }
+  } catch(e) {}
   return false;
 }
 
@@ -2121,6 +2125,7 @@ function applyStopTime(i) {
   document.getElementById('time-overlay').remove();
   renderStopList();
   if (currentView === 'detail') renderDetail();
+  autoSave();
   showToast('Updated ✓');
 }
 
@@ -2139,6 +2144,7 @@ function moveStopToDay(targetDay, stopIdx) {
   const stop = days[currentDay].stops.splice(idx, 1)[0];
   days[targetDay].stops.push(stop);
   currentStop = Math.min(currentStop, days[currentDay].stops.length - 1);
+  autoSave();
   renderStopList();
   showView('list');
   showToast('"' + stop.name + '" → ' + days[targetDay].title.split('—')[0].trim() + ' ✓');
@@ -2150,6 +2156,7 @@ function moveStopFromMapToDay(stopIdx, targetDay) {
   if (isNaN(idx)) return;
   const stop = days[currentDay].stops.splice(idx, 1)[0];
   days[targetDay].stops.push(stop);
+  autoSave();
   renderRouteMap();
   showToast('"' + stop.name + '" → ' + days[targetDay].title.split('—')[0].trim() + ' ✓');
 }
@@ -2383,6 +2390,7 @@ function markDone() {
   updateBottomNav();
 }
 function toggleDone(i) {
+  setTimeout(autoSave, 0);
   const key = currentDay+'-'+i;
   if (completed.includes(key)) completed = completed.filter(k => k !== key);
   else completed.push(key);
@@ -2424,6 +2432,7 @@ function confirmDeleteStop(i) {
     days[currentDay].stops.splice(i, 1);
     reassignTimes();
     currentStop = Math.min(currentStop, days[currentDay].stops.length - 1);
+    autoSave();
     renderStopList();
     showToast('Stop removed');
   });
@@ -2669,6 +2678,7 @@ function addStop(dayIdx, info) {
   currentStop = days[dayIdx].stops.length - 1;
   renderStopList();
   selectStop(currentStop);
+  autoSave();
   showToast('"'+info.name+'" added to Day '+(dayIdx+1)+'!');
   document.getElementById('addName').value='';
   document.getElementById('addAddress').value='';
