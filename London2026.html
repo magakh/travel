@@ -2147,26 +2147,26 @@ function parseDurationMins(dur) {
 
 // ── MOVE STOP BETWEEN DAYS ────────────────────────────────────────
 function moveStopToDay(targetDay, stopIdx) {
-  if (targetDay === currentDay) return;
-  const idx = (stopIdx !== undefined) ? stopIdx : currentStop;
+  if (targetDay === undefined || targetDay === '' || targetDay === currentDay) return;
+  // Use explicitly passed index — never rely on currentStop
+  const idx = parseInt(stopIdx);
+  if (isNaN(idx) || idx < 0 || idx >= days[currentDay].stops.length) return;
   const stop = days[currentDay].stops.splice(idx, 1)[0];
   days[targetDay].stops.push(stop);
-  reassignTimesForDay(currentDay);
-  reassignTimesForDay(targetDay);
   currentStop = Math.min(currentStop, days[currentDay].stops.length - 1);
   renderStopList();
   showView('list');
-  showToast('"' + stop.name + '" moved to ' + days[targetDay].title.split('—')[0].trim());
+  showToast('"' + stop.name + '" → ' + days[targetDay].title.split('—')[0].trim() + ' ✓');
 }
 
 function moveStopFromMapToDay(stopIdx, targetDay) {
-  if (targetDay === currentDay) return;
-  const stop = days[currentDay].stops.splice(stopIdx, 1)[0];
+  if (targetDay === undefined || targetDay === currentDay) return;
+  const idx = parseInt(stopIdx);
+  if (isNaN(idx)) return;
+  const stop = days[currentDay].stops.splice(idx, 1)[0];
   days[targetDay].stops.push(stop);
-  reassignTimesForDay(currentDay);
-  reassignTimesForDay(targetDay);
   renderRouteMap();
-  showToast('"' + stop.name + '" moved to ' + days[targetDay].title.split('—')[0].trim());
+  showToast('"' + stop.name + '" → ' + days[targetDay].title.split('—')[0].trim() + ' ✓');
 }
 
 
@@ -2360,7 +2360,7 @@ function renderDetail() {
       <button class="dnak-btn dnav-back" onclick="showView('list')" style="flex:1;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--surface);font-size:13px;font-weight:700;cursor:pointer;color:var(--muted);">← List</button>
     </div>
     <div style="padding:0 16px 16px;">
-      <select onchange="moveStopToDay(parseInt(this.value), currentStop)"
+      <select onchange="moveStopToDay(parseInt(this.value), ${currentStop})"
         style="width:100%;padding:12px 14px;border-radius:10px;border:1px solid var(--border);background:#f5f4f0;font-size:13px;font-weight:700;cursor:pointer;color:var(--text);appearance:none;-webkit-appearance:none;">
         <option value="${currentDay}" disabled selected>↔ Move to a different day…</option>
         ${days.map((d,di) => di !== currentDay ? `<option value="${di}">${d.title.split('—')[0].trim()}</option>` : '').join('')}
