@@ -1717,19 +1717,33 @@ async function ghFetch(payload) {
   });
 }
 
+const SYNC_RAW = 'https://raw.githubusercontent.com/magakh/travel/main/sync_london2026.json';
+
 async function ghRead() {
-  // Use API (not raw) to bypass CDN caching
-  const res = await fetch(SYNC_API + '?t=' + Date.now(), {
-    headers: { 'Authorization': 'token ' + GH_TOKEN, 'Accept': 'application/vnd.github.v3+json' }
-  });
-  if (!res.ok) return null;
-  const meta = await res.json();
-  if (!meta.content) return null;
-  const json = decodeURIComponent(
-    atob(meta.content.replace(/\n/g, ''))
-      .split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
-  );
-  return JSON.parse(json);
+  // Try raw URL first — public, no auth, works on all devices
+  // Add timestamp to bust any CDN cache
+  try {
+    const res = await fetch(SYNC_RAW + '?t=' + Date.now());
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.days) return data;
+    }
+  } catch(e) {}
+  // Fallback: GitHub API (authenticated)
+  try {
+    const res = await fetch(SYNC_API + '?t=' + Date.now(), {
+      headers: { 'Authorization': 'token ' + GH_TOKEN, 'Accept': 'application/vnd.github.v3+json' }
+    });
+    if (!res.ok) return null;
+    const meta = await res.json();
+    if (!meta.content) return null;
+    const json = decodeURIComponent(
+      atob(meta.content.replace(/\n/g, ''))
+        .split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
+    );
+    return JSON.parse(json);
+  } catch(e) {}
+  return null;
 }
 
 async function syncSave() {
