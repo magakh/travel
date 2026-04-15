@@ -1072,6 +1072,21 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
 .stop-row.has-conflict { border-left:3px solid var(--red) !important; }
 .stop-row.has-reservation { border-left:3px solid #ffc107; }
 .stop-row.has-reservation.confirmed { border-left:3px solid #28a745; }
+.travel-connector {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 14px 5px 52px;
+  background: #fafaf8; border-bottom: 1px solid var(--border);
+  font-size: 11px; color: var(--muted); font-weight: 500;
+}
+.travel-connector .tc-line {
+  width: 2px; height: 18px; background: #ddd;
+  flex-shrink: 0; margin-left: -30px; margin-right: 8px;
+}
+.travel-connector.tc-loading { color: #bbb; font-style: italic; }
+.stop-end-time {
+  font-size: 10px; color: var(--hint); font-weight: 500;
+  margin-top: 2px; opacity: 0.8;
+}
 </style>
 </head>
 <body>
@@ -1866,6 +1881,64 @@ function searchExisting(q) {
 }
 
 
+// ── TRAVEL TIMES ──────────────────────────────────────────────────
+const _travelCache = {}; // key: "lat1,lng1->lat2,lng2" => minutes
+
+async function fetchWalkTime(fromLat, fromLng, toLat, toLng) {
+  const key = `${fromLat.toFixed(4)},${fromLng.toFixed(4)}->${toLat.toFixed(4)},${toLng.toFixed(4)}`;
+  if (_travelCache[key] !== undefined) return _travelCache[key];
+  try {
+    const url = `https://router.project-osrm.org/route/v1/foot/${fromLng},${fromLat};${toLng},${toLat}?overview=false`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const secs = data.routes?.[0]?.duration;
+    if (!secs) return null;
+    const mins = Math.round(secs / 60);
+    _travelCache[key] = mins;
+    return mins;
+  } catch(e) { return null; }
+}
+
+function fmtWalkMins(mins) {
+  if (!mins) return '🚶 Walking';
+  if (mins < 60) return `🚶 ${mins} min walk`;
+  return `🚶 ${Math.floor(mins/60)}h ${mins%60}min walk`;
+}
+
+function calcEndTime(timeStr, durationStr) {
+  const [tp, ap] = timeStr.split(' ');
+  const [h, m] = tp.split(':').map(Number);
+  const start = (h % 12 + (ap === 'PM' ? 12 : 0)) * 60 + (m || 0);
+  const end = start + parseDurationMins(durationStr || '60 min');
+  const hh = Math.floor(end / 60) % 24;
+  const mm = end % 60;
+  const apm = hh >= 12 ? 'PM' : 'AM';
+  return (hh % 12 || 12) + ':' + String(mm).padStart(2,'0') + ' ' + apm;
+}
+
+async function loadTravelTimes(stops) {
+  if (!stops || stops.length < 2) return;
+  const hd = window.HOTEL_DATA;
+  // Build list of segments: hotel->stop0, stop0->stop1, ..., stopN->hotel
+  const points = [];
+  if (hd) points.push({ lat: hd.lat, lng: hd.lng, name: 'Hotel' });
+  stops.forEach(s => points.push({ lat: s.lat, lng: s.lng, name: s.name }));
+  if (hd) points.push({ lat: hd.lat, lng: hd.lng, name: 'Hotel' });
+
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i], b = points[i+1];
+    const mins = await fetchWalkTime(a.lat, a.lng, b.lat, b.lng);
+    const key = `tc-${currentDay}-${i}`;
+    const el = document.getElementById(key);
+    if (el && mins !== null) {
+      el.textContent = fmtWalkMins(mins);
+      el.classList.remove('tc-loading');
+    }
+  }
+}
+
+
 // ── RESERVATIONS ──────────────────────────────────────────────────
 function editReservation(i) {
   const s = days[currentDay].stops[i];
@@ -2373,9 +2446,14 @@ function renderStopList() {
       <span style="color:#ccc;font-size:16px;">›</span>
     </div>`;
 
-  document.getElementById('stopList').innerHTML =
-    hotelBanner(hotelStartTime, currentDay === 0 ? 'Hotel Check-In' : 'Hotel — Morning departure') +
-    stops.map((s, i) => `
+  // Build hotel→stop0 connector index offset
+  const hd2 = window.HOTEL_DATA;
+
+  const stopRows = stops.map((s, i) => {
+    const endTime = calcEndTime(s.time, s.duration);
+    const connectorIdx = hd2 ? i + 1 : i; // offset if hotel is first point
+    return `
+    <div class="travel-connector tc-loading" id="tc-${currentDay}-${connectorIdx}">🚶 …</div>
     <div class="stop-row ${i === currentStop && currentView === 'detail' ? 'active-row' : ''} ${getConflict(i) ? 'has-conflict' : (s.reservation ? (s.reservation.confirmed ? 'confirmed' : 'has-reservation') : '')}"
          draggable="true"
          ondragstart="dragStart(event,${i})"
@@ -2393,6 +2471,7 @@ function renderStopList() {
           <span onclick="event.stopPropagation(); editStopTime(${i});" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;" title="Tap to edit start time">⏱ ${s.time}</span>
           &nbsp;·&nbsp;
           <span onclick="event.stopPropagation(); editDuration(${i});" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;color:var(--muted);" title="Tap to edit duration">⏳ ${s.duration}</span>
+          &nbsp;→&nbsp;<span style="color:var(--hint);">${endTime}</span>
         </div>
         ${getConflict(i) ? '<div class="conflict-banner">⚠️ Time conflict with previous stop</div>' : ''}
         <div class="stop-name-label">${s.name}${s.reservation ? ' <span class="res-badge ' + (s.reservation.confirmed?'confirmed':'') + '">' + (s.reservation.confirmed?'✓ Booked':'⏳ Pending') + '</span>' : ''}</div>
@@ -2415,8 +2494,21 @@ function renderStopList() {
         style="background:none;border:none;color:#ddd;font-size:16px;cursor:pointer;padding:2px 4px;flex-shrink:0;align-self:center;transition:color 0.15s;"
         onmouseenter="this.style.color='#c0392b'" onmouseleave="this.style.color='#ddd'"
         ontouchstart="this.style.color='#c0392b'" title="Remove stop">🗑</button>`}
+    </div>`;
+  }).join('');
 
-    </div>`).join('') + hotelBanner('~10:00 PM', hotelEndName);
+  // Last connector: last stop → hotel
+  const lastConnIdx = hd2 ? stops.length + 1 : stops.length;
+  const lastConn = `<div class="travel-connector tc-loading" id="tc-${currentDay}-${lastConnIdx}">🚶 …</div>`;
+
+  document.getElementById('stopList').innerHTML =
+    hotelBanner(hotelStartTime, currentDay === 0 ? 'Hotel Check-In' : 'Hotel — Morning departure') +
+    (hd2 ? `<div class="travel-connector tc-loading" id="tc-${currentDay}-0">🚶 …</div>` : '') +
+    stopRows + lastConn +
+    hotelBanner('~10:00 PM', hotelEndName);
+
+  // Fetch travel times asynchronously (fills in connectors when ready)
+  loadTravelTimes(stops);
 
   // Restore scroll position after re-render
   if (area && scrollY) requestAnimationFrame(() => { area.scrollTop = scrollY; });
