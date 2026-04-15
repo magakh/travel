@@ -990,7 +990,7 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
   <div class="header-top">
     <div>
       <h1>London Tour Guide</h1>
-      <div class="header-sub">3 days · hidden gems · rooftop dining</div>
+      <div class="header-sub">May 7–10 · hidden gems · rooftop dining</div>
     </div>
     <div style="display:flex;gap:6px;flex-shrink:0;">
       <button class="prebook-pill" onclick="saveToStorage()" title="Save & sync" style="border-color:#88d8a0;color:#88d8a0;">💾</button>
@@ -1000,9 +1000,10 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
     </div>
   </div>
   <div class="day-tabs" id="dayTabs">
-    <button class="day-tab active" onclick="switchDay(0)" id="dtab0">Day 1</button>
-    <button class="day-tab" onclick="switchDay(1)" id="dtab1">Day 2</button>
-    <button class="day-tab" onclick="switchDay(2)" id="dtab2">Day 3</button>
+    <button class="day-tab active" onclick="switchDay(0)" id="dtab0">May 7</button>
+    <button class="day-tab" onclick="switchDay(1)" id="dtab1">May 8</button>
+    <button class="day-tab" onclick="switchDay(2)" id="dtab2">May 9</button>
+    <button class="day-tab" onclick="switchDay(3)" id="dtab3">May 10</button>
     <button class="day-tab blue" onclick="showRouteMap()" id="dtabMap">Route Map</button>
     <button class="day-tab green-tab" onclick="showAllMap()" id="dtabAll">All Days Map</button>
     <button class="day-tab" onclick="showView('add')" id="dtabAdd" style="border-color:#1a73e8;color:#1a73e8;">+ Add place</button>
@@ -1078,9 +1079,10 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
       </select>
       <label class="form-label">Add to day</label>
       <select class="form-input" id="addDay">
-        <option value="0">Day 1 — City Walk</option>
-        <option value="1">Day 2 — East London</option>
-        <option value="2">Day 3 — West & Mayfair</option>
+        <option value="0">May 7 — Arrival & City</option>
+        <option value="1">May 8 — East London</option>
+        <option value="2">May 9 — West & Mayfair</option>
+        <option value="3">May 10 — Final Day</option>
       </select>
       <label class="form-label">Duration</label>
       <select class="form-input" id="addDuration">
@@ -1105,9 +1107,10 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
         onkeydown="if(event.key==='Enter') aiSearch();">
       <label class="form-label">Add result to day</label>
       <select class="form-input" id="searchDay">
-        <option value="0">Day 1 — City Walk</option>
-        <option value="1">Day 2 — East London</option>
-        <option value="2">Day 3 — West &amp; Mayfair</option>
+        <option value="0">May 7 — Arrival & City</option>
+        <option value="1">May 8 — East London</option>
+        <option value="2">May 9 — West & Mayfair</option>
+        <option value="3">May 10 — Final Day</option>
       </select>
       <button class="gen-btn" id="searchBtn" onclick="aiSearch()">Search with AI →</button>
       <p class="gen-hint">AI searches for the best match, writes history &amp; tips, and adds it to your itinerary</p>
@@ -1130,11 +1133,11 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
 <script>
 const days = [
   {
-    title: "Day 1 — Marylebone to the City",
-    note: "Best on a weekday (Temple Church is Mon–Fri only)",
+    title: "May 7 — Arrival Day · City Afternoon",
+    note: "Arriving 9:35 · hotel check-in · starting at lunch · Temple Church is Mon–Fri only",
     stops: [
       {
-        time: "8:30 AM", name: "The Wolseley", type: "Grand café · St James's",
+        time: "1:00 PM", name: "The Wolseley — Lunch", type: "Grand café · Lunch · St James's",
         color: "#b5910a", prebook: true, free: false, weekend: false,
         lat: 51.5072, lng: -0.1416, address: "160 Piccadilly, London W1J 9EB",
         badges: ["food","prebook"],
@@ -1146,7 +1149,7 @@ const days = [
         prebookUrl: "https://www.thewolseley.com/"
       },
       {
-        time: "9:00 AM", name: "Daunt Books + Coffee", type: "Coffee & browse",
+        time: "2:30 PM", name: "Daunt Books + Browse", type: "Coffee & browse",
         color: "#1a7a3a", prebook: false, free: true, weekend: false,
         lat: 51.5204, lng: -0.152, address: "84 Marylebone High St, London W1U 4QW",
         badges: ["free","walk"],
@@ -1252,8 +1255,8 @@ const days = [
     ]
   },
   {
-    title: "Day 2 — East London Immersion",
-    note: "⚠️ Must be a weekend — Columbia Road (Sunday only) and Maltby Street (Sat/Sun only)",
+    title: "May 8 — East London Immersion",
+    note: "Thursday — Columbia Road & Maltby Street are weekend-only, swap for alternatives below",
     stops: [
       {
         time: "9:00 AM", name: "Columbia Road Flower Market + Coffee", type: "Sunday market · East London",
@@ -1366,8 +1369,8 @@ const days = [
     ]
   },
   {
-    title: "Day 3 — West London & Mayfair Elegance",
-    note: "Works any day of the week",
+    title: "May 9 — West London & Mayfair",
+    note: "Friday — works any day",
     stops: [
       {
         time: "9:00 AM", name: "Ottolenghi Islington — Healthy Breakfast", type: "Breakfast · Middle Eastern",
@@ -1397,8 +1400,8 @@ const days = [
         lat: 51.5173, lng: -0.1531, address: "Hertford House, Manchester Square, London W1U 3BN",
         badges: ["free"],
         travel: "🚇 Tube to Bond Street (Central or Jubilee line). Walk 8 min north through Marylebone.",
-        history: `If not visited on Day 1 — see the Day 1 entry for the full history. One of the greatest art museums on earth, housed in an 18th-century private mansion. The Laughing Cavalier, Rembrandt's Titus, and three floors of European masterpieces, all free, all in a building that feels like a private ducal palace. The glass-roofed courtyard café is excellent for a mid-morning pause.`,
-        todo: `<p><span class="tip-icon">🎨</span><strong>If you've already been on Day 1:</strong> Replace this with a visit to <strong>Daunt Books</strong> (5-min walk) for a longer browse, or walk through <strong>Marylebone Village</strong> — the high street has excellent healthy food shops, pharmacies, and cafés. Then proceed directly to Leighton House.</p>`,
+        history: `If not visited on May 7 — see the May 7 entry for the full history. One of the greatest art museums on earth, housed in an 18th-century private mansion. The Laughing Cavalier, Rembrandt's Titus, and three floors of European masterpieces, all free, all in a building that feels like a private ducal palace. The glass-roofed courtyard café is excellent for a mid-morning pause.`,
+        todo: `<p><span class="tip-icon">🎨</span><strong>If you've already been on Day 1:</strong> Replace with a visit to <strong>Daunt Books</strong> (5-min walk) for a longer browse, or walk through <strong>Marylebone Village</strong> — the high street has excellent healthy food shops, pharmacies, and cafés. Then proceed directly to Leighton House.</p>`,
         duration: "90 min"
       },
       {
@@ -1407,7 +1410,7 @@ const days = [
         lat: 51.4987, lng: -0.203, address: "12 Holland Park Rd, London W14 8LZ",
         badges: ["paid"],
         travel: "🚇 Tube from Bond Street to High Street Kensington (Circle/District line, 10 min). Walk 12 min north through Holland Park.",
-        history: "See Day 2 entry for full history. If you visited on Day 2, use this slot for a long walk through Holland Park — one of London's finest parks, with a formal Italian garden, peacocks, and the Kyoto Garden (a Japanese garden gifted by the city of Kyoto in 1991).",
+        history: "See Day 2 entry for full history. If you visited on May 8, use this slot for a long walk through Holland Park — one of London's finest parks, with a formal Italian garden, peacocks, and the Kyoto Garden (a Japanese garden gifted by the city of Kyoto in 1991).",
         todo: `<p><span class="tip-icon">🕌</span><strong>If visiting today:</strong> Take time to sit in the Arab Hall and absorb the tiles. The garden café serves excellent coffee and light lunches. ~£10 entry. Closed Tuesdays. If already visited, walk through <strong>Holland Park</strong> instead — 15 minutes of genuine tranquillity in central London.</p>`,
         duration: "75 min"
       },
@@ -1469,19 +1472,90 @@ const days = [
       }
     ]
   }
+,
+  {
+    title: "May 10 — Final Day · South Bank & Farewell",
+    note: "Last full day — leaving May 11 · South Bank, Borough Market, Tate Modern",
+    stops: [
+      {
+        time: "9:30 AM", name: "Borough Market — Breakfast", type: "London's greatest food market · Free",
+        color: "#1a7a3a", prebook: false, free: true, weekend: false,
+        lat: 51.5055, lng: -0.0908, address: "8 Southwark St, London SE1 1TL",
+        badges: ["free","food"],
+        travel: "🚇 Tube to London Bridge (Jubilee/Northern line). 2-min walk. Or walk across London Bridge from the City.",
+        history: `<strong>Borough Market</strong> has existed on this site since at least 1014 — it is one of the oldest food markets in the world. The current Victorian iron and glass structure was built in the 1850s, funded by the market's own traders. During the Great Fire of London in 1666, the market survived because Southwark was south of the river.\n\nThe market declined significantly through most of the 20th century but was revived from the 1990s onward, becoming one of London's premier food destinations. Today it hosts over 100 traders selling bread, cheese, charcuterie, fresh produce, street food, and specialist ingredients from across Britain and Europe. It is a working wholesale market as well as a retail destination.`,
+        todo: `<p><span class="tip-icon">🧀</span><strong>For breakfast:</strong> Get a freshly baked pastry from Bread Ahead bakery, a salt beef bagel from Monmouth Coffee + the food stalls, or a full hot breakfast from one of the market kitchens. Arrive before 10am — it gets extremely busy by 11am. The cheese and charcuterie counters are excellent for last-day picnic supplies.</p>`,
+        duration: "75 min"
+      },
+      {
+        time: "11:00 AM", name: "Tate Modern", type: "World's greatest modern art museum · Free",
+        color: "#1a73e8", prebook: false, free: true, weekend: false,
+        lat: 51.5076, lng: -0.0994, address: "Bankside, London SE1 9TG",
+        badges: ["free"],
+        travel: "🚶 10-min walk west along the South Bank from Borough Market, following the river.",
+        history: `<strong>Tate Modern</strong> opened in 2000 in the former <strong>Bankside Power Station</strong>, designed by Sir Giles Gilbert Scott (who also designed Battersea Power Station and the classic red telephone box). The building was decommissioned in 1981 after generating electricity for London for 30 years.\n\nSwiss architects <strong>Herzog & de Meuron</strong> converted it into a gallery, preserving the vast Turbine Hall as one of the world's most dramatic public spaces. The Switch House extension (2016) added ten more floors, giving the gallery views across the Thames to St Paul's. The permanent collection includes Picasso, Rothko, Bacon, Hirst, Bourgeois, and Warhol — all free.`,
+        todo: `<p><span class="tip-icon">🎨</span><strong>Don't miss:</strong> The Turbine Hall (always a spectacular commission), the Rothko Room on Level 3, and the viewing platform on Level 10 for the best panoramic view of London — St Paul's, the City, and the Thames all at once. The café on the riverside terrace is excellent for a final London coffee.</p>`,
+        duration: "90 min"
+      },
+      {
+        time: "12:45 PM", name: "Walk the South Bank & Millennium Bridge", type: "Riverside walk · Free",
+        color: "#7b1fa2", prebook: false, free: true, weekend: false,
+        lat: 51.5095, lng: -0.0984, address: "Millennium Bridge, London SE1",
+        badges: ["free","walk"],
+        travel: "🚶 Walk from Tate Modern — the Millennium Bridge is right outside the gallery.",
+        history: `The <strong>Millennium Bridge</strong> was designed by Norman Foster and Anthony Caro, opened in June 2000, and immediately nicknamed the <em>Wobbly Bridge</em> after it swayed alarmingly when 80,000 pedestrians walked across it on opening day. It was closed for two years while engineers added dampers. It has not wobbled since.\n\nThe view from the bridge — St Paul's Cathedral to the north, the City skyline, and the South Bank to the south — is one of London's most photographed perspectives. The walk along the South Bank from here past the Globe Theatre, the Tate, and toward London Bridge is one of the finest riverside walks in Europe.`,
+        todo: `<p><span class="tip-icon">📸</span><strong>Walk the bridge</strong> for the classic St Paul's view — the best photograph of the trip. Then walk east along the South Bank past the Globe Theatre (you can do a self-guided exterior visit free), past Clink Street (London's oldest prison site), back toward Borough Market for any last purchases before heading to the hotel.</p>`,
+        duration: "45 min"
+      },
+      {
+        time: "2:00 PM", name: "Sketch — Afternoon Tea", type: "Legendary afternoon tea · Mayfair",
+        color: "#c0392b", prebook: true, free: false, weekend: false,
+        lat: 51.5117, lng: -0.1436, address: "9 Conduit St, London W1S 2XG",
+        badges: ["food","prebook"],
+        travel: "🚇 Tube to Oxford Circus (Central/Victoria/Bakerloo line). 5-min walk south through Mayfair to Conduit Street.",
+        history: `<strong>Sketch</strong> was opened in 2002 by restaurateur <strong>Mourad Mazouz</strong> in a former Scottish Presbyterian church built in 1779, later converted into a Regency townhouse. The building was completely reimagined by artist and designer <strong>Martin Creed</strong> and others.\n\nThe <strong>Parlour room</strong>, where afternoon tea is served, is decorated in blush pink and features live classical music from a resident violinist on most afternoons. The egg-shaped pod bathrooms in the basement are among the most famous in London. Sketch has won multiple Michelin stars across its different restaurant spaces.`,
+        todo: `<p><span class="tip-icon">🫖</span><strong>Book The Parlour</strong> specifically (not the Gallery or Lecture Room). Request a table near the violinist. The afternoon tea is one of London's finest — exceptional pastries, finger sandwiches, and a theatrical setting that makes it a perfect farewell experience. Book 1–2 weeks ahead. Arrive 10 minutes early.</p>`,
+        duration: "120 min",
+        prebookText: "Book The Parlour — request window or violinist table",
+        prebookUrl: "https://sketch.london/afternoon-tea/"
+      },
+      {
+        time: "5:00 PM", name: "Burlington Arcade & Bond Street — Final Shopping", type: "Shopping · Mayfair",
+        color: "#b5910a", prebook: false, free: true, weekend: false,
+        lat: 51.5095, lng: -0.1416, address: "Burlington Arcade, Piccadilly, London W1J 0QJ",
+        badges: ["free","walk"],
+        travel: "🚶 5-min walk from Sketch, south on New Bond Street to Piccadilly.",
+        history: `<strong>Burlington Arcade</strong> (1819) was the first purpose-built shopping arcade in Britain, built by Lord Cavendish to prevent passers-by from throwing oyster shells into his garden next door. The Beadle guards in their top hats and frock coats still patrol today, enforcing the original rules against running, whistling, and opening umbrellas — in place since 1819. The arcade houses British luxury brands including cashmere specialists, jewellers, and perfumers.`,
+        todo: `<p><span class="tip-icon">🛍️</span><strong>Last chance</strong> for British cashmere, fragrances, and luxury gifts. N.Peal cashmere is excellent. Browse the arcade and then walk north on Bond Street past the couture houses. End at Fortnum & Mason on Piccadilly (5-min walk) for tea, biscuits, and quintessentially British gifts to take home.</p>`,
+        duration: "60 min"
+      },
+      {
+        time: "7:30 PM", name: "Rules Restaurant — Farewell Dinner", type: "London's oldest restaurant · 1798",
+        color: "#c0392b", prebook: true, free: false, weekend: false,
+        lat: 51.5122, lng: -0.1225, address: "35 Maiden Ln, London WC2E 7LB",
+        badges: ["food","prebook"],
+        travel: "🚇 Tube to Covent Garden (Piccadilly line). 5-min walk south on Maiden Lane.",
+        history: `<strong>Rules</strong> is London's oldest restaurant, established in 1798 by Thomas Rule on Maiden Lane, Covent Garden. It has been in continuous operation for over 225 years and has served virtually every notable figure in British history: <strong>Charles Dickens</strong>, <strong>Graham Greene</strong>, <strong>Evelyn Waugh</strong>, <strong>King Edward VII</strong> and his mistress Lillie Langtry (who had a private room), <strong>John Betjeman</strong>, and countless others.\n\nThe interior has barely changed in a century — dark oak panelling, red banquettes, walls covered in cartoons, prints, and paintings from Victorian and Edwardian London. The menu specialises in traditional British game and seasonal produce from the restaurant's own estate in the Pennines.`,
+        todo: `<p><span class="tip-icon">🍷</span><strong>Order:</strong> The game pie or beef Wellington are the signature dishes. Order the potted shrimps to start — they're a British classic. The wine list has excellent burgundies. Request a booth or a corner table. This is the most historically atmospheric restaurant in London and a perfect final dinner — you are eating in the same room as Dickens.</p>`,
+        duration: "120 min",
+        prebookText: "Book online — request a booth or the Dickens room",
+        prebookUrl: "https://rules.co.uk/"
+      }
+    ]
+  }
 ];
 
 const prebooks = [
-  { name: "Gymkhana", urgency: "urgent", text: "Book immediately — one of London's hardest reservations. Minimum 2–3 weeks, often longer.", url: "https://www.gymkhanarestaurants.com/", day: "Day 2 evening" },
-  { name: "Sky Garden", urgency: "urgent", text: "Free entry but releases slots exactly 3 weeks ahead and sells out within hours. Set a calendar reminder.", url: "https://skygarden.london/sky-garden/", day: "Day 1 evening" },
-  { name: "Dennis Severs' House", urgency: "urgent", text: "Very limited Fri/Sat evening slots. Book online as soon as possible.", url: "https://www.dennissevershouse.co.uk/", day: "Day 2 evening" },
-  { name: "Sketch — Afternoon Tea", urgency: "medium", text: "Book The Parlour room. 1–2 weeks in advance. Request the Parlour specifically for the violinist and best atmosphere.", url: "https://sketch.london/afternoon-tea/", day: "Day 3 afternoon" },
-  { name: "Duck & Waffle", urgency: "medium", text: "Book online and request a window table explicitly. 1–2 weeks ahead should suffice.", url: "https://duckandwaffle.com/london/", day: "Day 1 dinner" },
-  { name: "Rochelle Canteen", urgency: "medium", text: "Small restaurant, fills fast. Book online 1 week ahead. Note: no dinner Sunday.", url: "https://www.rochellecanteen.com/", day: "Day 2 brunch" },
-  { name: "Dishoom Carnaby", urgency: "low", text: "Book online or arrive at opening (8am) to avoid the queue. Walk-ins accepted early in the morning.", url: "https://www.dishoom.com/reservations/", day: "Day 1 brunch" },
-  { name: "Ottolenghi Islington", urgency: "low", text: "Book or arrive at opening. Note closed Tue & Wed — plan Day 3 accordingly.", url: "https://ottolenghi.co.uk/", day: "Day 3 breakfast" },
-  { name: "Barbican Concert/Theatre", urgency: "low", text: "Check barbican.org.uk for your dates and book well ahead for popular LSO concerts.", url: "https://www.barbican.org.uk/", day: "Day 3 evening" },
-  { name: "Farmacy or NOPI (lunch)", urgency: "low", text: "Book 3–5 days ahead. Both are popular for weekend lunch.", url: "https://www.farmacylondon.com/", day: "Day 3 lunch" }
+  { name: "Gymkhana", urgency: "urgent", text: "Book immediately — one of London's hardest reservations. Minimum 2–3 weeks, often longer.", url: "https://www.gymkhanarestaurants.com/", day: "May 8 evening" },
+  { name: "Sky Garden", urgency: "urgent", text: "Free entry but releases slots exactly 3 weeks ahead and sells out within hours. Set a calendar reminder.", url: "https://skygarden.london/sky-garden/", day: "May 7 evening" },
+  { name: "Dennis Severs' House", urgency: "urgent", text: "Very limited Fri/Sat evening slots. Book online as soon as possible.", url: "https://www.dennissevershouse.co.uk/", day: "May 8 evening" },
+  { name: "Sketch — Afternoon Tea", urgency: "medium", text: "Book The Parlour room. 1–2 weeks in advance. Request the Parlour specifically for the violinist and best atmosphere.", url: "https://sketch.london/afternoon-tea/", day: "May 9 afternoon" },
+  { name: "Duck & Waffle", urgency: "medium", text: "Book online and request a window table explicitly. 1–2 weeks ahead should suffice.", url: "https://duckandwaffle.com/london/", day: "May 7 dinner" },
+  { name: "Rochelle Canteen", urgency: "medium", text: "Small restaurant, fills fast. Book online 1 week ahead. Note: no dinner Sunday.", url: "https://www.rochellecanteen.com/", day: "May 8 brunch" },
+  { name: "Dishoom Carnaby", urgency: "low", text: "Book online or arrive at opening (8am) to avoid the queue. Walk-ins accepted early in the morning.", url: "https://www.dishoom.com/reservations/", day: "May 7 brunch" },
+  { name: "Ottolenghi Islington", urgency: "low", text: "Book or arrive at opening. Note closed Tue & Wed — plan Day 3 accordingly.", url: "https://ottolenghi.co.uk/", day: "May 9 breakfast" },
+  { name: "Barbican Concert/Theatre", urgency: "low", text: "Check barbican.org.uk for your dates and book well ahead for popular LSO concerts.", url: "https://www.barbican.org.uk/", day: "May 9 evening" },
+  { name: "Farmacy or NOPI (lunch)", urgency: "low", text: "Book 3–5 days ahead. Both are popular for weekend lunch.", url: "https://www.farmacylondon.com/", day: "May 9 lunch" }
 ];
 
 
@@ -1666,7 +1740,7 @@ async function manualRefresh() {
   if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
   try {
     const data = await ghRead();
-    if (data && data.days && data.days.length === 3) {
+    if (data && data.days && data.days.length >= 3) {
       data.days.forEach((d, i) => { days[i].stops = d.stops; days[i].title = d.title || days[i].title; });
       completed = data.completed || [];
       switchDay(currentDay);
@@ -1682,7 +1756,7 @@ async function manualRefresh() {
 async function syncLoad() {
   try {
     const data = await ghRead();
-    if (data && data.days && data.days.length === 3) {
+    if (data && data.days && data.days.length >= 3) {
       data.days.forEach((d, i) => { days[i].stops = d.stops; days[i].title = d.title || days[i].title; });
       completed = data.completed || [];
       return true;
@@ -1696,7 +1770,7 @@ function startSyncPolling() {
     if (window._lastSyncTime && Date.now() - window._lastSyncTime < 25000) return;
     try {
       const data = await ghRead();
-      if (data && data.days && data.days.length === 3) {
+      if (data && data.days && data.days.length >= 3) {
         const remote = JSON.stringify(data.days.map(d => d.stops.map(s => s.name)));
         const local  = JSON.stringify(days.map(d => d.stops.map(s => s.name)));
         if (remote !== local) {
@@ -1717,7 +1791,7 @@ function tryLoadSaved() {
     const raw = localStorage.getItem('london_tour_v2');
     if (!raw) return false;
     const data = JSON.parse(raw);
-    if (data.days && Array.isArray(data.days) && data.days.length === 3) {
+    if (data.days && Array.isArray(data.days) && data.days.length >= 3) {
       data.days.forEach((d, i) => { days[i].stops = d.stops; days[i].title = d.title || days[i].title; });
       completed = data.completed || [];
       showToast('Loaded your saved plan ✓');
@@ -1745,7 +1819,7 @@ function importFile(input) {
   reader.onload = (e) => {
     try {
       const data = JSON.parse(e.target.result);
-      if (!data.days || data.days.length !== 3) throw new Error('Invalid format');
+      if (!data.days || data.days.length < 3) throw new Error('Invalid format');
       data.days.forEach((d, i) => { days[i].stops = d.stops; });
       completed = data.completed || [];
       try { localStorage.setItem('london_tour_v2', JSON.stringify(data)); } catch(e) {}
@@ -1955,9 +2029,10 @@ function renderSearchResults(results, dayIdx) {
         <button class="src-add-btn" onclick="addFromSearch(${i})">+ Add to Day ${dayIdx+1}</button>
         <select onchange="document.getElementById('searchDay').value=this.value;document.getElementById('sr-day-${i}').textContent='Add to Day '+(parseInt(this.value)+1)"
           style="padding:8px 10px;border-radius:8px;border:1px solid #ddd;font-size:13px;font-weight:600;background:#fff;cursor:pointer;">
-          <option value="0" ${dayIdx===0?'selected':''}>Day 1</option>
-          <option value="1" ${dayIdx===1?'selected':''}>Day 2</option>
-          <option value="2" ${dayIdx===2?'selected':''}>Day 3</option>
+          <option value="0" ${dayIdx===0?'selected':''}>May 7</option>
+          <option value="1" ${dayIdx===1?'selected':''}>May 8</option>
+          <option value="2" ${dayIdx===2?'selected':''}>May 9</option>
+          <option value="3" ${dayIdx===3?'selected':''}>May 10</option>
         </select>
       </div>
     </div>`).join('');
@@ -2002,7 +2077,7 @@ async function init() {
     const saved = tryLoadSaved();
     if (!saved) {
       prepareBreakfasts();
-      [0,1,2].forEach(di => {
+      [0,1,2,3].forEach(di => {
         const tmp = currentDay;
         currentDay = di;
         optimizeRouteForDay(di);
@@ -2041,7 +2116,7 @@ function showView(v) {
 }
 
 function updateTabHighlight() {
-  ['dtab0','dtab1','dtab2','dtabMap','dtabAll','dtabAdd','dtabSearch'].forEach(id => {
+  ['dtab0','dtab1','dtab2','dtab3','dtabMap','dtabAll','dtabAdd','dtabSearch'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     if (id === 'dtabMap' || id === 'dtabAll' || id === 'dtabAdd' || id === 'dtabSearch') return;
@@ -2070,7 +2145,7 @@ function updateBottomNav() {
 function switchDay(d) {
   currentDay = d;
   currentStop = 0;
-  ['dtab0','dtab1','dtab2'].forEach((id, i) => {
+  ['dtab0','dtab1','dtab2','dtab3'].forEach((id, i) => {
     document.getElementById(id).classList.toggle('active', i === d);
   });
   document.getElementById('dayNote').textContent = days[d].note || '';
@@ -2391,8 +2466,8 @@ function buildRouteMapIframe(stops, color) {
 
 
 function renderAllMap() {
-  const dayColors = ['#1a73e8','#e65100','#1a7a3a'];
-  const dayNames = ['Day 1','Day 2','Day 3'];
+  const dayColors = ['#1a73e8','#e65100','#1a7a3a','#7b1fa2'];
+  const dayNames = ['May 7','May 8','May 9','May 10'];
   const allLats = days.flatMap(d => d.stops.map(s => s.lat));
   const allLngs = days.flatMap(d => d.stops.map(s => s.lng));
   const cLat = (Math.min(...allLats)+Math.max(...allLats))/2;
@@ -2410,7 +2485,7 @@ function renderAllMap() {
 
   document.getElementById('allMapContent').innerHTML = `
     <div class="all-map-header">
-      <h2>All 3 Days &mdash; London</h2>
+      <h2>All 4 Days &mdash; London</h2>
       <div class="map-legend">${legend}</div>
       <div style="display:flex;gap:8px;">
         ${dayColors.map((c,i)=>`<button onclick="switchDay(${i})" style="flex:1;padding:8px;border-radius:8px;border:2px solid ${c};background:#fff;color:${c};font-size:12px;font-weight:700;cursor:pointer;">${dayNames[i]}</button>`).join('')}
