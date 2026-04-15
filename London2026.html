@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>London Tour Guide</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+#routeMapDiv, #allMapDiv { width:100%; height:340px; z-index:1; }
+#allMapDiv { height: 420px; }
+</style>
 <style>
 :root {
   --bg: #f5f4f0;
@@ -1497,47 +1503,28 @@ function renderRouteMap() {
 }
 
 function buildRouteMapIframe(stops, color) {
-  const stopsData = stops.map((s,i) => ({
-    lat: s.lat, lng: s.lng, name: s.name, time: s.time,
-    duration: s.duration, address: s.address || '', color: s.color,
-    prebook: !!s.prebook, free: !!s.free, i
-  }));
-  const cLat = stops.reduce((a,s)=>a+s.lat,0)/stops.length;
-  const cLng = stops.reduce((a,s)=>a+s.lng,0)/stops.length;
-
-  const mapHTML = [
-    '<!DOCTYPE html><html><head>',
-    '<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">',
-    '<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>',
-    '<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>',
-    '<style>*{margin:0;padding:0;box-sizing:border-box;}html,body{height:100%;overflow:hidden;}#map{width:100%;height:100vh;}</style>',
-    '</head><body><div id="map"></div><script>',
-    'var stops=' + JSON.stringify(stopsData) + ';',
-    'var routeColor=' + JSON.stringify(color) + ';',
-    'var map=L.map("map",{zoomControl:false}).setView([' + cLat + ',' + cLng + '],14);',
-    'L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OpenStreetMap contributors",maxZoom:19}).addTo(map);',
-    'var coords=stops.map(function(s){return[s.lat,s.lng];});',
-    'L.polyline(coords,{color:routeColor,weight:5,opacity:0.85,dashArray:"10,6"}).addTo(map);',
-    'stops.forEach(function(s,i){',
-    '  var sz=i===0?32:26;',
-    '  var icon=L.divIcon({className:"",',
-    '    html:"<div style=\\"background:"+s.color+";color:#fff;width:"+sz+"px;height:"+sz+"px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:"+(i===0?13:11)+"px;font-weight:900;border:2.5px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.35);\\">"+(i+1)+"</div>",',
-    '    iconSize:[sz,sz],iconAnchor:[sz/2,sz/2],popupAnchor:[0,-(sz/2+4)]});',
-    '  var popup="<div style=\\"min-width:160px\\"><b style=\\"color:"+s.color+";font-size:13px;\\">Stop "+(i+1)+"</b><br><b style=\\"font-size:14px;\\">"+s.name+"</b><br><span style=\\"color:#666;font-size:12px;\\">"+s.time+" &middot; "+s.duration+"</span><br><span style=\\"font-size:11px;color:#888;\\">"+s.address+"</span>"+(s.prebook?"<br><span style=\\"color:#c0392b;font-size:11px;font-weight:700;\\">&#9888; Pre-book</span>":"")+(s.free?"<br><span style=\\"color:#1a7a3a;font-size:11px;font-weight:700;\\">&#10003; Free</span>":"")+"</div>";',
-    '  L.marker([s.lat,s.lng],{icon:icon}).addTo(map).bindPopup(popup);',
-    '});',
-    'map.fitBounds(L.latLngBounds(coords),{padding:[40,40]});',
-    '<\/script></body></html>'
-  ].join('\n');
-
   var container = document.getElementById('routeMapIframe');
   if (!container) return;
-  var iframe = document.createElement('iframe');
-  iframe.style.cssText = 'width:100%;height:340px;border:none;display:block;';
-  iframe.setAttribute('sandbox', 'allow-scripts');
-  iframe.srcdoc = mapHTML;
-  container.innerHTML = '';
-  container.appendChild(iframe);
+  // Destroy old Leaflet instance if any
+  if (window._routeMap) { window._routeMap.remove(); window._routeMap = null; }
+  container.innerHTML = '<div id="routeMapDiv"></div>';
+
+  var cLat = stops.reduce(function(a,s){return a+s.lat;},0)/stops.length;
+  var cLng = stops.reduce(function(a,s){return a+s.lng;},0)/stops.length;
+  var map = L.map('routeMapDiv', {zoomControl:false}).setView([cLat, cLng], 14);
+  window._routeMap = map;
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution:'© OpenStreetMap contributors', maxZoom:19}).addTo(map);
+
+  var coords = stops.map(function(s){return [s.lat, s.lng];});
+  L.polyline(coords, {color:color, weight:5, opacity:0.85, dashArray:'10,6'}).addTo(map);
+
+  stops.forEach(function(s, i) {
+    var sz = i===0 ? 32 : 26;
+    var icon = L.divIcon({className:'', html:'<div style="background:'+s.color+';color:#fff;width:'+sz+'px;height:'+sz+'px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:'+(i===0?13:11)+'px;font-weight:900;border:2.5px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.35);">'+(i+1)+'</div>', iconSize:[sz,sz], iconAnchor:[sz/2,sz/2], popupAnchor:[0,-(sz/2+4)]});
+    var popup = '<div style="min-width:160px"><b style="color:'+s.color+';font-size:13px;">Stop '+(i+1)+'</b><br><b style="font-size:14px;">'+s.name+'</b><br><span style="color:#666;font-size:12px;">'+s.time+' · '+s.duration+'</span><br><span style="font-size:11px;color:#888;">'+s.address+'</span>'+(s.prebook?'<br><span style="color:#c0392b;font-size:11px;font-weight:700;">⚠ Pre-book</span>':'')+(s.free?'<br><span style="color:#1a7a3a;font-size:11px;font-weight:700;">✓ Free</span>':'')+'</div>';
+    L.marker([s.lat, s.lng], {icon:icon}).addTo(map).bindPopup(popup);
+  });
+  map.fitBounds(L.latLngBounds(coords), {padding:[40,40]});
 }
 
 
@@ -1557,31 +1544,6 @@ function renderAllMap() {
     }))
   }));
 
-  const mapHTML = [
-    '<!DOCTYPE html><html><head>',
-    '<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">',
-    '<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>',
-    '<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>',
-    '<style>*{margin:0;padding:0;}html,body{height:100%;overflow:hidden;}#map{width:100%;height:100vh;}</style>',
-    '</head><body><div id="map"></div><script>',
-    'var allData=' + JSON.stringify(stopsData) + ';',
-    'var map=L.map("map",{zoomControl:true}).setView([' + cLat + ',' + cLng + '],12);',
-    'L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OpenStreetMap contributors",maxZoom:19}).addTo(map);',
-    'var allBounds=[];',
-    'allData.forEach(function(day){',
-    '  var coords=day.stops.map(function(s){return[s.lat,s.lng];});',
-    '  coords.forEach(function(c){allBounds.push(c);});',
-    '  L.polyline(coords,{color:day.color,weight:4,opacity:0.8,dashArray:"8,5"}).addTo(map);',
-    '  day.stops.forEach(function(s,i){',
-    '    var icon=L.divIcon({className:"",html:"<div style=\\"background:"+day.color+";color:#fff;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;border:2.5px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.3);\\">"+(i+1)+"</div>",iconSize:[28,28],iconAnchor:[14,14],popupAnchor:[0,-18]});',
-    '    var popup="<b style=\\"color:"+day.color+"\\">"+day.label+" &middot; Stop "+(i+1)+"</b><br><b>"+s.name+"</b><br><span style=\\"color:#666;font-size:12px;\\">"+s.time+" &middot; "+s.duration+"</span><br><span style=\\"font-size:11px;\\">"+s.address+"</span>"+(s.prebook?"<br><span style=\\"color:#c0392b;font-size:11px;\\">&#9888; Pre-book</span>":"")+(s.free?"<br><span style=\\"color:#1a7a3a;font-size:11px;\\">Free</span>":"");',
-    '    L.marker([s.lat,s.lng],{icon:icon}).addTo(map).bindPopup(popup);',
-    '  });',
-    '});',
-    'map.fitBounds(L.latLngBounds(allBounds),{padding:[30,30]});',
-    '<\/script></body></html>'
-  ].join('\n');
-
   const legend = dayColors.map((c,i) => `<div class="legend-item"><div class="legend-dot-line" style="background:${c}"></div><span>${dayNames[i]}</span></div>`).join('');
 
   document.getElementById('allMapContent').innerHTML = `
@@ -1592,18 +1554,27 @@ function renderAllMap() {
         ${dayColors.map((c,i)=>`<button onclick="switchDay(${i})" style="flex:1;padding:8px;border-radius:8px;border:2px solid ${c};background:#fff;color:${c};font-size:12px;font-weight:700;cursor:pointer;">${dayNames[i]}</button>`).join('')}
       </div>
     </div>
-    <div id="allMapIframe" style="flex:1;min-height:420px;display:flex;align-items:center;justify-content:center;background:#e8f0e4;">
-      <span style="color:#888;font-size:13px;">Loading map...</span>
-    </div>
+    <div id="allMapDiv"></div>
   `;
 
-  var container = document.getElementById('allMapIframe');
-  var iframe = document.createElement('iframe');
-  iframe.style.cssText = 'width:100%;height:100%;min-height:420px;border:none;display:block;flex:1;';
-  iframe.setAttribute('sandbox', 'allow-scripts');
-  iframe.srcdoc = mapHTML;
-  container.innerHTML = '';
-  container.appendChild(iframe);
+  if (window._allMap) { window._allMap.remove(); window._allMap = null; }
+
+  var map = L.map('allMapDiv', {zoomControl:true}).setView([cLat, cLng], 12);
+  window._allMap = map;
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution:'© OpenStreetMap contributors', maxZoom:19}).addTo(map);
+
+  var allBounds = [];
+  stopsData.forEach(function(day) {
+    var coords = day.stops.map(function(s){return [s.lat, s.lng];});
+    coords.forEach(function(c){allBounds.push(c);});
+    L.polyline(coords, {color:day.color, weight:4, opacity:0.8, dashArray:'8,5'}).addTo(map);
+    day.stops.forEach(function(s, i) {
+      var icon = L.divIcon({className:'', html:'<div style="background:'+day.color+';color:#fff;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;border:2.5px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.3);">'+(i+1)+'</div>', iconSize:[28,28], iconAnchor:[14,14], popupAnchor:[0,-18]});
+      var popup = '<b style="color:'+day.color+'">'+day.label+' · Stop '+(i+1)+'</b><br><b>'+s.name+'</b><br><span style="color:#666;font-size:12px;">'+s.time+' · '+s.duration+'</span><br><span style="font-size:11px;">'+s.address+'</span>'+(s.prebook?'<br><span style="color:#c0392b;font-size:11px;">⚠ Pre-book</span>':'')+(s.free?'<br><span style="color:#1a7a3a;font-size:11px;">Free</span>':'');
+      L.marker([s.lat, s.lng], {icon:icon}).addTo(map).bindPopup(popup);
+    });
+  });
+  map.fitBounds(L.latLngBounds(allBounds), {padding:[30,30]});
 }
 
 
