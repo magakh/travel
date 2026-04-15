@@ -2298,6 +2298,13 @@ function renderStopList() {
           ${s.free ? '<span class="tag-pill free">Free</span>' : ''}
           ${s.isUserAdded ? '<span class="tag-pill" style="background:#e8f0fd;color:#1565c0;">Custom</span>' : ''}
         </div>
+        <div onclick="event.stopPropagation();" style="margin-top:5px;">
+          <select onchange="moveStopToDay(parseInt(this.value)); this.selectedIndex=0;"
+            style="font-size:11px;color:#1a73e8;border:1px solid #c5d8fa;background:#e8f0fd;border-radius:6px;padding:2px 6px;font-weight:700;cursor:pointer;max-width:160px;">
+            <option value="" disabled selected>↔ Move to day…</option>
+            ${days.map((d,di) => di !== currentDay ? `<option value="${di}">${d.title.split('—')[0].trim()}</option>` : '').join('')}
+          </select>
+        </div>
       </div>
       <button onclick="event.stopPropagation(); confirmDeleteStop(${i});"
         style="background:none;border:none;color:#ddd;font-size:18px;cursor:pointer;padding:4px 6px;flex-shrink:0;align-self:center;transition:color 0.15s;"
@@ -2365,16 +2372,16 @@ function renderDetail() {
       <div class="tip-box">${s.todo || ''}</div>
     </div>
 
-    <div style="padding:0 16px 4px;display:flex;gap:8px;">
-      <select id="moveDaySelect" onchange="moveStopToDay(parseInt(this.value))"
-        style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--surface);font-size:13px;font-weight:600;cursor:pointer;color:var(--muted);">
-        <option value="${currentDay}" disabled selected>Move to another day…</option>
-        ${days.map((d,di) => di !== currentDay ? `<option value="${di}">${d.title.split('—')[0].trim()}</option>` : '').join('')}
-      </select>
-    </div>
     <div class="detail-nav">
       <button class="dnak-btn remove-btn" onclick="removeStop()" title="Remove stop">🗑</button>
       <button class="dnak-btn dnav-back" onclick="showView('list')" style="flex:1;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--surface);font-size:13px;font-weight:700;cursor:pointer;color:var(--muted);">← List</button>
+    </div>
+    <div style="padding:0 16px 16px;">
+      <select onchange="moveStopToDay(parseInt(this.value))"
+        style="width:100%;padding:12px 14px;border-radius:10px;border:1px solid var(--border);background:#f5f4f0;font-size:13px;font-weight:700;cursor:pointer;color:var(--text);appearance:none;-webkit-appearance:none;">
+        <option value="${currentDay}" disabled selected>↔ Move to a different day…</option>
+        ${days.map((d,di) => di !== currentDay ? `<option value="${di}">${d.title.split('—')[0].trim()}</option>` : '').join('')}
+      </select>
     </div>
   `;
   updateBottomNav();
@@ -2527,9 +2534,9 @@ function renderRouteMap() {
       </div>
       <div class="mini-num" style="background:${s.color}">${i+1}</div>
       <div class="mini-info" style="flex:1;">
-        <select onchange="event.stopPropagation(); moveStopFromMapToDay(${i}, parseInt(this.value)); this.value='${currentDay}'"
-          style="font-size:10px;color:#888;border:none;background:transparent;cursor:pointer;padding:0;margin-bottom:2px;width:100%;">
-          <option value="${currentDay}" disabled selected>↔ Move to…</option>
+        <select onchange="event.stopPropagation(); moveStopFromMapToDay(${i}, parseInt(this.value));"
+          style="font-size:11px;color:#1a73e8;border:1px solid #c5d8fa;background:#e8f0fd;border-radius:6px;cursor:pointer;padding:2px 4px;margin-bottom:3px;width:100%;font-weight:700;">
+          <option value="" disabled selected>↔ Move to day…</option>
           ${days.map((d,di) => di !== currentDay ? `<option value="${di}">${d.title.split('—')[0].trim()}</option>` : '').join('')}
         </select>
         <div class="mini-time-s">${s.time} &middot; ${s.duration}</div>
