@@ -2187,7 +2187,7 @@ function renderStopList() {
       <div class="stop-check ${completed.includes(currentDay+'-'+i) ? 'done' : ''}"
            onclick="event.stopPropagation(); toggleDone(${i})"></div>
       <span class="drag-h" onclick="event.stopPropagation()">⠿</span>
-      <div class="stop-dot" style="background:${s.color}"></div>
+      <div class="stop-dot" style="background:${s.color};width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:800;flex-shrink:0;margin-top:2px;">${i+1}</div>
       <div class="stop-meta">
         <div class="stop-time-label" onclick="event.stopPropagation(); editStopTime(${i});" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;" title="Tap to edit time">⏱ ${s.time} · ${s.duration}</div>
         <div class="stop-name-label">${s.name}</div>
