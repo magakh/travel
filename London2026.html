@@ -2011,6 +2011,13 @@ function showView(v) {
   currentView = v;
   updateBottomNav();
   updateTabHighlight();
+  // Invalidate map size after panel becomes visible so Leaflet fills the container
+  setTimeout(() => {
+    if ((v === 'routemap' || v === 'allmap')) {
+      const m = v === 'routemap' ? window._routeMap : window._allMap;
+      if (m) m.invalidateSize();
+    }
+  }, 50);
 }
 
 function updateTabHighlight() {
