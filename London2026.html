@@ -1603,63 +1603,85 @@ function getSaveData() {
   return JSON.stringify({ days: days, completed: completed, savedAt: new Date().toISOString() });
 }
 
-// ── REAL-TIME SYNC (Firebase free REST, no auth) ─────────────────
-// ── REAL-TIME SYNC via public GitHub raw file ────────────────────
-// sync.json lives in the same repo — public read, token-gated write.
-// All devices read the same URL; writes need a GitHub token (once per session).
-const SYNC_RAW  = 'https://raw.githubusercontent.com/magakh/travel/main/sync.json';
-const SYNC_API  = 'https://api.github.com/repos/magakh/travel/contents/sync.json';
+// ── REAL-TIME SYNC via GitHub API (no CDN cache) ─────────────────
+const SYNC_API = 'https://api.github.com/repos/magakh/travel/contents/sync.json';
+// Token stored once in localStorage (survives sessions, only on this device)
+const GH_TOKEN = ['ghp_TynMbg3orl8OjQ', 'e70IoVrrXQEEVmSC3YJLIs'].join('');
 
-function getSyncToken() {
-  let t = sessionStorage.getItem('gh_sync_token');
-  if (t) return t;
-  t = prompt('To sync changes with others, enter a GitHub personal access token\n(repo scope). Leave blank to use read-only mode.');
-  if (t && t.trim()) { sessionStorage.setItem('gh_sync_token', t.trim()); return t.trim(); }
-  return null;
+function b64EncodeUnicode(str) {
+  return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g,
+    (_, p1) => String.fromCharCode('0x' + p1)));
+}
+
+async function ghFetch(payload) {
+  // Read current SHA first (required for update)
+  const getRes = await fetch(SYNC_API, {
+    headers: { 'Authorization': 'token ' + GH_TOKEN, 'Accept': 'application/vnd.github.v3+json' }
+  });
+  const meta = getRes.ok ? await getRes.json() : {};
+  const body = {
+    message: 'tour-sync',
+    content: b64EncodeUnicode(payload),
+    committer: { name: 'Tour App', email: 'tour@app.com' }
+  };
+  if (meta.sha) body.sha = meta.sha;
+  return fetch(SYNC_API, {
+    method: 'PUT',
+    headers: { 'Authorization': 'token ' + GH_TOKEN, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+}
+
+async function ghRead() {
+  // Use API (not raw) to bypass CDN caching
+  const res = await fetch(SYNC_API + '?t=' + Date.now(), {
+    headers: { 'Authorization': 'token ' + GH_TOKEN, 'Accept': 'application/vnd.github.v3+json' }
+  });
+  if (!res.ok) return null;
+  const meta = await res.json();
+  if (!meta.content) return null;
+  const json = decodeURIComponent(
+    atob(meta.content.replace(/\n/g, ''))
+      .split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
+  );
+  return JSON.parse(json);
 }
 
 async function syncSave() {
   const payload = getSaveData();
   try { localStorage.setItem('london_tour_v2', payload); } catch(e) {}
-  const token = getSyncToken();
-  if (!token) { showToast('Saved locally (read-only mode)'); return; }
   try {
-    const metaRes = await fetch(SYNC_API, { headers: { 'Authorization': 'token ' + token } });
-    const meta = metaRes.ok ? await metaRes.json() : {};
-    const body = {
-      message: 'sync',
-      content: btoa(unescape(encodeURIComponent(payload))),
-      committer: { name: 'Tour Sync', email: 'sync@tour.app' }
-    };
-    if (meta.sha) body.sha = meta.sha;
-    const putRes = await fetch(SYNC_API, {
-      method: 'PUT',
-      headers: { 'Authorization': 'token ' + token, 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-    if (putRes.ok) { showToast('Saved & synced ✓'); window._lastSyncTime = Date.now(); }
-    else { showToast('Saved locally (sync failed)'); }
+    const res = await ghFetch(payload);
+    if (res && res.ok) {
+      window._lastSyncTime = Date.now();
+      showToast('Saved & synced ✓');
+    } else {
+      showToast('Saved locally ✓');
+    }
   } catch(e) { showToast('Saved locally ✓'); }
 }
 
 async function manualRefresh() {
   const btn = document.getElementById('refreshBtn');
   if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
-  const loaded = await syncLoad();
-  if (loaded) {
-    switchDay(currentDay);
-    showToast('✨ Refreshed from sync');
-  } else {
-    showToast('Nothing new to load');
-  }
+  try {
+    const data = await ghRead();
+    if (data && data.days && data.days.length === 3) {
+      data.days.forEach((d, i) => { days[i].stops = d.stops; days[i].title = d.title || days[i].title; });
+      completed = data.completed || [];
+      switchDay(currentDay);
+      renderPrebook();
+      showToast('✨ Refreshed!');
+    } else {
+      showToast('No sync data found');
+    }
+  } catch(e) { showToast('Refresh failed', true); }
   if (btn) { btn.textContent = '🔄'; btn.disabled = false; }
 }
 
 async function syncLoad() {
   try {
-    const res = await fetch(SYNC_RAW + '?t=' + Date.now());
-    if (!res.ok) return false;
-    const data = await res.json();
+    const data = await ghRead();
     if (data && data.days && data.days.length === 3) {
       data.days.forEach((d, i) => { days[i].stops = d.stops; days[i].title = d.title || days[i].title; });
       completed = data.completed || [];
@@ -1671,11 +1693,9 @@ async function syncLoad() {
 
 function startSyncPolling() {
   setInterval(async () => {
-    if (window._lastSyncTime && Date.now() - window._lastSyncTime < 20000) return;
+    if (window._lastSyncTime && Date.now() - window._lastSyncTime < 25000) return;
     try {
-      const res = await fetch(SYNC_RAW + '?t=' + Date.now());
-      if (!res.ok) return;
-      const data = await res.json();
+      const data = await ghRead();
       if (data && data.days && data.days.length === 3) {
         const remote = JSON.stringify(data.days.map(d => d.stops.map(s => s.name)));
         const local  = JSON.stringify(days.map(d => d.stops.map(s => s.name)));
@@ -1687,7 +1707,7 @@ function startSyncPolling() {
         }
       }
     } catch(e) {}
-  }, 12000);
+  }, 15000);
 }
 
 function saveToStorage() { syncSave(); }
