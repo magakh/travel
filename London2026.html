@@ -1164,7 +1164,7 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
       </div>
       <div id="hotelPreview" style="margin-bottom:12px;"></div>
       <button class="gen-btn" onclick="saveHotel()" style="background:#444;">🏨 Save Hotel</button>
-      <p class="gen-hint">Hotel pin will appear on all maps as your base</p>
+      <p class="gen-hint">Save hotel here, then tap 💾 in the header to sync it to all devices</p>
     </div>
   </div>
 
@@ -1753,7 +1753,8 @@ async function syncSave() {
     const res = await ghFetch(payload);
     if (res && res.ok) {
       window._lastSyncTime = Date.now();
-      showToast('Saved & synced ✓');
+      const hSaved = window.HOTEL_DATA ? ' + hotel' : '';
+      showToast('Saved & synced' + hSaved + ' ✓');
     } else {
       showToast('Saved locally ✓');
     }
@@ -1771,7 +1772,8 @@ async function manualRefresh() {
       if (data.hotel) { window.HOTEL_DATA = data.hotel; HOTEL.name = data.hotel.name; HOTEL.address = data.hotel.address; HOTEL.lat = data.hotel.lat; HOTEL.lng = data.hotel.lng; }
       switchDay(currentDay);
       renderPrebook();
-      showToast('✨ Refreshed!');
+      const hotelOk = data.hotel ? '+ hotel ✓' : '(no hotel yet)';
+      showToast('✨ Refreshed ' + hotelOk);
     } else {
       showToast('No sync data found');
     }
