@@ -986,16 +986,77 @@ function clearSaved() {
 function optimizeRouteForDay(di) {
   const stops = days[di].stops;
   if (stops.length < 3) return;
-  const dist = (a, b) => Math.sqrt((a.lat-b.lat)**2 + (a.lng-b.lng)**2);
-  const first = stops[0]; // keep breakfast first
-  const rest = stops.slice(1);
-  const ordered = [first];
-  while (rest.length) {
-    const last = ordered[ordered.length-1];
-    let best = 0, bestD = Infinity;
-    rest.forEach((s, i) => { const d = dist(last, s); if (d < bestD) { bestD=d; best=i; } });
-    ordered.push(rest.splice(best, 1)[0]);
+
+  // Haversine distance in metres (accurate for London scale)
+  function dist(a, b) {
+    const R = 6371000;
+    const p1 = a.lat * Math.PI/180, p2 = b.lat * Math.PI/180;
+    const dp = (b.lat - a.lat) * Math.PI/180;
+    const dl = (b.lng - a.lng) * Math.PI/180;
+    const x = Math.sin(dp/2)**2 + Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;
+    return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1-x));
   }
+
+  // Detect food/dining stops by type or name keywords
+  function isFood(s) {
+    const t = ((s.type||'') + ' ' + (s.name||'')).toLowerCase();
+    return /restaurant|caf|canteen|brunch|lunch|dinner|bar|waffle|duck|food|bistro|grill|kitchen/.test(t)
+      || (s.badges && s.badges.includes('food'));
+  }
+
+  // Step 1: Keep first stop fixed (morning anchor), greedy nearest-neighbour for rest
+  const first = stops[0];
+  const pool = stops.slice(1);
+  const ordered = [first];
+  while (pool.length) {
+    const last = ordered[ordered.length - 1];
+    let bestIdx = 0, bestD = Infinity;
+    pool.forEach((s, i) => { const d = dist(last, s); if (d < bestD) { bestD = d; bestIdx = i; } });
+    ordered.push(pool.splice(bestIdx, 1)[0]);
+  }
+
+  // Step 2: 2-opt improvement to shorten total walking distance (first stop fixed)
+  let improved = true;
+  while (improved) {
+    improved = false;
+    for (let i = 1; i < ordered.length - 1; i++) {
+      for (let j = i + 1; j < ordered.length; j++) {
+        const nextJ = j + 1 < ordered.length ? ordered[j + 1] : null;
+        const before = dist(ordered[i-1], ordered[i]) + (nextJ ? dist(ordered[j], nextJ) : 0);
+        const after  = dist(ordered[i-1], ordered[j]) + (nextJ ? dist(ordered[i], nextJ) : 0);
+        if (after < before - 1) { // 1 metre threshold to avoid float noise
+          ordered.splice(i, j - i + 1, ...ordered.slice(i, j + 1).reverse());
+          improved = true;
+        }
+      }
+    }
+  }
+
+  // Step 3: Spread food stops — no two food stops should be adjacent
+  // Iteratively swap an adjacent food pair: move the second one to the nearest
+  // non-adjacent position, preferring a swap that keeps proximity good.
+  let swapped = true, passes = 0;
+  while (swapped && passes < 30) {
+    swapped = false; passes++;
+    for (let i = 1; i < ordered.length - 1; i++) {
+      if (isFood(ordered[i]) && isFood(ordered[i + 1])) {
+        // Find the best non-food stop after i+1 to swap with ordered[i+1]
+        let swapTarget = -1, bestScore = Infinity;
+        for (let j = i + 2; j < ordered.length; j++) {
+          if (!isFood(ordered[j])) {
+            // Score: cost of inserting ordered[i+1] at position j vs ordered[j] at i+1
+            const score = dist(ordered[i], ordered[j]) + dist(ordered[j], ordered[i+2] || ordered[i+1]);
+            if (score < bestScore) { bestScore = score; swapTarget = j; }
+          }
+        }
+        if (swapTarget !== -1) {
+          [ordered[i+1], ordered[swapTarget]] = [ordered[swapTarget], ordered[i+1]];
+          swapped = true;
+        }
+      }
+    }
+  }
+
   days[di].stops = ordered;
   reassignTimesForDay(di);
 }
