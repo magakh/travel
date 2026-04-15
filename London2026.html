@@ -1133,443 +1133,312 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
 <script>
 const days = [
   {
-    title: "May 7 — Arrival Day · City Afternoon",
-    note: "Arriving 9:35 · hotel check-in · starting at lunch · Temple Church is Mon–Fri only",
+    title: "May 7 — Arrival · Royal & River",
+    note: "Arriving 9:35 · hotel check-in · afternoon start · Buckingham Palace tours at 9:30 AM (plan for another day if arriving late)",
     stops: [
       {
-        time: "1:00 PM", name: "The Wolseley — Lunch", type: "Grand café · Lunch · St James's",
+        time: "1:00 PM", name: "The Wolseley — Lunch",
+        type: "Grand café · St James's",
         color: "#b5910a", prebook: true, free: false, weekend: false,
         lat: 51.5072, lng: -0.1416, address: "160 Piccadilly, London W1J 9EB",
         badges: ["food","prebook"],
-        travel: "🚶 2-min walk from Piccadilly Circus or Green Park Tube. On Piccadilly itself, opposite the Ritz.",
-        history: `<strong>The Wolseley</strong> opened in 2003 in one of London's most extraordinary rooms — a vast 1920s palace built for the <strong>Wolseley Motor Company</strong> as their flagship showroom, designed by William Curtis Green in the style of a Florentine palazzo. The soaring arched ceiling, black-and-white marble floors, and gilded ironwork were designed to impress car buyers in the age of motoring glamour. When the car company failed in 1926, the building became a Barclays Bank branch for decades.\n\nRestaurateurs <strong>Chris Corbin and Jeremy King</strong> transformed it into a grand European café in 2003, modelled on the great Viennese and Parisian cafés — Café Central, Lipp, and the Deux Magots. It rapidly became the social and cultural centre of London, where politicians, authors, artists, and celebrities come for breakfast, and has remained so ever since. It is arguably London's finest all-day café.`,
-        todo: `<p><span class="tip-icon">🥐</span><strong>Order for breakfast:</strong> The Wolseley Full Breakfast or the Eggs Benedict with smoked salmon. The pastry basket is outstanding. Sit in the main room, not the booths, to absorb the full grandeur of the space. Book at least 2 weeks ahead for weekday breakfast — it fills completely. The atmosphere at 8:30am, with the room buzzing and the coffee service immaculate, is one of London's great experiences.</p>`,
-        duration: "60 min",
-        prebookText: "Book online — fills 2+ weeks ahead",
-        prebookUrl: "https://www.thewolseley.com/"
+        travel: "🚶 2-min walk from Piccadilly Circus or Green Park Tube.",
+        history: `<strong>The Wolseley</strong> opened in 2003 in a vast 1920s palace built for the <strong>Wolseley Motor Company</strong>. The soaring arched ceiling, black-and-white marble floors and gilded ironwork were designed to impress car buyers. When the company failed in 1926 the building became a Barclays Bank branch for decades.\n\nRestaurateurs <strong>Chris Corbin and Jeremy King</strong> transformed it into a grand European café in 2003, modelled on the great Viennese and Parisian cafés. It rapidly became the social centre of London — where politicians, authors and celebrities have breakfast — and has remained so ever since.`,
+        todo: `<p><span class="tip-icon">🥐</span><strong>Order:</strong> The Wolseley Full, Eggs Benedict with smoked salmon, or the pastry basket. Sit in the main room for the full grandeur. Book 2 weeks ahead — fills completely.</p>`,
+        duration: "75 min", prebookText: "Book online — fills 2+ weeks ahead", prebookUrl: "https://www.thewolseley.com/"
       },
       {
-        time: "2:30 PM", name: "Daunt Books + Browse", type: "Coffee & browse",
+        time: "2:30 PM", name: "Buckingham Palace — State Rooms Tour",
+        type: "Royal Palace · Paid tour · Summer only",
+        color: "#b5910a", prebook: true, free: false, weekend: false,
+        lat: 51.5014, lng: -0.1419, address: "Buckingham Palace, London SW1A 1AA",
+        badges: ["prebook"],
+        travel: "🚶 10-min walk from The Wolseley through Green Park — one of the Royal Parks.",
+        history: `<strong>Buckingham Palace</strong> has been the official London residence of the British monarch since 1837, when Queen Victoria moved in. Built as Buckingham House in 1703 for the Duke of Buckingham, George III bought it in 1761. It was enlarged repeatedly — most significantly by John Nash in the 1820s for George IV.\n\nThe State Rooms are opened to the public each summer and contain some of the greatest works from the Royal Collection — paintings by Rembrandt, Rubens, Vermeer, and Canaletto, alongside priceless furniture, porcelain, and silverware. The Throne Room, the White Drawing Room, and the Grand Staircase are among the finest interiors in Britain.`,
+        todo: `<p><span class="tip-icon">👑</span><strong>Book the State Rooms tour</strong> at royal.uk — open late July to late September. The 19 State Rooms take about 2 hours. The garden is extraordinary. After the tour, walk around the Victoria Memorial and through St James's Park along the Mall.</p>`,
+        duration: "120 min", prebookText: "Book at royal.uk — State Rooms open summer only", prebookUrl: "https://www.rct.uk/visit/the-state-rooms-buckingham-palace"
+      },
+      {
+        time: "4:45 PM", name: "St James's Park & Big Ben",
+        type: "Royal park · Westminster Bridge view · Free",
         color: "#1a7a3a", prebook: false, free: true, weekend: false,
-        lat: 51.5204, lng: -0.152, address: "84 Marylebone High St, London W1U 4QW",
+        lat: 51.5007, lng: -0.1246, address: "Westminster Bridge, London SW1A 2JH",
         badges: ["free","walk"],
-        travel: "🚶 20-min walk from Piccadilly, or Tube to Baker Street (5 min). Head south on Marylebone High Street — one of London's loveliest village streets.",
-        history: `<strong>Daunt Books</strong> opened in 1990 in this stunning 1910 Edwardian building, originally built as a bookshop for travel writer and publisher James Daunt. The interior is a masterpiece of Edwardian design — a long, oak-galleried hall with a triple-height stained-glass skylight at the rear. The building was designed by architect <strong>John Edgar Chapman</strong>.\n\nMarylebone High Street itself sits on a medieval lane that existed before the Norman Conquest. The name comes from <em>"Mary-le-bourne"</em> — St Mary's Church by the stream (bourne). In the 18th century this was a fashionable village on the edge of London; today it retains that elegant village character.`,
-        todo: `<p><span class="tip-icon">☕</span><strong>Order:</strong> A flat white or filter coffee from the in-store café. Browse the legendary travel section organised by country — fiction, history, and guidebooks for each destination together on one shelf. Pick up something for the journey home.</p>`,
-        duration: "45 min"
+        travel: "🚶 15-min walk east through St James's Park along the lake, past the pelicans, to Westminster Bridge.",
+        history: `<strong>St James's Park</strong> is the oldest of the Royal Parks, first enclosed by Henry VIII in 1532. The lake was redesigned by John Nash in 1827 in the naturalistic style. The park is home to a colony of pelicans — a tradition dating to 1664 when the Russian Ambassador gave two pelicans as a gift to Charles II.\n\n<strong>Westminster Bridge</strong> opened in 1750. From its centre you get the classic Big Ben view — the Clock Tower (Elizabeth Tower) rising above the Palace of Westminster, with the London Eye on the opposite bank. William Wordsworth wrote his sonnet <em>Composed upon Westminster Bridge</em> here in 1802.`,
+        todo: `<p><span class="tip-icon">📸</span><strong>Walk to the centre of Westminster Bridge</strong> for the Big Ben photograph. Then catch the Thames Clipper from Westminster Pier (2-min walk) eastbound — the view looking back at Parliament from the water is unforgettable.</p>`,
+        duration: "40 min"
       },
       {
-        time: "9:50 AM", name: "The Wallace Collection", type: "World-class free art museum",
-        color: "#5c4db1", prebook: false, free: true, weekend: false,
-        lat: 51.5173, lng: -0.1531, address: "Hertford House, Manchester Square, London W1U 3BN",
-        badges: ["free"],
-        travel: "🚶 5-min walk south then east along Wigmore Street to Manchester Square.",
-        history: `<strong>Hertford House</strong> was built in 1776 as Manchester House, one of the grandest private mansions in London. It was acquired by the 2nd Marquess of Hertford in 1797 and the family spent the next century filling it with one of the finest private art collections in history.\n\nThe 4th Marquess and his illegitimate son <strong>Sir Richard Wallace</strong> were the great collectors — amassing Rembrandt, Velázquez, Fragonard, Rubens, Titian, and Frans Hals' <em>The Laughing Cavalier</em> (1624). Wallace's widow bequeathed the entire collection to the British nation in 1897 on the condition it never leave London and never be lent out. It has been a free public museum ever since — one of the most generous gifts in art history.`,
-        todo: `<p><span class="tip-icon">🎨</span><strong>Must-see rooms:</strong> The Great Gallery (top floor) for the Old Masters. Room 22 for Hals' <em>Laughing Cavalier</em>. The European Armoury — 2,500 pieces of medieval armour — is extraordinary. The glass-roofed courtyard café is excellent for a mid-morning stop. Download the free audio guide from their website.</p>`,
-        duration: "90 min", prebookText: null, prebookUrl: null
-      },
-      {
-        time: "11:30 AM", name: "Walk through Mayfair", type: "Walking tour",
-        color: "#7b1fa2", prebook: false, free: true, weekend: false,
-        lat: 51.5113, lng: -0.1427, address: "Burlington Arcade, Piccadilly, London W1J 0QJ",
-        badges: ["free","walk"],
-        travel: "🚶 25-min walk south through Mayfair — one of London's finest walking routes.",
-        history: `<strong>Mayfair</strong> takes its name from the May Fair held annually here from 1686 until the 1760s, when it was suppressed for causing disorder. The area was developed into London's most prestigious residential district in the early 18th century by the Grosvenor family, who still own much of it today.\n\n<strong>Burlington Arcade</strong> (1819) was the first purpose-built shopping arcade in Britain. It was commissioned by Lord George Cavendish to stop people throwing oyster shells and rubbish into his garden next door. The Beadles (uniformed guards) who patrol it today date from its opening — they enforce rules against running, singing, and opening umbrellas, which have been in place since 1819.\n\n<strong>Savile Row</strong>, which you'll pass through, has been the global home of bespoke tailoring since the 1800s. The Beatles' last public performance was on the rooftop of No. 3 in January 1969.`,
-        todo: `<p><span class="tip-icon">🚶</span><strong>Route:</strong> Walk south from Wallace Collection → through Marylebone → along Bond Street → through Burlington Arcade → along Savile Row → arriving at Dishoom Carnaby on Kingly Street. This is one of London's most architecturally rewarding walking routes.</p>`,
-        duration: "25 min"
-      },
-            {
-        time: "1:00 PM", name: "Sir John Soane's Museum", type: "Hidden gem museum · Free",
-        color: "#5c4db1", prebook: false, free: true, weekend: false,
-        lat: 51.517, lng: -0.1175, address: "13 Lincoln's Inn Fields, London WC2A 3BP",
-        badges: ["free"],
-        travel: "🚶 15-min walk east along High Holborn to Lincoln's Inn Fields — London's largest public square.",
-        history: `<strong>Sir John Soane</strong> (1753–1837) was the greatest British architect of his age — designer of the original Bank of England and Dulwich Picture Gallery. He spent 40 years transforming these three terraced houses into an architectural experiment, knocking through floors and walls to create extraordinary spaces flooded with natural light via mirrors and skylights.\n\nThe house contains <strong>30,000 objects</strong> including an Egyptian sarcophagus of <strong>Seti I</strong> (1279 BC), Hogarth's complete <em>A Rake's Progress</em> series (1733), Roman antiquities, architectural models, and an entire picture gallery with walls that swing open to reveal paintings three layers deep. Soane left it to the nation on his death in 1837 with the condition it remain exactly as he left it. It has barely changed since.`,
-        todo: `<p><span class="tip-icon">🏛️</span><strong>Don't miss:</strong> Ask a guide to open the picture planes in the Picture Room to reveal the three hidden layers of paintings. Find Seti I's sarcophagus in the basement Sepulchral Chamber. Look for the monk's cell and the "Padre Giovanni" tomb — Soane's eccentric tribute to his pet dog. Download the audio guide before visiting from soane.org.</p>`,
-        duration: "90 min", prebookText: null
-      },
-      {
-        time: "2:45 PM", name: "Two Temple Place", type: "Hidden Victorian mansion · Free",
-        color: "#006064", prebook: false, free: true, weekend: false,
-        lat: 51.5116, lng: -0.1122, address: "2 Temple Pl, London WC2R 3BD",
-        badges: ["free"],
-        travel: "🚶 10-min walk south along Chancery Lane to the Victoria Embankment. The building is just off the river.",
-        history: `<strong>Two Temple Place</strong> was built in 1895 for <strong>William Waldorf Astor</strong>, the richest man in America, as his London estate office. Designed by architect John Loughborough Pearson (who also designed Truro Cathedral), it is a stunning example of Late Victorian Gothic Revival architecture.\n\nThe exterior is covered in a frieze of figures from literature and history. Inside, the main hall features a triple-height mahogany staircase with 52 carved figures representing characters from <em>The Last of the Mohicans</em>. The stained glass, gilded ceilings, and marble floors were all installed at extraordinary expense. Astor subsequently donated it to the nation. It now hosts free contemporary art exhibitions from Britain's regional museum collections — one of London's best-kept secrets.`,
-        todo: `<p><span class="tip-icon">✨</span><strong>Explore:</strong> Look up at the carved wooden staircase — spot all 52 literary figures. The main hall has extraordinary gilded detail. Check what exhibition is currently running at twotempleplace.org — they are consistently excellent. Closed Mondays.</p>`,
-        duration: "50 min"
-      },
-      {
-        time: "3:00 PM", name: "Big Ben & Houses of Parliament", type: "Iconic landmark · Westminster · Exterior & Bridge view",
-        color: "#006064", prebook: false, free: true, weekend: false,
-        lat: 51.5007, lng: -0.1246, address: "Westminster, London SW1A 0AA",
-        badges: ["free"],
-        travel: "🚇 Tube to Westminster (Jubilee/Circle/District line). The tower is directly above the station exit — unmissable.",
-        history: `<strong>Big Ben</strong> is the nickname for the Great Bell of the clock at the north end of the <strong>Houses of Parliament</strong> (officially the Elizabeth Tower, renamed in 2012 for the Queen's Diamond Jubilee). The tower was completed in 1859 and the bell — weighing 13.5 tonnes — first rang on 11 July 1859. The name Big Ben likely refers to Sir Benjamin Hall, the Commissioner of Works when the bell was installed.\n\nThe <strong>Palace of Westminster</strong> has been the seat of the British Parliament since the 13th century. The current Gothic Revival building was designed by <strong>Charles Barry</strong> and <strong>Augustus Pugin</strong> after a catastrophic fire in 1834 destroyed most of the medieval palace. Pugin died aged 40 from overwork on the project. The building contains over 1,100 rooms, 100 staircases, and 4.8km of corridors.`,
-        todo: `<p><span class="tip-icon">🕰️</span><strong>From Westminster Bridge</strong> you get the classic Big Ben view. Walk to the centre of the bridge for the full panorama — Parliament on one side, the London Eye on the other. Then head to Westminster Pier (2-min walk from the bridge) to catch the Thames Clipper river boat westward toward Greenwich or eastward toward the City. The view from the water looking back at Parliament is unforgettable.</p>`,
-        duration: "30 min"
-      },
-      {
-        time: "3:35 PM", name: "Thames River Cruise 🚢", type: "River boat · City of London views",
+        time: "5:30 PM", name: "Thames River Cruise 🚢",
+        type: "Thames Clipper · Westminster to Tower Bridge",
         color: "#1a73e8", prebook: false, free: false, weekend: false,
         lat: 51.5014, lng: -0.1221, address: "Westminster Pier, Victoria Embankment, London SW1A 2JH",
         badges: ["paid"],
         travel: "🚶 2-min walk from Westminster Bridge — Westminster Pier is on the north bank directly below Big Ben.",
-        history: `The <strong>River Thames</strong> is the reason London exists — the Romans founded Londinium here in 43 AD precisely because this was the lowest point where the river could be bridged while still being tidal and accessible to ocean-going ships. For 1,800 years the Thames was London's main highway: goods, people, royalty, and prisoners all moved by river.\n\n<strong>Westminster Pier</strong> sits at the heart of royal and political London. From here you can see the entire sweep of the city's most iconic buildings. The river boat (<strong>Thames Clippers</strong>) runs a fast commuter service both east (toward Tower Bridge, Greenwich) and west (toward Kew). Historically, private watermen ferried passengers across the river for centuries — the predecessor of today's taxi.`,
-        todo: `<p><span class="tip-icon">⛵</span><strong>Take the Thames Clipper</strong> eastbound from Westminster Pier toward Tower Bridge — about 20 minutes, passing Tate Modern, the Millennium Bridge, Southwark, and under Tower Bridge itself. Buy tickets at the pier or on the app (around £6–8). Sit on the top open deck for the best views. You can hop off at Bankside or Tower Bridge and walk back, or ride to Greenwich and return. The view of Parliament from the water — looking back as you depart — is the finest in London.</p>`,
-        duration: "45 min"
-      },
-      {
-        time: "3:45 PM", name: "Buckingham Palace & St James's Park", type: "Royal Palace · Free exterior · Guard change",
-        color: "#b5910a", prebook: false, free: true, weekend: false,
-        lat: 51.5014, lng: -0.1419, address: "Buckingham Palace, London SW1A 1AA",
-        badges: ["free"],
-        travel: "🚶 15-min walk west along Birdcage Walk through St James's Park — one of London's finest royal parks. Or take the 11 or 211 bus one stop.",
-        history: `<strong>Buckingham Palace</strong> has been the official London residence of the British monarch since 1837, when Queen Victoria moved in as the first sovereign to use it. The building began as Buckingham House in 1703, built for the Duke of Buckingham. George III bought it in 1761 as a private residence, and it was enlarged repeatedly — most significantly by John Nash in the 1820s for George IV.\n\nThe famous <strong>East Front</strong> (the face you see from the Mall) was added in 1913, designed by Sir Aston Webb. The Palace has 775 rooms including 19 State Rooms, 52 royal and guest bedrooms, 188 staff bedrooms, 92 offices, and 78 bathrooms. The <strong>Changing of the Guard</strong> — the formal handover of responsibility for guarding the palace — takes place at 11:00 AM on most days (check royal.uk for schedule).`,
-        todo: `<p><span class="tip-icon">👑</span><strong>Walk through St James's Park</strong> to approach the Palace along the Mall — the ceremonial route. The view of the palace from the Victoria Memorial is the classic shot. If you time it right, the <strong>Changing of the Guard</strong> is at 11am (not today — it's afternoon, but plan for another day). Walk around the perimeter of the Palace to Green Park for a peaceful end to the afternoon. The <strong>State Rooms</strong> are open for paid tours in summer — check royal.uk.</p>`,
-        duration: "45 min"
-      },
-      {
-        time: "3:40 PM", name: "Temple Church", type: "800-year-old Knights Templar church",
-        color: "#880e4f", prebook: false, free: false, weekend: false,
-        lat: 51.5133, lng: -0.1103, address: "Temple, London EC4Y 7BB",
-        badges: ["paid","weekday"],
-        travel: "🚶 5-min walk along the Embankment then into the Temple complex through the archway on Fleet Street.",
-        history: `<strong>Temple Church</strong> was built in 1185 by the <strong>Knights Templar</strong> — the military monastic order founded in Jerusalem in 1119 to protect Christian pilgrims travelling to the Holy Land. The circular nave was deliberately modelled on the Church of the Holy Sepulchre in Jerusalem.\n\nThe nine stone effigies of crusader knights on the floor date from 1185–1250. After the Templars were suppressed and their leaders burned at the stake in 1312, the church passed to the Knights Hospitaller and then to the legal profession. It is still owned by the Inner and Middle Temple law societies. The church survived the Great Fire of 1666 but was badly damaged in the Blitz of 1941 — the current interior is a meticulous post-war restoration. <em>The Da Vinci Code</em> used it as a location, but the real history is far stranger than the novel.`,
-        todo: `<p><span class="tip-icon">⚔️</span><strong>Look for:</strong> The nine crusader knight effigies on the floor — run your eyes over the faces, they are extraordinary portraits. The Round Church (1185) vs the Chancel (1240) — you can see the architectural shift from Romanesque to Early Gothic. Open Mon–Fri only, small entry charge.</p>`,
+        history: `The <strong>River Thames</strong> is the reason London exists — the Romans founded Londinium here in 43 AD precisely because this was the lowest tidal bridging point accessible to ocean ships. For 1,800 years the Thames was London's main highway: goods, people, royalty and prisoners all moved by river.\n\nThe <strong>Thames Clippers</strong> (now Uber Boat) run a fast river service between Westminster and Woolwich, stopping at major piers. The 25-minute eastbound journey passes the South Bank, Tate Modern, the Millennium Bridge, Shakespeare's Globe, Bankside, and arrives at Tower Bridge — passing under it — with some of the finest urban river views in Europe.`,
+        todo: `<p><span class="tip-icon">⛵</span><strong>Take the eastbound Clipper</strong> to Tower Bridge/London Bridge pier. Sit on the top open deck. Buy tickets on the app (around £6–8). The view of St Paul's dome rising above the city from the river is extraordinary. Disembark at Tower Bridge and walk — or stay on to Greenwich another day.</p>`,
         duration: "35 min"
       },
       {
-        time: "4:20 PM", name: "Postman's Park", type: "Hidden memorial garden · Free",
+        time: "6:15 PM", name: "Ham Yard Hotel — Afternoon Tea",
+        type: "Boutique hotel · Soho · Afternoon tea",
+        color: "#880e4f", prebook: true, free: false, weekend: false,
+        lat: 51.5104, lng: -0.1369, address: "1 Ham Yard, London W1D 7DT",
+        badges: ["food","prebook"],
+        travel: "🚇 Tube from Tower Hill/London Bridge to Piccadilly Circus (2 stops). Ham Yard is 3-min walk from Piccadilly Circus, tucked behind Shaftesbury Avenue.",
+        history: `<strong>Ham Yard Hotel</strong> opened in 2014, designed by Kit Kemp for the Firmdale Hotels group. It occupies a hidden courtyard — Ham Yard — in the heart of Soho, on a site that was a bombed-out rubble-strewn lot from the Blitz until the 1990s.\n\nThe hotel is celebrated for Kit Kemp's signature interior style — bold patterns, contemporary art, eclectic furniture, and an atmosphere that feels like a stylish private house rather than a hotel. The afternoon tea in the bar and restaurant is one of Soho's best-kept secrets — less formal and touristy than the grand hotel teas, with excellent pastries and a lively Soho crowd.`,
+        todo: `<p><span class="tip-icon">🫖</span><strong>Order the afternoon tea</strong> — excellent finger sandwiches, scones with clotted cream, and pastries in a beautiful room. The Soho location means you're surrounded by theatre-goers and creative types rather than tourists. Book ahead — popular for early evening after-work tea. A perfect gentle end to the arrival day.</p>`,
+        duration: "90 min", prebookText: "Book afternoon tea at hamyardhotel.com", prebookUrl: "https://www.hamyardhotel.com/restaurants-and-bars/restaurant/"
+      }
+    ]
+  },
+  {
+    title: "May 8 — Greenwich & the East",
+    note: "Full day out — Thames Clipper to Greenwich, back via Tower Bridge & Crown Jewels",
+    stops: [
+      {
+        time: "9:00 AM", name: "Dishoom King's Cross — Breakfast",
+        type: "Bombay café · Legendary breakfast · Pre-book",
+        color: "#c0392b", prebook: true, free: false, weekend: false,
+        lat: 51.5326, lng: -0.1228, address: "5 Stable St, London N1C 4AB",
+        badges: ["food","prebook"],
+        travel: "🚇 Tube to King's Cross St Pancras (Piccadilly line, 4 stops). Walk 5 min to Granary Square.",
+        history: `<strong>Dishoom</strong> is modelled on the Irani cafés of Bombay — opened by Zoroastrian immigrants from Iran in the early 20th century. These cafés were places of extraordinary democratic mixing, where factory workers and lawyers sat side by side over chai and eggs. Most Bombay Irani cafés have now closed.\n\nThe <strong>King's Cross branch</strong> (2014) occupies a converted granary warehouse in the magnificent King's Cross development — one of Europe's largest urban regeneration projects, transforming 67 acres of Victorian railway yards into a cultural and residential quarter.`,
+        todo: `<p><span class="tip-icon">☕</span><strong>Order:</strong> The bacon naan roll, Dishoom breakfast (with their legendary masala chai), or the vegetarian breakfast. Arrive at opening (8am) or book ahead — queues form quickly. The King's Cross setting in Granary Square is spectacular.</p>`,
+        duration: "60 min", prebookText: "Book online or arrive at 8am opening", prebookUrl: "https://www.dishoom.com/kings-cross/"
+      },
+      {
+        time: "10:15 AM", name: "Thames Clipper to Greenwich 🚢",
+        type: "River journey · 45 min · Canary Wharf & Docklands",
+        color: "#1a73e8", prebook: false, free: false, weekend: false,
+        lat: 51.5074, lng: -0.0278, address: "Embankment Pier, Victoria Embankment, WC2N 6NU",
+        badges: ["paid"],
+        travel: "🚇 Tube to Embankment (District/Circle). Walk to Embankment Pier. Or take Clipper from any central pier.",
+        history: `The <strong>Thames Clipper</strong> route to Greenwich passes through the heart of modern London's financial geography — past the gleaming towers of <strong>Canary Wharf</strong>, built on the derelict West India Docks from the late 1980s onward. The Docklands were once the busiest port in the world — in 1900, a quarter of all world trade passed through the Pool of London.\n\n<strong>Greenwich</strong> itself was the site of the Tudor Royal Palace where Henry VIII and his daughters Mary and Elizabeth were born. The <strong>Royal Observatory</strong> on the hill above the town was founded by Charles II in 1675 — and the <strong>Prime Meridian</strong>, the line from which all world longitudes are measured, passes through it.`,
+        todo: `<p><span class="tip-icon">⛵</span><strong>Sit on the top deck</strong> for the 45-minute journey. Pass Tower Bridge, the Shard, HMS Belfast, Canary Wharf, and the O2. Alight at Greenwich Pier. The journey itself is one of the great London experiences — the city unfolds around you from the water.</p>`,
+        duration: "50 min"
+      },
+      {
+        time: "11:15 AM", name: "Painted Hall — Old Royal Naval College",
+        type: "Baroque masterpiece · England's Sistine Chapel",
+        color: "#5c4db1", prebook: false, free: false, weekend: false,
+        lat: 51.4826, lng: -0.0076, address: "Old Royal Naval College, Greenwich, London SE10 9NN",
+        badges: ["paid"],
+        travel: "🚶 2-min walk from Greenwich Pier through the gates of the Old Royal Naval College.",
+        history: `The <strong>Painted Hall</strong> at the Old Royal Naval College is the most magnificent baroque interior in Britain — often called England's Sistine Chapel. It was painted by <strong>Sir James Thornhill</strong> over 19 years (1707–1726), covering 40,000 square feet of ceiling and walls with an elaborate allegory of the Protestant succession and British maritime power.\n\nThe building itself was designed by <strong>Christopher Wren</strong> and <strong>Nicholas Hawksmoor</strong> as a hospital for retired naval seamen — a British counterpart to Les Invalides in Paris. The hall was originally a dining room but proved too magnificent for daily use. Nelson's body lay in state here in 1805 after Trafalgar.`,
+        todo: `<p><span class="tip-icon">🎨</span><strong>Look up:</strong> The ceiling is overwhelming in scale and detail. Hire an audio guide and lie on the viewing trolley provided to see the ceiling properly without breaking your neck. Find the self-portrait of Thornhill in the lower hall — he painted himself holding out his hand for payment. Allow 45 minutes minimum.</p>`,
+        duration: "60 min"
+      },
+      {
+        time: "12:30 PM", name: "Greenwich Market — Lunch",
+        type: "Covered market · Street food · 1700s",
         color: "#1a7a3a", prebook: false, free: true, weekend: false,
-        lat: 51.5168, lng: -0.0977, address: "King Edward St, London EC1A 7BT",
-        badges: ["free"],
-        travel: "🚶 15-min walk north along Aldersgate Street — a classic City of London street with layers of history.",
-        history: `<strong>Postman's Park</strong> was created in 1880 on the site of three former churchyards near St Paul's. The name comes from its use as a lunchtime garden by workers from the nearby General Post Office.\n\nIn 1900, the Victorian artist <strong>George Frederic Watts</strong> fulfilled a lifelong ambition by installing the <strong>Memorial to Heroic Self-Sacrifice</strong> — a covered loggia of hand-painted Doulton ceramic tiles, each commemorating an ordinary person who died saving another. The memorial honours people like <em>"Frederick Alfred Croft, Inspector, saved a lunatic woman from suicide at Woolwich Arsenal station, January 11, 1878, but was himself run over by the train"</em>. Each tile is a complete world. There are 54 plaques — Watts planned 120 but died before completing the project.`,
-        todo: `<p><span class="tip-icon">🌿</span><strong>Take time:</strong> Read every single plaque slowly — they are extraordinary miniature stories of ordinary heroism. The stories of children saving siblings are particularly moving. The park is almost completely unknown to tourists despite being 5 minutes from St Paul's. Sit on a bench and absorb it.</p>`,
-        duration: "25 min"
+        lat: 51.4814, lng: -0.0094, address: "Greenwich Market, London SE10 9HZ",
+        badges: ["free","food"],
+        travel: "🚶 5-min walk through the grounds of the Naval College into the town centre.",
+        history: `<strong>Greenwich Market</strong> has traded on this site since the early 1700s, making it one of the oldest markets in London. The current covered market building dates from 1831. Unlike Borough Market, Greenwich Market is compact, covered, and less crowded — a local secret compared to its famous south bank cousin.\n\nThe market specialises in street food, arts, crafts, antiques, and vintage goods. The food stalls represent cuisines from across the world — Ethiopian, Japanese, Indian, Greek, Middle Eastern — with fresh produce and excellent coffee alongside. The surrounding area still has the atmosphere of a Georgian market town rather than a London suburb.`,
+        todo: `<p><span class="tip-icon">🌍</span><strong>For lunch:</strong> Browse the food stalls and pick 2–3 dishes from different stalls. The Ethiopian, Japanese, and Middle Eastern options are consistently outstanding. Eat in the market or take your food to the park on the hill for views over Canary Wharf. Allow 60 minutes — market closes around 5:30pm.</p>`,
+        duration: "60 min"
       },
       {
-        time: "5:00 PM", name: "Leadenhall Market", type: "Victorian covered market · Free",
+        time: "1:45 PM", name: "Royal Observatory & Prime Meridian",
+        type: "Historic observatory · Panoramic views · Paid",
+        color: "#e65100", prebook: false, free: false, weekend: false,
+        lat: 51.4778, lng: -0.0015, address: "Blackheath Ave, Greenwich, London SE10 8XJ",
+        badges: ["paid"],
+        travel: "🚶 15-min walk uphill through Greenwich Park — one of London's finest Royal Parks, with deer.",
+        history: `The <strong>Royal Observatory</strong> was founded by Charles II in 1675 to solve the problem of longitude — how to determine a ship's east-west position at sea. The <strong>Prime Meridian of the World</strong> — Longitude 0° — passes through the courtyard. Since 1884, all world time zones and longitudes have been measured from this line.\n\nThe <strong>flamsteed House</strong>, designed by Christopher Wren, is the original observatory building. The red Time Ball on the roof drops at exactly 1:00 PM every day — a tradition since 1833 that allowed ships on the Thames to set their chronometers.`,
+        todo: `<p><span class="tip-icon">🌍</span><strong>Stand on the Prime Meridian</strong> — one foot in the Eastern hemisphere, one in the Western. The panoramic view from the top of the hill over Canary Wharf, the City, and the Thames is one of the finest in London. The Astronomy Centre is free; the Observatory itself requires a ticket. Allow 45 minutes.</p>`,
+        duration: "50 min"
+      },
+      {
+        time: "3:00 PM", name: "Tower Bridge — Glass Walkway",
+        type: "Victorian engineering · Glass floor · Stunning views",
+        color: "#c0392b", prebook: true, free: false, weekend: false,
+        lat: 51.5055, lng: -0.0754, address: "Tower Bridge, London SE1 2UP",
+        badges: ["prebook"],
+        travel: "🚢 Thames Clipper back westbound from Greenwich Pier toward Tower Bridge/London Bridge pier (30 min). Or DLR to Tower Gateway (15 min).",
+        history: `<strong>Tower Bridge</strong> was built between 1886 and 1894, designed by Sir Horace Jones (who also designed Leadenhall Market) and engineer John Wolfe Barry. The bridge opens its bascules for tall ships — still around 800 times per year. The twin towers contain the original Victorian steam engines that powered the lifting mechanism until 1976, when they were converted to electricity.\n\nThe high-level walkways at 42 metres were originally open to the public but closed in 1910 because they became a haunt for prostitutes and pickpockets. They reopened in 1982 as a tourist attraction, and glass floors were installed in 2014 — giving a vertiginous view directly down to the road and river below.`,
+        todo: `<p><span class="tip-icon">🌉</span><strong>Walk the glass floor</strong> at 42 metres — genuinely vertiginous. Book online to skip queues. The Victorian Engine Rooms below are included in the ticket. Time your visit to see if the bridge is opening — check the schedule at towerbridge.org.uk. The view from the walkway over the Pool of London is spectacular.</p>`,
+        duration: "60 min", prebookText: "Book at towerbridge.org.uk", prebookUrl: "https://www.towerbridge.org.uk/"
+      },
+      {
+        time: "4:15 PM", name: "Crown Jewels — Tower of London",
+        type: "Royal fortress · Crown Jewels · 1000 years of history",
+        color: "#880e4f", prebook: true, free: false, weekend: false,
+        lat: 51.5081, lng: -0.0759, address: "Tower of London, London EC3N 4AB",
+        badges: ["prebook"],
+        travel: "🚶 3-min walk from Tower Bridge along the riverfront.",
+        history: `The <strong>Tower of London</strong> is one of the world's most important historical buildings — founded by William the Conqueror in 1066 and continuously used by the Crown for nearly 1,000 years as palace, prison, armoury, treasury, and place of execution. Anne Boleyn, Catherine Howard, Lady Jane Grey, Thomas More, and Walter Raleigh were all imprisoned here; many were executed on Tower Green.\n\nThe <strong>Crown Jewels</strong> in the Jewel House include the Imperial State Crown (worn by the monarch at the State Opening of Parliament), the Sovereign's Orb, and the Sceptre with Cross — incorporating the Cullinan I diamond, the largest clear-cut diamond in the world at 530 carats. The collection has been in the Tower since 1303.`,
+        todo: `<p><span class="tip-icon">💎</span><strong>Head straight to the Crown Jewels</strong> on arrival — the queue builds through the day. Take a Yeoman Warder (Beefeater) tour — they're included free and the guides are extraordinary storytellers, all retired senior military. Find the scaffold site on Tower Green and the cell where Raleigh wrote his <em>History of the World</em>. Book ahead — Tower of London sells out.</p>`,
+        duration: "90 min", prebookText: "Book at hrp.org.uk — sells out", prebookUrl: "https://www.hrp.org.uk/tower-of-london/"
+      },
+      {
+        time: "7:00 PM", name: "Fallow Restaurant — Dinner",
+        type: "Modern British · St James's Market · Innovative",
+        color: "#1a7a3a", prebook: true, free: false, weekend: false,
+        lat: 51.5094, lng: -0.1355, address: "2 St James's Market, London SW1Y 4AH",
+        badges: ["food","prebook"],
+        travel: "🚇 Tube from Tower Hill to Green Park (District line, 4 stops). Walk 5 min to St James's Market.",
+        history: `<strong>Fallow</strong> opened in 2021 in St James's Market — a redeveloped retail and dining quarter between Regent Street and Haymarket. Founded by chefs <strong>Jack Croft and William Murray</strong>, Fallow rapidly became one of London's most talked-about restaurants, earning a Michelin star in 2023.\n\nThe restaurant's philosophy centres on sustainability and waste reduction — the menu uses offcuts, nose-to-tail cooking, and ingredients sourced within sustainable parameters. The wood-fired cooking and the corn ribs (now their signature dish) created a sensation. The dining room is industrial-chic with an open kitchen, and the atmosphere is energetic rather than formal.`,
+        todo: `<p><span class="tip-icon">🍽️</span><strong>Order:</strong> The corn ribs as a starter (their signature), whatever fish is on the wood-fire section, and the mushroom parfait. The tasting menu is excellent value for a Michelin-starred meal. Book at least 2 weeks ahead — one of London's hardest reservations right now.</p>`,
+        duration: "120 min", prebookText: "Book at fallowrestaurant.com — 2+ weeks ahead", prebookUrl: "https://www.fallowrestaurant.com/"
+      }
+    ]
+  },
+  {
+    title: "May 9 — South Bank & Soho",
+    note: "Friday — Borough Market, Globe Theatre, Sky Garden, British Museum, Chinatown",
+    stops: [
+      {
+        time: "9:00 AM", name: "British Museum",
+        type: "World's greatest museum · Free · 2 hours",
+        color: "#1a73e8", prebook: false, free: true, weekend: false,
+        lat: 51.5194, lng: -0.127, address: "Great Russell St, London WC1B 3DG",
+        badges: ["free"],
+        travel: "🚇 Tube to Holborn (Central/Piccadilly line) or Tottenham Court Road. 5-min walk.",
+        history: `The <strong>British Museum</strong> was founded in 1753 — the world's first public national museum. The collection began with the bequest of physician and naturalist Sir Hans Sloane, who left 71,000 objects to the nation. Today the collection exceeds 8 million objects spanning 2 million years of human history.\n\nThe <strong>Great Court</strong>, designed by Norman Foster and opened in 2000, is the largest covered public square in Europe — a stunning glass-and-steel roof over the original 1857 Reading Room where Karl Marx wrote Das Kapital. The museum's most contested objects include the Elgin Marbles (Parthenon sculptures), the Rosetta Stone, and the Lewis Chessmen.`,
+        todo: `<p><span class="tip-icon">🏛️</span><strong>In 2 hours focus on:</strong> Room 4 (Egyptian mummies and the Rosetta Stone), Room 18 (Elgin Marbles/Parthenon sculptures — even amid controversy these are breathtaking), Room 41 (the Sutton Hoo helmet), and the Great Court. Pick up a map at the entrance — the museum is enormous and easy to get lost in. Free entry always.</p>`,
+        duration: "120 min"
+      },
+      {
+        time: "11:15 AM", name: "Chinatown & Soho Walk",
+        type: "Gerrard Street · London's Chinatown · Free",
         color: "#e65100", prebook: false, free: true, weekend: false,
-        lat: 51.5128, lng: -0.0835, address: "Gracechurch St, London EC3V 1LT",
-        badges: ["free"],
-        travel: "🚶 15-min walk east through the City of London — past the Bank of England and the Royal Exchange.",
-        history: `<strong>Leadenhall Market</strong> has occupied this site since the 14th century — it is the oldest market in the City of London. The site was part of the <strong>Roman forum of Londinium</strong>, the civic heart of Roman London (founded around 50 AD). Medieval London's main poultry and cheese market stood here.\n\nThe current magnificent structure was designed by <strong>Sir Horace Jones</strong> in 1881 — the same architect who designed Tower Bridge. The painted cast-iron roof structure, with its ornate green and burgundy ironwork and soaring glass roof, is one of the finest Victorian engineering achievements in London. It was used as Diagon Alley in the first Harry Potter film (2001) — the optician's shop that doubled as the Leaky Cauldron still stands on the corner.`,
-        todo: `<p><span class="tip-icon">🍷</span><strong>Stop for:</strong> A glass of wine or cocktail at one of the bars under the arches. Look up at the painted ceiling — the detail is extraordinary. Find the corner that appeared in Harry Potter. The market is at its best in the late afternoon when City workers fill the bars.</p>`,
-        duration: "40 min"
-      },
-      {
-        time: "5:50 PM", name: "Sky Garden — Sunset Cocktails", type: "Rooftop garden · Free with booking",
-        color: "#1565c0", prebook: true, free: true, weekend: false,
-        lat: 51.5112, lng: -0.0835, address: "1 Sky Garden Walk, London EC3M 8AF",
-        badges: ["free","prebook"],
-        travel: "🚶 2-min walk — the Sky Garden is in the Walkie-Talkie building (20 Fenchurch Street), directly next to Leadenhall Market.",
-        history: `The <strong>Walkie-Talkie building</strong> (officially 20 Fenchurch Street) was designed by Rafael Viñoly and completed in 2014. It is nicknamed the Walkie-Talkie because of its distinctive widening shape. In 2013, before the glass was treated, it famously focused sunlight so intensely on the street below that it melted a car and fried eggs on the pavement — earning it the tabloid nickname "the Fryscraper".\n\nThe <strong>Sky Garden</strong> on floors 35–37 was added as a public benefit — a requirement for planning permission — and opened in 2015. It is now one of London's most popular free attractions, offering some of the finest panoramic views of the city, including St Paul's Cathedral, the Shard, Tower Bridge, and the entire sweep of the Thames.`,
-        todo: `<p><span class="tip-icon">🌅</span><strong>Arrive at sunset</strong> for the most spectacular views as the city lights come on. The two outdoor terraces give you unobstructed 360° views. Order cocktails at the bar and watch the sun set over St Paul's. <strong>MUST BOOK AHEAD</strong> at skygarden.london — slots release 3 weeks in advance and sell out within hours. Free entry.</p>`,
-        duration: "75 min",
-        prebookText: "Book free entry — sells out 3 weeks ahead",
-        prebookUrl: "https://skygarden.london/sky-garden/"
-      },
-      {
-        time: "8:00 PM", name: "Duck & Waffle — Rooftop Dinner", type: "Rooftop fine dining · 40th floor",
-        color: "#c0392b", prebook: true, free: false, weekend: false,
-        lat: 51.5163, lng: -0.0812, address: "110 Bishopsgate, London EC2N 4AY",
-        badges: ["prebook"],
-        travel: "🚶 5-min walk north from Sky Garden to Heron Tower on Bishopsgate.",
-        history: `<strong>Heron Tower</strong> (now officially Salesforce Tower) is one of the City of London's tallest buildings at 230 metres, completed in 2011. It was designed by architects Kohn Pedersen Fox and features a distinctive external structural frame.\n\n<strong>Duck & Waffle</strong> opened in 2012 and was one of London's first 24-hour fine dining restaurants. At 40 floors up, it holds one of the most dramatic dining positions in the city — views of Tower Bridge, the Thames, the Gherkin, and on clear nights, all the way to the North Downs.`,
-        todo: `<p><span class="tip-icon">🍽️</span><strong>Order (healthy options):</strong> Seasonal vegetable dishes, fresh fish, and the tasting menus. Request a window table when booking — insist on it. The city views at night are extraordinary. Open 24 hours; reserve the 8pm slot for the best light transition from dusk to night.</p>`,
-        duration: "120 min",
-        prebookText: "Book online — request window table",
-        prebookUrl: "https://duckandwaffle.com/london/"
-      }
-    ]
-  },
-  {
-    title: "May 8 — East London Immersion",
-    note: "Thursday — Columbia Road & Maltby Street are weekend-only, swap for alternatives below",
-    stops: [
-      {
-        time: "9:00 AM", name: "Columbia Road Flower Market + Coffee", type: "Sunday market · East London",
-        color: "#1a7a3a", prebook: false, free: true, weekend: true,
-        lat: 51.5291, lng: -0.0698, address: "Columbia Rd, London E2 7RG",
-        badges: ["free","weekend"],
-        travel: "🚇 Tube to Bethnal Green (Central line, 25 min from Piccadilly Circus). Walk 10 min north. Or take bus 8 to Columbia Road.",
-        history: `<strong>Columbia Road</strong> has been a market street since the Victorian era. The flower market was formally established in the late 19th century when <strong>Baroness Angela Burdett-Coutts</strong> — the wealthiest woman in Victorian England — built the Columbia Market building here in 1869 as a covered market for the poor of the East End. When it failed commercially, the street traders took over and the outdoor flower market evolved organically.\n\nThe East End of London was historically home to successive waves of immigrants: <strong>Huguenot silk weavers</strong> from France (1680s), then Ashkenazi Jewish immigrants fleeing Eastern European pogroms (1880s–1930s), then Bangladeshi communities (1970s–present). You can still see the layers of this history in the architecture of Bethnal Green and Shoreditch surrounding you.`,
-        todo: `<p><span class="tip-icon">🌸</span><strong>Go early (9am)</strong> for the best flowers and energy before the crowds peak. The sellers shout prices in cockney rhyming slang. Browse the tiny independent shops on the street — excellent ceramics, art books, coffee. Grab a flat white from Columbia Coffee or Jones Dairy Café. The market runs 8am–3pm Sundays only.</p>`,
-        duration: "60 min"
-      },
-      {
-        time: "10:10 AM", name: "Walk through Spitalfields & Brick Lane", type: "Walking tour · Huguenot & Jewish history",
-        color: "#7b1fa2", prebook: false, free: true, weekend: false,
-        lat: 51.5194, lng: -0.0761, address: "Brick Lane, London E1 6RF",
+        lat: 51.5107, lng: -0.1314, address: "Gerrard St, London W1D 5PT",
         badges: ["free","walk"],
-        travel: "🚶 15-min walk west through Bethnal Green into Spitalfields — one of London's most historically layered neighbourhoods.",
-        history: `<strong>Spitalfields</strong> has been London's immigrant quarter for 350 years. The name comes from the Hospital Fields of the medieval priory of St Mary Spital (1197).\n\n<strong>Brick Lane</strong> tells the story of London's immigrants in a single street. The building at the corner of Fournier Street has been, in sequence: a Huguenot chapel (1743), a Wesleyan chapel (1819), the <strong>Great Synagogue</strong> for Jewish immigrants (1898), and now the <strong>Jamme Masjid mosque</strong> (1976) — each community transforming it for their own faith. No other building in London tells the story of immigration so vividly.\n\nThe Georgian terraced houses on Fournier Street and Elder Street were built by Huguenot silk merchants in the 1720s–30s and are among the finest unaltered 18th-century streetscapes in London.`,
-        todo: `<p><span class="tip-icon">🚶</span><strong>Walk via:</strong> Bethnal Green Road → Brick Lane (look for the multi-faith building on the corner of Fournier Street) → Elder Street (extraordinary Georgian terrace) → arriving at Rochelle Canteen on Arnold Circus. This 15-minute walk is one of the most historically rich in London.</p>`,
-        duration: "15 min"
-      },
-      {
-        time: "10:30 AM", name: "Rochelle Canteen — Brunch", type: "Cult restaurant · Seasonal British",
-        color: "#1a7a3a", prebook: true, free: false, weekend: false,
-        lat: 51.5258, lng: -0.0743, address: "16 Playground Gardens, London E2 7FA",
-        badges: ["food","prebook"],
-        travel: "🚶 Arrive via Arnold Circus — the centrepiece bandstand surrounded by the Boundary Estate, the world's first council housing (1900).",
-        history: `<strong>Rochelle Canteen</strong> opened in 2004 in a converted Victorian school bike shed — part of the <strong>Rochelle School</strong> building (1883), a former London County Council school. To find it you must ring a bell on a plain brick wall; there is no sign. It was opened by chefs <strong>Melanie Arnold and Margot Henderson</strong> (wife of Fergus Henderson of St John's fame).\n\n<strong>Arnold Circus</strong> outside is the centrepiece of the <strong>Boundary Estate</strong> — built in 1900 and the world's first social housing project. The bandstand stands on a mound made from the rubble of the Old Nichol slum it replaced. The estate is a masterpiece of Arts and Crafts social architecture.`,
-        todo: `<p><span class="tip-icon">🍳</span><strong>Order (healthy):</strong> Whatever fish or vegetables are on that day — the menu changes constantly based on what's freshest. The sea bass, seasonal grain dishes, and mushroom plates are consistently outstanding. Fresh and clean flavours — no heavy sauces. Ring the bell on the gate to enter. Book well ahead.</p>`,
-        duration: "75 min",
-        prebookText: "Book online — small restaurant, fills fast",
-        prebookUrl: "https://www.rochellecanteen.com/"
-      },
-      {
-        time: "12:00 PM", name: "Bunhill Fields Burial Ground", type: "Hidden literary cemetery · Free",
-        color: "#006064", prebook: false, free: true, weekend: false,
-        lat: 51.5237, lng: -0.0887, address: "38 City Rd, London EC1Y 2BG",
-        badges: ["free"],
-        travel: "🚶 15-min walk west through Shoreditch and Old Street.",
-        history: `<strong>Bunhill Fields</strong> has been a burial ground since at least the 13th century. The name derives from "Bone Hill" — a reference to the enormous quantity of human bones moved here from the charnel house of St Paul's Cathedral in 1549. During the Great Plague of 1665, over 120,000 bodies were buried in mass graves here.\n\nFrom 1665 it became the principal burial ground for <strong>Nonconformists</strong> — Protestant dissenters who refused to conform to the Church of England. Three of Britain's greatest writers are buried here within metres of each other: <strong>William Blake</strong> (1757–1827, poet and artist), <strong>Daniel Defoe</strong> (1660–1731, author of Robinson Crusoe), and <strong>John Bunyan</strong> (1628–1688, author of The Pilgrim's Progress). John Wesley, founder of Methodism, is buried across the road.`,
-        todo: `<p><span class="tip-icon">📚</span><strong>Find the graves of:</strong> William Blake (distinctive headstone near the north wall), Daniel Defoe (tall obelisk), and John Bunyan (elaborate tomb). Stand between them — three of the most influential writers in English literature, all buried in a park most Londoners have never visited. Allow 25 minutes.</p>`,
-        duration: "30 min"
-      },
-      {
-        time: "12:35 PM", name: "Barbican Centre — Art & Architecture", type: "Brutalist landmark · Free to explore",
-        color: "#5c4db1", prebook: false, free: true, weekend: false,
-        lat: 51.5202, lng: -0.0938, address: "Silk St, Barbican, London EC2Y 8DS",
-        badges: ["free"],
-        travel: "🚶 10-min walk south from Bunhill Fields — or take the Tube one stop to Barbican.",
-        history: `The <strong>Barbican Estate</strong> is the largest single arts and residential complex in Europe, built between 1965 and 1982 by architects <strong>Chamberlin, Powell and Bon</strong> for the City of London Corporation. It was a utopian vision of urban living — 6,500 residents in a self-contained city within the city, complete with restaurants, theatres, cinemas, gardens, and a lake.\n\nThe site was chosen because this entire area — some 35 acres — was completely flattened by the Blitz in December 1940. Before that it was a dense medieval and Victorian neighbourhood. Before that, it was the location of the <strong>Cripplegate Fort</strong>, a Roman fortification that pre-dated the main City walls. You can still see sections of the original Roman wall incorporated into the Barbican's structure.\n\nThe <strong>Barbican Centre</strong> opened in 1982 and is home to the London Symphony Orchestra.`,
-        todo: `<p><span class="tip-icon">🏗️</span><strong>Explore:</strong> Walk the elevated walkways (called "highwalks") — designed so residents could walk from home to the arts centre without touching the ground. Visit the <strong>Barbican Conservatory</strong> (check opening times — usually Sundays and occasional weekdays) — one of London's largest tropical indoor gardens. Check the free gallery exhibition. Have a coffee at the Barbican Kitchen overlooking the lake.</p>`,
-        duration: "90 min"
-      },
-      {
-        time: "2:30 PM", name: "Maltby Street Market — Lunch", type: "Weekend market · Under the arches",
-        color: "#e65100", prebook: false, free: true, weekend: true,
-        lat: 51.4995, lng: -0.0759, address: "Arch 46, Ropewalk, Maltby St, London SE1 3PA",
-        badges: ["free","weekend"],
-        travel: "🚇 Tube to London Bridge (5 min from Barbican). Walk 12 min south under the railway arches along Bermondsey Street.",
-        history: `<strong>Bermondsey</strong> has been a market and trade district since the medieval period. The area was famous for its leather tanning industry from the 12th century — the smell was so bad that it was kept south of the river. The <strong>tanneries</strong> that supplied leather to Victorian London's book-binding and shoe industries operated in these streets until the 20th century.\n\n<strong>Maltby Street Market</strong> began informally around 2010 as a handful of artisan food producers setting up under the Victorian railway arches — the same arches built for the London & Greenwich Railway (1836), the world's first purpose-built commuter railway. Unlike Borough Market (which has become a tourist destination), Maltby Street remains genuinely local — most traders are independent producers who make what they sell.`,
-        todo: `<p><span class="tip-icon">🥗</span><strong>Order:</strong> Ethiopian injera with slow-cooked stews, fresh fish tacos, handmade empanadas, or seasonal vegetable dishes — all healthy and outstanding. Get a glass of natural wine at one of the tiny arch bars and eat at the outdoor tables. Far better and less crowded than Borough Market. Open Sat 10–5, Sun 11–4.</p>`,
-        duration: "90 min"
-      },
-      {
-        time: "4:15 PM", name: "Leighton House Museum", type: "Victorian artist's home · Arab Hall",
-        color: "#880e4f", prebook: false, free: false, weekend: false,
-        lat: 51.4987, lng: -0.203, address: "12 Holland Park Rd, London W14 8LZ",
-        badges: ["paid"],
-        travel: "🚇 Tube to High Street Kensington (District/Circle line, 20 min from London Bridge). Walk 10 min north through Holland Park.",
-        history: `<strong>Leighton House</strong> was built between 1864 and 1895 for <strong>Frederic Leighton</strong> (1830–1896), the most celebrated British painter of the Victorian era and President of the Royal Academy. Leighton was obsessed with the Islamic world and spent decades collecting tiles, ceramics, and architectural fragments from across the Middle East.\n\nThe centrepiece is the <strong>Arab Hall</strong> (1877–1881), a room of extraordinary beauty designed to display Leighton's collection of <strong>Islamic tiles</strong> — 1,000 tiles dating from the 9th to the 17th century, gathered from Damascus, Cairo, Rhodes, and Syria. The golden mosaic frieze was designed by <strong>Walter Crane</strong>. A marble fountain tinkles in the centre beneath a gilded dome. Nothing in Britain prepares you for walking into this room.`,
-        todo: `<p><span class="tip-icon">🕌</span><strong>Don't miss:</strong> Stand in the Arab Hall doorway for the full impact before entering. Look up at the gilded mosaic ceiling. Find the 12th-century Syrian tiles mixed with Victorian reproductions — can you tell the difference? The garden is beautiful in spring. The café in the former studio serves excellent coffee. ~£10 entry. Closed Tuesdays.</p>`,
-        duration: "75 min",
-        prebookText: "No pre-booking needed, but check for closures",
-        prebookUrl: "https://www.rbkc.gov.uk/museums/leighton-house"
-      },
-      {
-        time: "6:00 PM", name: "Freshen up at hotel", type: "Rest · Travel back to Piccadilly",
-        color: "#666", prebook: false, free: true, weekend: false,
-        lat: 51.5071, lng: -0.1331, address: "Piccadilly, London W1",
-        badges: [],
-        travel: "🚇 Tube from High Street Kensington to Piccadilly Circus (District line to Earl's Court, then Piccadilly line, 20 min).",
-        history: "A moment to rest and prepare for the most atmospheric evening experience in London.",
-        todo: `<p><span class="tip-icon">🛁</span>Return to your Piccadilly hotel to freshen up. Tonight's Dennis Severs' House experience requires silence and presence of mind — it rewards contemplative visitors who arrive calm and ready to be transported.</p>`,
-        duration: "60 min"
-      },
-      {
-        time: "7:00 PM", name: "Dennis Severs' House — Candlelit Evening", type: "Immersive experience · Silent tour",
-        color: "#4a148c", prebook: true, free: false, weekend: false,
-        lat: 51.5209, lng: -0.0777, address: "18 Folgate St, London E1 6BX",
-        badges: ["prebook","weekday"],
-        travel: "🚇 Tube to Liverpool Street (Central line, 20 min). Walk 10 min west through Spitalfields.",
-        history: `<strong>Dennis Severs</strong> (1948–1999) was an American artist and performer who bought this Georgian townhouse in Spitalfields in 1979 for £50 and spent 20 years transforming it into what he called a "still-life drama." He invented the <strong>Jervis family</strong> — a fictional family of Huguenot silk weavers — and staged their lives across the 10 rooms of the house across three centuries.\n\nThe house is always in a state of being "just left" — fires smoldering, food half-eaten, chamber pots recently used, candles guttering. You move through in silence, from the 17th-century basement kitchen to the Victorian top-floor garret, as if the family has just stepped out. The experience is part historical recreation, part theatrical installation, part meditation on time and impermanence. Severs described it as "you either see it or you don't." Most visitors are deeply moved. Nothing else in London compares.`,
-        todo: `<p><span class="tip-icon">🕯️</span><strong>Rules:</strong> You must be silent throughout. No photography. Move slowly through each room — Severs said the house rewards people who look at everything. The smell of woodsmoke, candle wax, and old food is part of the experience. The evening sessions (5pm–8:15pm) are candlelit and the most atmospheric. Available Fri and Sat evenings only. <strong>Book online well in advance</strong> — very limited slots.</p>`,
-        duration: "75 min",
-        prebookText: "Book online — very limited Fri/Sat evening slots",
-        prebookUrl: "https://www.dennissevershouse.co.uk/"
-      },
-      {
-        time: "9:00 PM", name: "Gymkhana — Dinner", type: "Two Michelin-star Indian · Mayfair",
-        color: "#c0392b", prebook: true, free: false, weekend: false,
-        lat: 51.5085, lng: -0.1415, address: "42 Albemarle St, London W1S 4JH",
-        badges: ["prebook"],
-        travel: "🚇 Tube from Liverpool Street to Green Park (Central line to Bank, then Jubilee, 30 min). Walk 5 min north on Albemarle Street.",
-        history: `<strong>Gymkhana</strong> opened in 2013, taking its name and design inspiration from the members' clubs of the British Raj — the colonial sporting and social clubs of 19th-century India. The décor references the era of the <strong>Indian Civil Service</strong> — ceiling fans, rattan furniture, and prints of shikar (hunting) expeditions.\n\n<strong>Albemarle Street</strong> itself has a remarkable history — it was London's first one-way street (introduced in 1808 to manage the crowds attending lectures at the Royal Institution at No. 21). Lord Byron's publisher John Murray was at No. 50, where Byron's memoirs were famously burned after his death in 1824 to protect his reputation.`,
-        todo: `<p><span class="tip-icon">🍛</span><strong>Order (no bacon!):</strong> Slow-cooked black dal, kid goat methi keema, charred broccoli with paneer, and the extraordinary butter chicken. The tasting menu is excellent. The bar downstairs serves pre-dinner cocktails with Indian-inspired garnishes. <strong>Book immediately</strong> — this is the hardest reservation in Mayfair and can book out weeks in advance.</p>`,
-        duration: "120 min",
-        prebookText: "Book IMMEDIATELY — weeks in advance required",
-        prebookUrl: "https://www.gymkhanarestaurants.com/"
-      }
-    ]
-  },
-  {
-    title: "May 9 — West London & Mayfair",
-    note: "Friday — works any day",
-    stops: [
-      {
-        time: "9:00 AM", name: "Ottolenghi Islington — Healthy Breakfast", type: "Breakfast · Middle Eastern",
-        color: "#1a7a3a", prebook: true, free: false, weekend: false,
-        lat: 51.5398, lng: -0.1023, address: "287 Upper St, London N1 2TZ",
-        badges: ["food","prebook"],
-        travel: "🚇 Tube to Angel (Northern line, 20 min from Piccadilly). The restaurant is 3 min walk on Upper Street.",
-        history: `<strong>Ottolenghi</strong> was founded in 2002 by <strong>Yotam Ottolenghi</strong> and <strong>Sami Tamimi</strong> — one Israeli, one Palestinian, both raised in Jerusalem on opposite sides of the city. Their food reflects this shared heritage: <strong>Middle Eastern, North African, and Mediterranean</strong> influences combined with the finest seasonal British produce.\n\n<strong>Islington's Upper Street</strong> is one of London's great mixed neighbourhood streets — Georgian terraces, independent cafés, and restaurants running north from the City. The Angel junction at its south end is named after a coaching inn that stood here from medieval times; travellers heading north from London stopped here before the fields began.`,
-        todo: `<p><span class="tip-icon">🥗</span><strong>Order (healthy):</strong> Soft-boiled eggs with za'atar and labneh, seasonal grain bowls, freshly baked pastries with tahini. Everything is clean, flavourful, and beautifully presented. The communal tables make it convivial. Note: Ottolenghi Islington is closed Tuesday and Wednesday — check before going. Book ahead or arrive early.</p>`,
-        duration: "60 min",
-        prebookText: "Book ahead — or arrive at opening",
-        prebookUrl: "https://ottolenghi.co.uk/"
-      },
-      {
-        time: "10:15 AM", name: "Walk through Islington & Clerkenwell", type: "Walking tour · Georgian London",
-        color: "#7b1fa2", prebook: false, free: true, weekend: false,
-        lat: 51.524, lng: -0.1026, address: "Exmouth Market, London EC1R 4QE",
-        badges: ["free","walk"],
-        travel: "🚶 20-min walk south through Islington and Clerkenwell to the Wallace Collection Tube stop.",
-        history: `<strong>Clerkenwell</strong> was one of medieval London's most important districts — home to the <strong>Knights Hospitaller</strong> (rivals to the Knights Templar) whose priory, St John's, gave London its ambulance service (St John Ambulance). The name Clerkenwell means "Clerks' Well" — a spring used by medieval students and clergy.\n\nIn the 18th and 19th centuries, Clerkenwell became London's watchmaking and clockmaking quarter — the precision engineering skills brought by Huguenot refugees who settled here after fleeing France in 1685. Many of the small workshops survive in the back streets. <strong>Exmouth Market</strong>, which you'll pass through, is a pedestrianised street of independent food stalls and restaurants that captures the neighbourhood's current character perfectly.`,
-        todo: `<p><span class="tip-icon">🚶</span><strong>Walk via:</strong> Upper Street → Exmouth Market (coffee stop if needed) → Farringdon Road → Hatton Garden (London's diamond and jewellery quarter since the 16th century) → Holborn → Tube to Bond Street for the Wallace Collection. About 20 minutes of fascinating back streets.</p>`,
-        duration: "25 min"
-      },
-      {
-        time: "10:45 AM", name: "The Wallace Collection", type: "Free world-class art museum",
-        color: "#5c4db1", prebook: false, free: true, weekend: false,
-        lat: 51.5173, lng: -0.1531, address: "Hertford House, Manchester Square, London W1U 3BN",
-        badges: ["free"],
-        travel: "🚇 Tube to Bond Street (Central or Jubilee line). Walk 8 min north through Marylebone.",
-        history: `If not visited on May 7 — see the May 7 entry for the full history. One of the greatest art museums on earth, housed in an 18th-century private mansion. The Laughing Cavalier, Rembrandt's Titus, and three floors of European masterpieces, all free, all in a building that feels like a private ducal palace. The glass-roofed courtyard café is excellent for a mid-morning pause.`,
-        todo: `<p><span class="tip-icon">🎨</span><strong>If you've already been on Day 1:</strong> Replace with a visit to <strong>Daunt Books</strong> (5-min walk) for a longer browse, or walk through <strong>Marylebone Village</strong> — the high street has excellent healthy food shops, pharmacies, and cafés. Then proceed directly to Leighton House.</p>`,
-        duration: "90 min"
-      },
-      {
-        time: "12:30 PM", name: "Leighton House Museum", type: "Arab Hall · Victorian artist's home",
-        color: "#880e4f", prebook: false, free: false, weekend: false,
-        lat: 51.4987, lng: -0.203, address: "12 Holland Park Rd, London W14 8LZ",
-        badges: ["paid"],
-        travel: "🚇 Tube from Bond Street to High Street Kensington (Circle/District line, 10 min). Walk 12 min north through Holland Park.",
-        history: "See Day 2 entry for full history. If you visited on May 8, use this slot for a long walk through Holland Park — one of London's finest parks, with a formal Italian garden, peacocks, and the Kyoto Garden (a Japanese garden gifted by the city of Kyoto in 1991).",
-        todo: `<p><span class="tip-icon">🕌</span><strong>If visiting today:</strong> Take time to sit in the Arab Hall and absorb the tiles. The garden café serves excellent coffee and light lunches. ~£10 entry. Closed Tuesdays. If already visited, walk through <strong>Holland Park</strong> instead — 15 minutes of genuine tranquillity in central London.</p>`,
-        duration: "75 min"
-      },
-      {
-        time: "2:00 PM", name: "Lunch — Farmacy or NOPI", type: "Healthy lunch · West London",
-        color: "#1a7a3a", prebook: true, free: false, weekend: false,
-        lat: 51.5149, lng: -0.197, address: "74 Westbourne Grove, London W2 5SH",
-        badges: ["food","prebook"],
-        travel: "🚶 15-min walk north through Notting Hill from Holland Park Gate.",
-        history: `<strong>Westbourne Grove</strong> and the surrounding <strong>Notting Hill</strong> area underwent a dramatic transformation from the 1990s onwards — from a somewhat run-down neighbourhood to one of London's most fashionable addresses. The area's diversity is rooted in the <strong>Windrush generation</strong> of Caribbean immigrants who settled here from the late 1940s, and is celebrated annually in the <strong>Notting Hill Carnival</strong> (established 1966), Europe's largest street festival.\n\n<strong>Farmacy</strong> is a plant-based restaurant that pioneered London's healthy dining movement when it opened in 2016. <strong>NOPI</strong> (Ottolenghi's restaurant on Warwick Street, slightly east) is one of London's finest Middle Eastern-influenced restaurants.`,
-        todo: `<p><span class="tip-icon">🥑</span><strong>Farmacy</strong> (74 Westbourne Grove): Outstanding plant-based food — jackfruit tacos, miso-glazed aubergine, excellent grain bowls. Beautiful interior. Book ahead. OR <strong>NOPI</strong> (21-22 Warwick St, W1B): Ottolenghi's flagship restaurant — more refined than the delis, exceptional vegetable-forward dishes. Both are healthy and genuinely delicious.</p>`,
-        duration: "75 min",
-        prebookText: "Book Farmacy or NOPI in advance",
-        prebookUrl: "https://www.farmacylondon.com/"
-      },
-      {
-        time: "3:30 PM", name: "Walk through Kensington & Hyde Park", type: "Walking tour · Royal London",
-        color: "#7b1fa2", prebook: false, free: true, weekend: false,
-        lat: 51.5073, lng: -0.1657, address: "Hyde Park, London W2 2UH",
-        badges: ["free","walk"],
-        travel: "🚶 Walk east from Notting Hill through Kensington to Hyde Park — about 20 minutes.",
-        history: `<strong>Hyde Park</strong> was seized from the monks of Westminster Abbey by Henry VIII in 1536 as a private hunting ground. It was opened to the public by Charles I in 1637 and has been London's great democratic outdoor space ever since — the site of mass protests, the Great Exhibition of 1851, anti-war rallies, and free concerts.\n\n<strong>Speakers' Corner</strong> at the northeast corner has been a legal site for public oratory since 1872 — Marx, Lenin, George Orwell, and William Morris have all spoken here. The <strong>Serpentine</strong> (the lake) was created in 1730 by damming the River Westbourne — which now flows underground through Chelsea.\n\nThe <strong>Albert Memorial</strong> (1872) sits on the south edge of the park — a gilded monument to Queen Victoria's beloved husband Prince Albert, who died aged 42 in 1861. The <strong>Royal Albert Hall</strong> opposite was built as part of his legacy.`,
-        todo: `<p><span class="tip-icon">🌳</span><strong>Walk via:</strong> Kensington Gardens → the Albert Memorial → along the Serpentine → up to Speakers' Corner → across to Mayfair. This is one of London's great walks — the park is at its most beautiful in May when everything is in bloom. About 40 minutes of walking.</p>`,
+        travel: "🚶 10-min walk south from the British Museum through Soho to Gerrard Street.",
+        history: `<strong>London's Chinatown</strong> on Gerrard Street was established in the 1950s and 60s by Chinese immigrants, mainly from Hong Kong. The current Chinatown is actually London's second — the original was in Limehouse, East London, established in the 1880s by Chinese sailors and largely destroyed in the Blitz.\n\n<strong>Soho</strong> surrounding it has been London's most bohemian neighbourhood since the 18th century — home to the sex trade, jazz clubs, artists, writers, and immigrants in overlapping waves. The streets between Wardour Street, Old Compton Street, and Berwick Street contain more cultural history per square metre than almost anywhere in London.`,
+        todo: `<p><span class="tip-icon">🥟</span><strong>Walk through Chinatown</strong> — the red gates, lanterns, and the concentration of Cantonese, Sichuan, and Taiwanese restaurants is extraordinary. Walk north through Soho along Wardour Street and Berwick Street Market (London's oldest street market). The area is quiet in the morning — completely different from the evening.</p>`,
         duration: "45 min"
       },
       {
-        time: "4:30 PM", name: "Sketch — Afternoon Tea", type: "Theatrical afternoon tea · Mayfair",
-        color: "#c0392b", prebook: true, free: false, weekend: false,
-        lat: 51.5127, lng: -0.1415, address: "9 Conduit St, London W1S 2XG",
-        badges: ["prebook"],
-        travel: "🚶 10-min walk from the east side of Hyde Park through Mayfair to Conduit Street.",
-        history: `<strong>Sketch</strong> occupies a listed Georgian townhouse on Conduit Street, originally built as a suite of townhouses in the 1770s. The building has housed private members' clubs, tailors, and restaurants over its 250-year history.\n\nThe current incarnation opened in 2002 under the creative direction of French chef <strong>Pierre Gagnaire</strong> and restaurateur <strong>Mourad Mazouz</strong>. In 2014, the Gallery room was redesigned by artist <strong>David Shrigley</strong> — the walls are now covered in his distinctive hand-drawn illustrations. The egg-pod bathrooms were designed as sculptural objects by artist <strong>Mike Figgis</strong> and became one of London's most photographed interiors.\n\n<strong>Conduit Street</strong> was named for the water conduit installed here by the Corporation of London in 1500 to carry fresh water from the fields of Marylebone into the City.`,
-        todo: `<p><span class="tip-icon">🫖</span><strong>Book The Parlour</strong> room for afternoon tea — refillable finger sandwiches (ask for vegetarian), extraordinary pastries, and 14 teas to choose from. A live violinist plays. The egg-pod bathrooms must be visited. Don't rush — the experience is designed to last 2 hours. A perfect romantic treat 10 minutes walk from your Piccadilly hotel. Book via sketch.london.</p>`,
-        duration: "120 min",
-        prebookText: "Book The Parlour room — book 2 weeks ahead",
-        prebookUrl: "https://sketch.london/afternoon-tea/"
-      },
-      {
-        time: "6:45 PM", name: "Evening walk back through St James's", type: "Evening stroll · Royal London",
-        color: "#1a7a3a", prebook: false, free: true, weekend: false,
-        lat: 51.5044, lng: -0.1335, address: "St James's Park, London SW1A 2BJ",
-        badges: ["free","walk"],
-        travel: "🚶 15-min walk south from sketch through Mayfair and into St James's Park.",
-        history: `<strong>St James's Park</strong> is the oldest of the Royal Parks, created by Henry VIII in 1536 on marshland drained from the Tyburn stream. Charles II redesigned it in 1660 in the French formal style after returning from exile in Paris. It is now a wildlife sanctuary in the heart of government London — pelicans have been kept here since 1664, a gift from the Russian ambassador.\n\nThe view from the bridge across the lake — looking east toward Whitehall, west toward Buckingham Palace — is one of the great London views, particularly in the evening light. <strong>The Mall</strong> alongside the park was laid out in 1660 as a croquet ground (the game was called "pall-mall"). The houses of <strong>St James's</strong> to the north include Christie's auction house and several of London's oldest gentlemen's clubs.`,
-        todo: `<p><span class="tip-icon">🌆</span><strong>Evening walk:</strong> From sketch → south through Mayfair → along the south edge of Green Park → through the gates into St James's Park → across the bridge (pause for the view) → back north to Piccadilly. About 30 minutes of the most beautiful evening walking in London. The park lights at dusk are magical.</p>`,
-        duration: "30 min"
-      },
-      {
-        time: "7:30 PM", name: "Barbican Centre — Evening Concert or Theatre", type: "World-class arts · LSO & theatre",
-        color: "#5c4db1", prebook: true, free: false, weekend: false,
-        lat: 51.5202, lng: -0.0938, address: "Silk St, Barbican, London EC2Y 8DS",
-        badges: ["prebook"],
-        travel: "🚇 Tube from Green Park to Barbican (Jubilee to Bank, then Northern, 25 min). Arrive by 7:15 for pre-show drinks.",
-        history: `The <strong>Barbican Centre</strong> is the most ambitious arts centre in Europe — 10 venues including the 2,000-seat Barbican Hall (home of the London Symphony Orchestra), the Barbican Theatre (home of the RSC's London productions), a cinema, art gallery, conservatory, and three restaurants.\n\nIt was built specifically to bring culture to what had been a bombed-out wasteland. The architecture — vast concrete terraces, elevated walkways, and a man-made lake — was intended to create a self-contained urban world where art was woven into daily life. When it opened in 1982, the Queen said she hoped it would become "one of the wonders of the modern world."`,
-        todo: `<p><span class="tip-icon">🎶</span><strong>Book in advance:</strong> Check barbican.org.uk for the programme on your date — the LSO performs regularly here, and the quality is extraordinary. The Barbican also hosts world-class jazz, international theatre, and film retrospectives. Pre-show drinks at the Barbican Kitchen overlooking the lake are excellent. A perfect final evening in London.</p>`,
-        duration: "150 min",
-        prebookText: "Book concert/theatre tickets at barbican.org.uk",
-        prebookUrl: "https://www.barbican.org.uk/"
-      }
-    ]
-  }
-,
-  {
-    title: "May 10 — Final Day · South Bank & Farewell",
-    note: "Last full day — leaving May 11 · South Bank, Borough Market, Tate Modern",
-    stops: [
-      {
-        time: "9:30 AM", name: "Borough Market — Breakfast", type: "London's greatest food market · Free",
+        time: "12:15 PM", name: "Borough Market — Lunch",
+        type: "London's greatest food market · South Bank",
         color: "#1a7a3a", prebook: false, free: true, weekend: false,
         lat: 51.5055, lng: -0.0908, address: "8 Southwark St, London SE1 1TL",
         badges: ["free","food"],
-        travel: "🚇 Tube to London Bridge (Jubilee/Northern line). 2-min walk. Or walk across London Bridge from the City.",
-        history: `<strong>Borough Market</strong> has existed on this site since at least 1014 — it is one of the oldest food markets in the world. The current Victorian iron and glass structure was built in the 1850s, funded by the market's own traders. During the Great Fire of London in 1666, the market survived because Southwark was south of the river.\n\nThe market declined significantly through most of the 20th century but was revived from the 1990s onward, becoming one of London's premier food destinations. Today it hosts over 100 traders selling bread, cheese, charcuterie, fresh produce, street food, and specialist ingredients from across Britain and Europe. It is a working wholesale market as well as a retail destination.`,
-        todo: `<p><span class="tip-icon">🧀</span><strong>For breakfast:</strong> Get a freshly baked pastry from Bread Ahead bakery, a salt beef bagel from Monmouth Coffee + the food stalls, or a full hot breakfast from one of the market kitchens. Arrive before 10am — it gets extremely busy by 11am. The cheese and charcuterie counters are excellent for last-day picnic supplies.</p>`,
-        duration: "75 min"
-      },
-      {
-        time: "11:00 AM", name: "Tate Modern", type: "World's greatest modern art museum · Free",
-        color: "#1a73e8", prebook: false, free: true, weekend: false,
-        lat: 51.5076, lng: -0.0994, address: "Bankside, London SE1 9TG",
-        badges: ["free"],
-        travel: "🚶 10-min walk west along the South Bank from Borough Market, following the river.",
-        history: `<strong>Tate Modern</strong> opened in 2000 in the former <strong>Bankside Power Station</strong>, designed by Sir Giles Gilbert Scott (who also designed Battersea Power Station and the classic red telephone box). The building was decommissioned in 1981 after generating electricity for London for 30 years.\n\nSwiss architects <strong>Herzog & de Meuron</strong> converted it into a gallery, preserving the vast Turbine Hall as one of the world's most dramatic public spaces. The Switch House extension (2016) added ten more floors, giving the gallery views across the Thames to St Paul's. The permanent collection includes Picasso, Rothko, Bacon, Hirst, Bourgeois, and Warhol — all free.`,
-        todo: `<p><span class="tip-icon">🎨</span><strong>Don't miss:</strong> The Turbine Hall (always a spectacular commission), the Rothko Room on Level 3, and the viewing platform on Level 10 for the best panoramic view of London — St Paul's, the City, and the Thames all at once. The café on the riverside terrace is excellent for a final London coffee.</p>`,
-        duration: "90 min"
-      },
-      {
-        time: "12:45 PM", name: "Walk the South Bank & Millennium Bridge", type: "Riverside walk · Free",
-        color: "#7b1fa2", prebook: false, free: true, weekend: false,
-        lat: 51.5095, lng: -0.0984, address: "Millennium Bridge, London SE1",
-        badges: ["free","walk"],
-        travel: "🚶 Walk from Tate Modern — the Millennium Bridge is right outside the gallery.",
-        history: `The <strong>Millennium Bridge</strong> was designed by Norman Foster and Anthony Caro, opened in June 2000, and immediately nicknamed the <em>Wobbly Bridge</em> after it swayed alarmingly when 80,000 pedestrians walked across it on opening day. It was closed for two years while engineers added dampers. It has not wobbled since.\n\nThe view from the bridge — St Paul's Cathedral to the north, the City skyline, and the South Bank to the south — is one of London's most photographed perspectives. The walk along the South Bank from here past the Globe Theatre, the Tate, and toward London Bridge is one of the finest riverside walks in Europe.`,
-        todo: `<p><span class="tip-icon">📸</span><strong>Walk the bridge</strong> for the classic St Paul's view — the best photograph of the trip. Then walk east along the South Bank past the Globe Theatre (you can do a self-guided exterior visit free), past Clink Street (London's oldest prison site), back toward Borough Market for any last purchases before heading to the hotel.</p>`,
-        duration: "45 min"
-      },
-      {
-        time: "2:00 PM", name: "Sketch — Afternoon Tea", type: "Legendary afternoon tea · Mayfair",
-        color: "#c0392b", prebook: true, free: false, weekend: false,
-        lat: 51.5117, lng: -0.1436, address: "9 Conduit St, London W1S 2XG",
-        badges: ["food","prebook"],
-        travel: "🚇 Tube to Oxford Circus (Central/Victoria/Bakerloo line). 5-min walk south through Mayfair to Conduit Street.",
-        history: `<strong>Sketch</strong> was opened in 2002 by restaurateur <strong>Mourad Mazouz</strong> in a former Scottish Presbyterian church built in 1779, later converted into a Regency townhouse. The building was completely reimagined by artist and designer <strong>Martin Creed</strong> and others.\n\nThe <strong>Parlour room</strong>, where afternoon tea is served, is decorated in blush pink and features live classical music from a resident violinist on most afternoons. The egg-shaped pod bathrooms in the basement are among the most famous in London. Sketch has won multiple Michelin stars across its different restaurant spaces.`,
-        todo: `<p><span class="tip-icon">🫖</span><strong>Book The Parlour</strong> specifically (not the Gallery or Lecture Room). Request a table near the violinist. The afternoon tea is one of London's finest — exceptional pastries, finger sandwiches, and a theatrical setting that makes it a perfect farewell experience. Book 1–2 weeks ahead. Arrive 10 minutes early.</p>`,
-        duration: "120 min",
-        prebookText: "Book The Parlour — request window or violinist table",
-        prebookUrl: "https://sketch.london/afternoon-tea/"
-      },
-      {
-        time: "5:00 PM", name: "Burlington Arcade & Bond Street — Final Shopping", type: "Shopping · Mayfair",
-        color: "#b5910a", prebook: false, free: true, weekend: false,
-        lat: 51.5095, lng: -0.1416, address: "Burlington Arcade, Piccadilly, London W1J 0QJ",
-        badges: ["free","walk"],
-        travel: "🚶 5-min walk from Sketch, south on New Bond Street to Piccadilly.",
-        history: `<strong>Burlington Arcade</strong> (1819) was the first purpose-built shopping arcade in Britain, built by Lord Cavendish to prevent passers-by from throwing oyster shells into his garden next door. The Beadle guards in their top hats and frock coats still patrol today, enforcing the original rules against running, whistling, and opening umbrellas — in place since 1819. The arcade houses British luxury brands including cashmere specialists, jewellers, and perfumers.`,
-        todo: `<p><span class="tip-icon">🛍️</span><strong>Last chance</strong> for British cashmere, fragrances, and luxury gifts. N.Peal cashmere is excellent. Browse the arcade and then walk north on Bond Street past the couture houses. End at Fortnum & Mason on Piccadilly (5-min walk) for tea, biscuits, and quintessentially British gifts to take home.</p>`,
+        travel: "🚇 Tube to London Bridge (Jubilee line from Green Park, 2 stops). 2-min walk.",
+        history: `<strong>Borough Market</strong> has existed on this site since at least 1014 — one of the oldest food markets in the world. The current Victorian iron and glass structure was built in the 1850s. During the Great Fire of London in 1666, the market survived because Southwark was south of the river.\n\nThe market was revived from the 1990s onward, becoming one of London's premier food destinations. Today over 100 traders sell bread, cheese, charcuterie, fresh produce, and street food. It is a working wholesale market as well as a retail destination.`,
+        todo: `<p><span class="tip-icon">🧀</span><strong>For lunch:</strong> Get fresh pasta from Padella (queue early), charcuterie from Cannon & Cannon, a cheese toastie from Kappacasein, or browse multiple stalls and combine. Arrive by 12:00 before the lunchtime rush peaks. The Neal's Yard Dairy cheese counter is world-class.</p>`,
         duration: "60 min"
       },
       {
-        time: "7:30 PM", name: "Rules Restaurant — Farewell Dinner", type: "London's oldest restaurant · 1798",
+        time: "1:30 PM", name: "Shakespeare's Globe Theatre",
+        type: "Open-air Elizabethan theatre · Tours & guided visit",
+        color: "#5c4db1", prebook: false, free: false, weekend: false,
+        lat: 51.5081, lng: -0.0972, address: "21 New Globe Walk, London SE1 9DT",
+        badges: ["paid"],
+        travel: "🚶 5-min walk west from Borough Market along the South Bank.",
+        history: `The original <strong>Globe Theatre</strong> was built in 1599 by Shakespeare's company, the Lord Chamberlain's Men — using timber from the demolished Curtain Theatre in Shoreditch. Shakespeare was a shareholder. It burned down in 1613 when a cannon fired during a performance of Henry VIII ignited the thatched roof.\n\nThe current <strong>Shakespeare's Globe</strong> is a faithful reconstruction, completed in 1997 through the lifelong campaign of American actor and director <strong>Sam Wanamaker</strong>. Built 200 metres from the original site, it uses traditional Elizabethan construction methods — the only thatched roof permitted in central London since the Great Fire of 1666.`,
+        todo: `<p><span class="tip-icon">🎭</span><strong>Take the guided tour</strong> of the theatre (runs daily, ~1 hour). You can stand in the yard where the groundlings stood in Shakespeare's time. If there's a matinee performance, consider seeing it — standing yard tickets are £5 and an extraordinary experience. The view from the theatre across the Thames to St Paul's is magnificent.</p>`,
+        duration: "60 min"
+      },
+      {
+        time: "2:45 PM", name: "Millennium Bridge Walk to St Paul's",
+        type: "Iconic riverside walk · Free · Famous view",
+        color: "#7b1fa2", prebook: false, free: true, weekend: false,
+        lat: 51.5095, lng: -0.0984, address: "Millennium Bridge, London SE1",
+        badges: ["free","walk"],
+        travel: "🚶 3-min walk east from the Globe along the South Bank.",
+        history: `The <strong>Millennium Bridge</strong> was designed by Norman Foster and Anthony Caro, opened in June 2000, and immediately nicknamed the <em>Wobbly Bridge</em> after it swayed alarmingly when 80,000 pedestrians walked across it on opening day. It was closed for two years while engineers added dampers and has not wobbled since.\n\nThe view from the bridge — <strong>St Paul's Cathedral</strong> framed dead ahead to the north — is one of London's most photographed. St Paul's dome (completed 1710) was the tallest building in London for 250 years. Christopher Wren is buried in the crypt with the inscription: <em>Si monumentum requiris, circumspice</em> — If you seek his monument, look around you.`,
+        todo: `<p><span class="tip-icon">📸</span><strong>Walk the bridge</strong> for the classic St Paul's photograph. Cross to the north bank and walk up through Peter's Hill to the cathedral. Climb to the Whispering Gallery and the Golden Gallery at the top for panoramic views of London (paid — worth it). Then walk east along Cannon Street toward the City.</p>`,
+        duration: "30 min"
+      },
+      {
+        time: "5:30 PM", name: "Sky Garden — Sunset Cocktails",
+        type: "Rooftop garden · Free with booking · 35th floor",
+        color: "#1565c0", prebook: true, free: true, weekend: false,
+        lat: 51.5112, lng: -0.0835, address: "1 Sky Garden Walk, London EC3M 8AF",
+        badges: ["free","prebook"],
+        travel: "🚶 12-min walk east through the City from St Paul's along Cannon Street.",
+        history: `The <strong>Walkie-Talkie building</strong> (20 Fenchurch Street) was designed by Rafael Viñoly and completed in 2014. Before the glass was treated, it famously focused sunlight so intensely on the street below that it melted a car — earning the tabloid nickname <em>the Fryscraper</em>.\n\nThe <strong>Sky Garden</strong> on floors 35–37 was added as a planning requirement and opened in 2015. It is now one of London's most popular free attractions, offering panoramic views of the city including St Paul's, the Shard, Tower Bridge, and the entire sweep of the Thames.`,
+        todo: `<p><span class="tip-icon">🌅</span><strong>Arrive at sunset</strong> for the most spectacular views as the city lights come on. Order cocktails at the bar and watch the sun set over St Paul's. <strong>MUST BOOK AHEAD</strong> at skygarden.london — slots release 3 weeks in advance and sell out within hours. Free entry.</p>`,
+        duration: "75 min", prebookText: "Book free entry — sells out 3 weeks ahead", prebookUrl: "https://skygarden.london/sky-garden/"
+      },
+      {
+        time: "7:30 PM", name: "Duck & Waffle — Rooftop Dinner",
+        type: "Rooftop fine dining · 40th floor · City views",
+        color: "#c0392b", prebook: true, free: false, weekend: false,
+        lat: 51.5163, lng: -0.0812, address: "110 Bishopsgate, London EC2N 4AY",
+        badges: ["food","prebook"],
+        travel: "🚶 5-min walk north from Sky Garden to Heron Tower on Bishopsgate.",
+        history: `<strong>Duck & Waffle</strong> opened in 2012 on the 40th floor of Heron Tower. It was one of London's first 24-hour fine dining restaurants. At 40 floors up, it holds one of the most dramatic dining positions in the city — views of Tower Bridge, the Thames, and the Gherkin.`,
+        todo: `<p><span class="tip-icon">🍽️</span><strong>Request a window table</strong> when booking — insist on it. The city views at night are extraordinary. Order seasonal vegetable dishes, fresh fish, and the duck and waffle (of course). Open 24 hours.</p>`,
+        duration: "120 min", prebookText: "Book online — request window table", prebookUrl: "https://duckandwaffle.com/london/"
+      }
+    ]
+  },
+  {
+    title: "May 10 — Parks, Museums & Farewell",
+    note: "Last full day — Kensington, farewell lunch, Borough Market, Rules dinner",
+    stops: [
+      {
+        time: "9:00 AM", name: "Kensington Gardens & Hyde Park",
+        type: "Royal parks · Albert Memorial · Serpentine",
+        color: "#1a7a3a", prebook: false, free: true, weekend: false,
+        lat: 51.5073, lng: -0.1871, address: "Kensington Gardens, London W2 2UH",
+        badges: ["free","walk"],
+        travel: "🚇 Tube to Queensway (Central line) or High Street Kensington (District/Circle). Walk into the park.",
+        history: `<strong>Kensington Gardens</strong> was originally the private grounds of Kensington Palace — separated from Hyde Park in 1728 by Queen Caroline. The <strong>Albert Memorial</strong> (1872) is one of the most elaborate monuments in London — a gilded Gothic canopy sheltering a statue of Prince Albert, surrounded by allegorical figures representing the continents and the arts he championed.\n\n<strong>Kensington Palace</strong> has been a royal residence since 1689. Princess Diana lived here from her marriage in 1981 until her death in 1997. The Round Pond and the Serpentine Gallery nearby are beloved London institutions.`,
+        todo: `<p><span class="tip-icon">🌿</span><strong>Walk from Queensway</strong> through the Italian Gardens, past the Round Pond, to the Albert Memorial. Cross into Hyde Park to the Serpentine and walk east through the park. The morning light in the parks is extraordinary. Look for the Peter Pan statue near the Long Water — erected secretly overnight in 1912 by J.M. Barrie.</p>`,
+        duration: "75 min"
+      },
+      {
+        time: "10:30 AM", name: "The Wallace Collection",
+        type: "World-class free art museum · Hertford House",
+        color: "#5c4db1", prebook: false, free: true, weekend: false,
+        lat: 51.5173, lng: -0.1531, address: "Hertford House, Manchester Square, London W1U 3BN",
+        badges: ["free"],
+        travel: "🚇 Tube to Bond Street (Central/Jubilee). 5-min walk north to Manchester Square.",
+        history: `<strong>Hertford House</strong> was built in 1776. The 4th Marquess of Hertford and his illegitimate son <strong>Sir Richard Wallace</strong> were the great collectors — amassing Rembrandt, Velázquez, Fragonard, Rubens, Titian, and Frans Hals' <em>The Laughing Cavalier</em>. Wallace's widow bequeathed the entire collection to the British nation in 1897 on condition it never leave London and never be lent out.`,
+        todo: `<p><span class="tip-icon">🎨</span><strong>Must-see:</strong> The Great Gallery for the Old Masters. Room 22 for Hals' <em>Laughing Cavalier</em>. The European Armoury — 2,500 pieces of medieval armour. The glass-roofed courtyard café is excellent for a mid-morning stop.</p>`,
+        duration: "90 min"
+      },
+      {
+        time: "12:15 PM", name: "Daunt Books + Browse",
+        type: "World's most beautiful bookshop · Marylebone",
+        color: "#1a7a3a", prebook: false, free: true, weekend: false,
+        lat: 51.5204, lng: -0.152, address: "84 Marylebone High St, London W1U 4QW",
+        badges: ["free"],
+        travel: "🚶 10-min walk north through Marylebone Village — one of London's finest village high streets.",
+        history: `<strong>Daunt Books</strong> opened in 1990 in this stunning 1910 Edwardian building. The interior is a masterpiece — a long, oak-galleried hall with a triple-height stained-glass skylight. The travel section is organised by country: fiction, history, and guidebooks for each destination together on one shelf. Pick up something for the flight home.`,
+        todo: `<p><span class="tip-icon">📚</span><strong>Browse the travel section</strong> — pick up books about places on your next trip. The café in the rear makes excellent coffee. Marylebone High Street outside has some of London's best independent shops and delis for last-day supplies.</p>`,
+        duration: "40 min"
+      },
+      {
+        time: "1:30 PM", name: "Sketch — Afternoon Tea",
+        type: "Legendary afternoon tea · The Parlour · Violinist",
+        color: "#c0392b", prebook: true, free: false, weekend: false,
+        lat: 51.5117, lng: -0.1436, address: "9 Conduit St, London W1S 2XG",
+        badges: ["food","prebook"],
+        travel: "🚇 Tube to Oxford Circus. 5-min walk south through Mayfair to Conduit Street.",
+        history: `<strong>Sketch</strong> opened in 2002 in a former Scottish Presbyterian church built in 1779. The <strong>Parlour room</strong> where afternoon tea is served is decorated in blush pink and features live classical music from a resident violinist. The egg-shaped pod bathrooms in the basement are among the most famous in London.`,
+        todo: `<p><span class="tip-icon">🫖</span><strong>Book The Parlour</strong> specifically — request a table near the violinist. Exceptional pastries, finger sandwiches, and a theatrical setting. A perfect farewell-to-London experience. Book 1–2 weeks ahead.</p>`,
+        duration: "120 min", prebookText: "Book The Parlour — request violinist table", prebookUrl: "https://sketch.london/afternoon-tea/"
+      },
+      {
+        time: "4:00 PM", name: "Burlington Arcade & Bond Street",
+        type: "1819 shopping arcade · British luxury · Mayfair",
+        color: "#b5910a", prebook: false, free: true, weekend: false,
+        lat: 51.5095, lng: -0.1416, address: "Burlington Arcade, Piccadilly, London W1J 0QJ",
+        badges: ["free","walk"],
+        travel: "🚶 5-min walk from Sketch south on New Bond Street to Piccadilly.",
+        history: `<strong>Burlington Arcade</strong> (1819) was the first purpose-built shopping arcade in Britain. The Beadle guards in top hats still patrol today, enforcing the original 1819 rules against running, whistling, and opening umbrellas. The arcade houses British luxury brands — cashmere, jewellers, and perfumers.`,
+        todo: `<p><span class="tip-icon">🛍️</span><strong>Last chance</strong> for British cashmere (N.Peal is excellent), fragrances, and luxury gifts. End at <strong>Fortnum & Mason</strong> on Piccadilly (5-min walk) for tea, biscuits, and quintessentially British gifts to take home.</p>`,
+        duration: "60 min"
+      },
+      {
+        time: "7:30 PM", name: "Rules Restaurant — Farewell Dinner",
+        type: "London's oldest restaurant · Est. 1798 · Covent Garden",
         color: "#c0392b", prebook: true, free: false, weekend: false,
         lat: 51.5122, lng: -0.1225, address: "35 Maiden Ln, London WC2E 7LB",
         badges: ["food","prebook"],
         travel: "🚇 Tube to Covent Garden (Piccadilly line). 5-min walk south on Maiden Lane.",
-        history: `<strong>Rules</strong> is London's oldest restaurant, established in 1798 by Thomas Rule on Maiden Lane, Covent Garden. It has been in continuous operation for over 225 years and has served virtually every notable figure in British history: <strong>Charles Dickens</strong>, <strong>Graham Greene</strong>, <strong>Evelyn Waugh</strong>, <strong>King Edward VII</strong> and his mistress Lillie Langtry (who had a private room), <strong>John Betjeman</strong>, and countless others.\n\nThe interior has barely changed in a century — dark oak panelling, red banquettes, walls covered in cartoons, prints, and paintings from Victorian and Edwardian London. The menu specialises in traditional British game and seasonal produce from the restaurant's own estate in the Pennines.`,
-        todo: `<p><span class="tip-icon">🍷</span><strong>Order:</strong> The game pie or beef Wellington are the signature dishes. Order the potted shrimps to start — they're a British classic. The wine list has excellent burgundies. Request a booth or a corner table. This is the most historically atmospheric restaurant in London and a perfect final dinner — you are eating in the same room as Dickens.</p>`,
-        duration: "120 min",
-        prebookText: "Book online — request a booth or the Dickens room",
-        prebookUrl: "https://rules.co.uk/"
+        history: `<strong>Rules</strong> is London's oldest restaurant, established in 1798 on Maiden Lane, Covent Garden. In continuous operation for over 225 years, it has served Charles Dickens, Graham Greene, Evelyn Waugh, King Edward VII, and countless others. The interior has barely changed in a century — dark oak panelling, red banquettes, walls covered in Victorian cartoons and prints.`,
+        todo: `<p><span class="tip-icon">🍷</span><strong>Order:</strong> The game pie or beef Wellington. Potted shrimps to start — a British classic. Request a booth or corner table. You are eating in the same room as Dickens. The most historically atmospheric restaurant in London — a perfect final dinner.</p>`,
+        duration: "120 min", prebookText: "Book online — request a booth", prebookUrl: "https://rules.co.uk/"
       }
     ]
   }
