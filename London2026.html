@@ -1774,7 +1774,7 @@ async function manualRefresh() {
   try {
     const data = await ghRead();
     if (data && data.days && data.days.length >= 3) {
-      data.days.forEach((d, i) => { days[i].stops = d.stops; days[i].title = d.title || days[i].title; });
+      data.days.forEach((d, i) => { if (days[i]) days[i].stops = d.stops; });
       completed = data.completed || [];
       switchDay(currentDay);
       renderPrebook();
@@ -1790,7 +1790,7 @@ async function syncLoad() {
   try {
     const data = await ghRead();
     if (data && data.days && data.days.length >= 3) {
-      data.days.forEach((d, i) => { days[i].stops = d.stops; days[i].title = d.title || days[i].title; });
+      data.days.forEach((d, i) => { if (days[i]) days[i].stops = d.stops; });
       completed = data.completed || [];
       return true;
     }
@@ -1807,7 +1807,7 @@ function startSyncPolling() {
         const remote = JSON.stringify(data.days.map(d => d.stops.map(s => s.name)));
         const local  = JSON.stringify(days.map(d => d.stops.map(s => s.name)));
         if (remote !== local) {
-          data.days.forEach((d, i) => { days[i].stops = d.stops; });
+          data.days.forEach((d, i) => { if (days[i]) days[i].stops = d.stops; });
           completed = data.completed || [];
           switchDay(currentDay);
           showToast('✨ Updated from another device');
@@ -1825,7 +1825,7 @@ function tryLoadSaved() {
     if (!raw) return false;
     const data = JSON.parse(raw);
     if (data.days && Array.isArray(data.days) && data.days.length >= 3) {
-      data.days.forEach((d, i) => { days[i].stops = d.stops; days[i].title = d.title || days[i].title; });
+      data.days.forEach((d, i) => { if (days[i]) days[i].stops = d.stops; });
       completed = data.completed || [];
       showToast('Loaded your saved plan ✓');
       return true;
