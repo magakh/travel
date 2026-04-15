@@ -993,7 +993,8 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
       <div class="header-sub">3 days · hidden gems · rooftop dining</div>
     </div>
     <div style="display:flex;gap:6px;flex-shrink:0;">
-      <button class="prebook-pill" onclick="saveToStorage()" title="Save to device" style="border-color:#88d8a0;color:#88d8a0;">💾</button>
+      <button class="prebook-pill" onclick="saveToStorage()" title="Save & sync" style="border-color:#88d8a0;color:#88d8a0;">💾</button>
+      <button class="prebook-pill" id="refreshBtn" onclick="manualRefresh()" title="Refresh from sync" style="border-color:#88d8a0;color:#88d8a0;">🔄</button>
       <button class="prebook-pill" onclick="showSaveMenu()" title="More options">⋮</button>
       <button class="prebook-pill" onclick="showView('prebook')">Book list</button>
     </div>
@@ -1639,6 +1640,19 @@ async function syncSave() {
     if (putRes.ok) { showToast('Saved & synced ✓'); window._lastSyncTime = Date.now(); }
     else { showToast('Saved locally (sync failed)'); }
   } catch(e) { showToast('Saved locally ✓'); }
+}
+
+async function manualRefresh() {
+  const btn = document.getElementById('refreshBtn');
+  if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+  const loaded = await syncLoad();
+  if (loaded) {
+    switchDay(currentDay);
+    showToast('✨ Refreshed from sync');
+  } else {
+    showToast('Nothing new to load');
+  }
+  if (btn) { btn.textContent = '🔄'; btn.disabled = false; }
 }
 
 async function syncLoad() {
