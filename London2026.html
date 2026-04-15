@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>London Tour Guide</title>
+<title>London 2026</title>
 <style>
 /* required styles */
 
@@ -989,7 +989,7 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
 <div class="header" id="appHeader">
   <div class="header-top">
     <div>
-      <h1>London Tour Guide</h1>
+      <h1>London 2026</h1>
       <div class="header-sub">May 7–10 · hidden gems · rooftop dining</div>
     </div>
     <div style="display:flex;gap:6px;flex-shrink:0;">
@@ -1602,7 +1602,7 @@ function getSaveData() {
 }
 
 // ── REAL-TIME SYNC via GitHub API (no CDN cache) ─────────────────
-const SYNC_API = 'https://api.github.com/repos/magakh/travel/contents/sync.json';
+const SYNC_API = 'https://api.github.com/repos/magakh/travel/contents/sync_london2026.json';
 // Token stored once in localStorage (survives sessions, only on this device)
 const GH_TOKEN = ['ghp_TynMbg3orl8OjQ', 'e70IoVrrXQEEVmSC3YJLIs'].join('');
 
@@ -1647,7 +1647,7 @@ async function ghRead() {
 
 async function syncSave() {
   const payload = getSaveData();
-  try { localStorage.setItem('london_tour_v2', payload); } catch(e) {}
+  try { localStorage.setItem('london2026_v1', payload); } catch(e) {}
   try {
     const res = await ghFetch(payload);
     if (res && res.ok) {
@@ -1697,12 +1697,12 @@ function saveToStorage() { syncSave(); }
 
 function autoSave() {
   // Save locally immediately on every change — push to cloud only on explicit 💾
-  try { localStorage.setItem('london_tour_v2', getSaveData()); } catch(e) {}
+  try { localStorage.setItem('london2026_v1', getSaveData()); } catch(e) {}
 }
 
 function tryLoadSaved() {
   try {
-    const raw = localStorage.getItem('london_tour_v2');
+    const raw = localStorage.getItem('london2026_v1');
     if (!raw) return false;
     const data = JSON.parse(raw);
     if (data.days && Array.isArray(data.days) && data.days.length >= 3) {
@@ -1735,7 +1735,7 @@ function importFile(input) {
       if (!data.days || data.days.length < 3) throw new Error('Invalid format');
       data.days.forEach((d, i) => { days[i].stops = d.stops; });
       completed = data.completed || [];
-      try { localStorage.setItem('london_tour_v2', JSON.stringify(data)); } catch(e) {}
+      try { localStorage.setItem('london2026_v1', JSON.stringify(data)); } catch(e) {}
       switchDay(currentDay);
       renderPrebook();
       showToast('Plan imported successfully ✓');
@@ -1748,7 +1748,7 @@ function importFile(input) {
 
 function clearSaved() {
   showConfirm('Reset all days to original itinerary?', () => {
-    try { localStorage.removeItem('london_tour_v2'); } catch(e) {}
+    try { localStorage.removeItem('london2026_v1'); } catch(e) {}
     completed = [];
     location.reload();
   });
