@@ -1,0 +1,1696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>London Tour Guide</title>
+<style>
+:root {
+  --bg: #f5f4f0;
+  --surface: #ffffff;
+  --border: #e8e6e0;
+  --border2: #d0cec8;
+  --text: #1a1a1a;
+  --muted: #666;
+  --hint: #999;
+  --accent: #1a73e8;
+  --green: #1a7a3a;
+  --red: #c0392b;
+  --orange: #e65100;
+  --header-h: 112px;
+  --bottom-h: 64px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); }
+
+/* ── HEADER ─────────────────────────────────────────────────────── */
+.header {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+  background: #1a1a1a; color: #fff;
+  padding: env(safe-area-inset-top, 0) 0 0;
+}
+.header-top {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px 8px;
+}
+.header h1 { font-size: 16px; font-weight: 700; letter-spacing: -0.3px; }
+.header-sub { font-size: 11px; color: #aaa; margin-top: 1px; }
+.prebook-pill {
+  font-size: 11px; font-weight: 700; padding: 5px 10px;
+  background: transparent; border: 1px solid #fdc8c8; color: #ff8a8a;
+  border-radius: 20px; cursor: pointer; white-space: nowrap; flex-shrink: 0;
+}
+.day-tabs {
+  display: flex; overflow-x: auto; gap: 6px; padding: 0 12px 10px;
+  scrollbar-width: none; -ms-overflow-style: none;
+}
+.day-tabs::-webkit-scrollbar { display: none; }
+.day-tab {
+  padding: 6px 14px; border-radius: 20px; border: 1px solid #444;
+  font-size: 12px; font-weight: 600; cursor: pointer; background: transparent;
+  color: #ccc; white-space: nowrap; flex-shrink: 0; transition: all 0.15s;
+}
+.day-tab.active { background: #fff; color: #1a1a1a; border-color: #fff; }
+.day-tab.blue { background: #1a73e8; border-color: #1a73e8; color: #fff; }
+.day-tab.green-tab { background: #1a7a3a; border-color: #1a7a3a; color: #fff; }
+
+/* ── BOTTOM NAV ──────────────────────────────────────────────────── */
+.bottom-nav {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 200;
+  background: var(--surface); border-top: 1px solid var(--border);
+  display: flex; align-items: center;
+  padding: 8px 12px env(safe-area-inset-bottom, 8px);
+  gap: 8px;
+}
+.bn-btn {
+  flex: 1; padding: 10px 6px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--surface); font-size: 12px; font-weight: 600; cursor: pointer;
+  color: var(--muted); transition: all 0.15s; text-align: center; line-height: 1.2;
+}
+.bn-btn.primary { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+.bn-btn:disabled { opacity: 0.3; cursor: default; }
+
+/* ── MAIN SCROLL AREA ────────────────────────────────────────────── */
+.main-area {
+  position: fixed; top: var(--header-h); left: 0; right: 0;
+  bottom: var(--bottom-h); overflow-y: auto; -webkit-overflow-scrolling: touch;
+}
+
+/* ── VIEW PANELS ─────────────────────────────────────────────────── */
+.panel { display: none; }
+.panel.active { display: block; }
+
+/* ── STOP LIST (main view) ───────────────────────────────────────── */
+.stop-list-view { padding: 0; }
+.day-note {
+  padding: 10px 16px; background: #fff8e8; border-bottom: 1px solid #ffe0b2;
+  font-size: 12px; color: #7a5000; font-weight: 500;
+}
+.action-bar {
+  display: flex; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--border);
+  background: #fafaf8;
+}
+.action-bar button {
+  flex: 1; padding: 8px 6px; border-radius: 8px; border: 1px solid var(--border);
+  font-size: 12px; font-weight: 700; cursor: pointer; background: var(--surface);
+  color: var(--muted); transition: all 0.15s;
+}
+.action-bar button.blue-btn { border-color: var(--accent); color: var(--accent); background: #e8f0fd; }
+
+.stop-row {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 14px 16px; border-bottom: 1px solid var(--border);
+  background: var(--surface); cursor: pointer; transition: background 0.1s;
+  position: relative;
+}
+.stop-row:active { background: #f5f4f0; }
+.stop-row.active-row { background: #f0ede6; border-left: 3px solid #1a1a1a; padding-left: 13px; }
+.stop-check {
+  width: 22px; height: 22px; border-radius: 50%; border: 2px solid #ccc;
+  background: var(--surface); cursor: pointer; flex-shrink: 0; margin-top: 2px;
+  display: flex; align-items: center; justify-content: center; transition: all 0.15s;
+}
+.stop-check.done { background: #1a1a1a; border-color: #1a1a1a; }
+.stop-check.done::after { content: '✓'; color: #fff; font-size: 11px; font-weight: 700; }
+.drag-h { font-size: 16px; color: #ccc; cursor: grab; flex-shrink: 0; padding: 2px 0; margin-top: 2px; }
+.stop-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
+.stop-meta { flex: 1; min-width: 0; }
+.stop-time-label { font-size: 11px; color: var(--hint); font-weight: 500; margin-bottom: 1px; }
+.stop-name-label { font-size: 14px; font-weight: 700; color: var(--text); line-height: 1.3; }
+.stop-type-label { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.stop-tags { display: flex; gap: 4px; margin-top: 5px; flex-wrap: wrap; }
+.tag-pill {
+  font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 10px;
+}
+.tag-pill.prebook { background: #fde8e8; color: var(--red); }
+.tag-pill.free { background: #e8f5ec; color: var(--green); }
+.stop-chevron { color: #ccc; font-size: 16px; align-self: center; flex-shrink: 0; }
+
+/* progress */
+.progress-wrap { height: 3px; background: var(--border); margin: 0; }
+.progress-fill { height: 100%; background: #1a1a1a; transition: width 0.3s; }
+
+/* ── STOP DETAIL VIEW ────────────────────────────────────────────── */
+.detail-view { padding: 0 0 16px; }
+.detail-hero { padding: 20px 16px 16px; border-bottom: 1px solid var(--border); background: var(--surface); }
+.detail-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--muted); background: #f0ede8; padding: 4px 10px; border-radius: 20px; margin-bottom: 10px; }
+.detail-title { font-size: 22px; font-weight: 800; color: var(--text); line-height: 1.2; margin-bottom: 4px; }
+.detail-subtitle { font-size: 13px; color: var(--muted); margin-bottom: 12px; }
+.badge-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.badge {
+  font-size: 11px; padding: 4px 10px; border-radius: 20px; font-weight: 600;
+}
+.badge.free { background: #e8f5ec; color: var(--green); }
+.badge.prebook { background: #fde8e8; color: var(--red); }
+.badge.paid { background: #fff3e0; color: var(--orange); }
+.badge.food { background: #e8f4fd; color: #1565c0; }
+.badge.walk { background: #f3e5f5; color: #7b1fa2; }
+.badge.weekend { background: #fce4ec; color: #880e4f; }
+.badge.weekday { background: #e8eaf6; color: #283593; }
+
+.detail-section { padding: 16px; border-bottom: 1px solid var(--border); }
+.section-label {
+  font-size: 10px; font-weight: 800; color: var(--hint); text-transform: uppercase;
+  letter-spacing: 0.8px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px;
+}
+.section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+.travel-box {
+  display: flex; gap: 10px; background: #f0ede6; border-radius: 10px;
+  padding: 12px 14px; margin-bottom: 14px;
+}
+.travel-icon { font-size: 18px; flex-shrink: 0; }
+.travel-text { font-size: 13px; line-height: 1.6; color: #333; }
+
+.map-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+.map-btn-a {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 12px 8px; border-radius: 10px; font-size: 13px; font-weight: 700;
+  text-decoration: none; border: none; cursor: pointer; transition: background 0.15s;
+}
+.map-btn-a.blue { background: var(--accent); color: #fff; }
+.map-btn-a.blue:active { background: #1557b0; }
+.map-btn-a.green-btn { background: var(--green); color: #fff; }
+.map-btn-a.green-btn:active { background: #145e2c; }
+
+.prebook-alert {
+  background: #fff3f3; border: 1px solid #fdc8c8; border-radius: 10px;
+  padding: 12px 14px; margin-bottom: 14px;
+}
+.prebook-alert-title { font-size: 11px; font-weight: 800; color: var(--red); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 4px; }
+.prebook-alert p { font-size: 13px; line-height: 1.5; color: #333; }
+.prebook-alert a { color: var(--red); font-weight: 700; }
+
+.history-text { font-size: 14px; line-height: 1.75; color: #333; }
+.history-text strong { color: var(--text); font-weight: 700; }
+.history-para { margin-top: 10px; }
+
+.tip-box {
+  background: #faf9f6; border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px 14px;
+}
+.tip-box p { font-size: 13px; line-height: 1.65; color: #333; }
+
+.detail-nav { display: flex; gap: 8px; padding: 16px; }
+.dnav-btn {
+  flex: 1; padding: 12px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--surface); font-size: 13px; font-weight: 700; cursor: pointer;
+  color: var(--muted); transition: all 0.15s; text-align: center;
+}
+.dnak-btn:active { background: #f0ede8; }
+.dnav-next { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+.remove-btn { flex: 0 0 44px; color: var(--red); border-color: #fdc8c8; font-size: 16px; }
+
+/* ── ROUTE MAP VIEW ─────────────────────────────────────────────── */
+.route-map-view { padding: 0; }
+.map-header { padding: 14px 16px; border-bottom: 1px solid var(--border); background: var(--surface); }
+.map-header h2 { font-size: 17px; font-weight: 700; margin-bottom: 3px; }
+.map-header p { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+.map-open-btn {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  width: 100%; padding: 12px; border-radius: 10px;
+  background: var(--accent); color: #fff; font-size: 14px; font-weight: 700;
+  text-decoration: none; border: none; cursor: pointer; margin-bottom: 8px;
+}
+.map-canvas-wrap {
+  background: #eaf2ea; margin: 12px 16px; border-radius: 12px;
+  overflow: hidden; border: 1px solid #c8d8c8;
+}
+.map-canvas-wrap svg { display: block; width: 100%; height: auto; }
+.mini-stop-cards { padding: 0 16px 16px; }
+.mini-card {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; margin-bottom: 8px; cursor: pointer; transition: all 0.1s;
+}
+.mini-card:active { background: #f5f4f0; }
+.mini-card.active-mini { border-color: #1a1a1a; background: #f5f4f0; }
+.mini-num {
+  width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 800; color: #fff;
+}
+.mini-info { flex: 1; min-width: 0; }
+.mini-time-s { font-size: 11px; color: var(--hint); }
+.mini-name-s { font-size: 13px; font-weight: 700; color: var(--text); }
+
+/* ── ALL DAYS MAP ────────────────────────────────────────────────── */
+.all-map-view { display: flex; flex-direction: column; height: 100%; }
+.all-map-header { padding: 14px 16px 12px; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0; }
+.all-map-header h2 { font-size: 17px; font-weight: 700; margin-bottom: 4px; }
+.map-legend { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; }
+.legend-dot-line { width: 20px; height: 3px; border-radius: 2px; }
+.all-map-iframe { flex: 1; border: none; display: block; width: 100%; min-height: 400px; }
+
+/* ── ADD LOCATION VIEW ───────────────────────────────────────────── */
+.add-view { padding: 20px 16px; }
+.add-view h2 { font-size: 20px; font-weight: 800; margin-bottom: 4px; }
+.add-view p { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
+.form-label { font-size: 11px; font-weight: 700; color: #555; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 6px; }
+.form-input {
+  width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px;
+  font-size: 15px; margin-bottom: 16px; outline: none; background: var(--surface);
+  color: var(--text); -webkit-appearance: none; appearance: none;
+  font-family: inherit;
+}
+.form-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(26,115,232,0.12); }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.gen-btn {
+  width: 100%; padding: 16px; background: #1a1a1a; color: #fff; border: none;
+  border-radius: 12px; font-size: 16px; font-weight: 700; cursor: pointer;
+  transition: background 0.15s; font-family: inherit;
+}
+.gen-btn:disabled { background: #666; }
+.gen-btn:active { background: #333; }
+.gen-hint { font-size: 12px; color: var(--hint); text-align: center; margin-top: 8px; }
+.search-result-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 14px 16px; margin-bottom: 10px; cursor: pointer; transition: all 0.12s;
+}
+.search-result-card:active { background: #f5f4f0; }
+.search-result-card h3 { font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 3px; }
+.search-result-card .src-type { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.search-result-card .src-desc { font-size: 13px; color: #444; line-height: 1.5; margin-bottom: 10px; }
+.src-add-btn {
+  display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px;
+  background: #1a1a1a; color: #fff; border: none; border-radius: 8px;
+  font-size: 13px; font-weight: 700; cursor: pointer;
+}
+
+/* ── PRE-BOOKING VIEW ────────────────────────────────────────────── */
+.prebook-view { padding: 20px 16px; }
+.prebook-view h2 { font-size: 20px; font-weight: 800; margin-bottom: 4px; }
+.prebook-view > p { font-size: 13px; color: var(--muted); margin-bottom: 16px; }
+.pb-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 14px 16px; margin-bottom: 10px;
+}
+.pb-card-title { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+.pb-urgency { font-size: 10px; font-weight: 800; padding: 3px 9px; border-radius: 20px; display: inline-block; margin-bottom: 6px; }
+.pb-urgency.urgent { background: #fde8e8; color: var(--red); }
+.pb-urgency.medium { background: #fff3e0; color: var(--orange); }
+.pb-urgency.low { background: #e8f5ec; color: var(--green); }
+.pb-card p { font-size: 13px; color: #555; line-height: 1.5; }
+.pb-card a { color: var(--accent); font-weight: 700; }
+.pb-day { font-size: 11px; color: var(--hint); margin-left: 8px; }
+
+/* ── TOAST ───────────────────────────────────────────────────────── */
+.toast {
+  position: fixed; bottom: calc(var(--bottom-h) + 12px); left: 50%;
+  transform: translateX(-50%); background: #1a1a1a; color: #fff;
+  padding: 10px 20px; border-radius: 20px; font-size: 13px; font-weight: 600;
+  z-index: 9999; white-space: nowrap; pointer-events: none;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+}
+.toast.err { background: var(--red); }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<input type="file" id="import-input" accept=".json" style="display:none" onchange="importFile(this); this.value='';">
+<div class="header" id="appHeader">
+  <div class="header-top">
+    <div>
+      <h1>London Tour Guide</h1>
+      <div class="header-sub">3 days · hidden gems · rooftop dining</div>
+    </div>
+    <div style="display:flex;gap:6px;flex-shrink:0;">
+      <button class="prebook-pill" onclick="saveToStorage()" title="Save to device" style="border-color:#88d8a0;color:#88d8a0;">💾</button>
+      <button class="prebook-pill" onclick="showSaveMenu()" title="More options">⋮</button>
+      <button class="prebook-pill" onclick="showView('prebook')">Book list</button>
+    </div>
+  </div>
+  <div class="day-tabs" id="dayTabs">
+    <button class="day-tab active" onclick="switchDay(0)" id="dtab0">Day 1</button>
+    <button class="day-tab" onclick="switchDay(1)" id="dtab1">Day 2</button>
+    <button class="day-tab" onclick="switchDay(2)" id="dtab2">Day 3</button>
+    <button class="day-tab blue" onclick="showRouteMap()" id="dtabMap">Route Map</button>
+    <button class="day-tab green-tab" onclick="showAllMap()" id="dtabAll">All Days Map</button>
+    <button class="day-tab" onclick="showView('add')" id="dtabAdd" style="border-color:#1a73e8;color:#1a73e8;">+ Add place</button>
+    <button class="day-tab" onclick="showView('search')" id="dtabSearch" style="border-color:#7b1fa2;color:#7b1fa2;">🔍 Search</button>
+  </div>
+</div>
+
+<!-- BOTTOM NAV -->
+<div class="bottom-nav" id="bottomNav">
+  <button class="bn-btn" id="bnPrev" onclick="navPrev()">← Prev</button>
+  <button class="bn-btn" id="bnDone" onclick="markDone()">Mark done</button>
+  <button class="bn-btn primary" id="bnNext" onclick="navNext()">Next →</button>
+</div>
+
+<!-- MAIN SCROLL AREA -->
+<div class="main-area" id="mainArea">
+
+  <!-- STOP LIST -->
+  <div class="panel active" id="panel-list">
+    <div class="day-note" id="dayNote"></div>
+    <div class="progress-wrap"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+    <div class="action-bar">
+      <button onclick="optimizeRoute()">⚡ Optimize route</button>
+      <button class="blue-btn" onclick="showView('add')">+ Add location</button>
+    </div>
+    <div id="stopList"></div>
+  </div>
+
+  <!-- STOP DETAIL -->
+  <div class="panel" id="panel-detail">
+    <div class="detail-view" id="detailContent"></div>
+  </div>
+
+  <!-- ROUTE MAP -->
+  <div class="panel" id="panel-routemap">
+    <div class="route-map-view" id="routeMapContent"></div>
+  </div>
+
+  <!-- ALL DAYS MAP -->
+  <div class="panel" id="panel-allmap">
+    <div class="all-map-view" id="allMapContent"></div>
+  </div>
+
+  <!-- ADD LOCATION -->
+  <div class="panel" id="panel-add">
+    <div class="add-view">
+      <h2>Add a location</h2>
+      <p>Enter any London place — AI will write the history, tips, and tour guide content for it.</p>
+      <label class="form-label">Place name *</label>
+      <input class="form-input" id="addName" type="text" placeholder="e.g. Hunterian Museum">
+      <label class="form-label">Address *</label>
+      <input class="form-input" id="addAddress" type="text" placeholder="e.g. 35 Lincoln's Inn Fields, WC2A">
+      <div class="form-row">
+        <div>
+          <label class="form-label">Latitude</label>
+          <input class="form-input" id="addLat" type="number" step="0.0001" placeholder="51.5174">
+        </div>
+        <div>
+          <label class="form-label">Longitude</label>
+          <input class="form-input" id="addLng" type="number" step="0.0001" placeholder="-0.118">
+        </div>
+      </div>
+      <label class="form-label">Type</label>
+      <select class="form-input" id="addType">
+        <option value="museum">Museum / Gallery</option>
+        <option value="restaurant">Restaurant / Café</option>
+        <option value="market">Market / Street food</option>
+        <option value="park">Park / Garden</option>
+        <option value="landmark">Historic landmark</option>
+        <option value="church">Church / Cathedral</option>
+        <option value="walk">Walking / Neighbourhood</option>
+        <option value="rooftop">Rooftop / View</option>
+      </select>
+      <label class="form-label">Add to day</label>
+      <select class="form-input" id="addDay">
+        <option value="0">Day 1 — City Walk</option>
+        <option value="1">Day 2 — East London</option>
+        <option value="2">Day 3 — West & Mayfair</option>
+      </select>
+      <label class="form-label">Duration</label>
+      <select class="form-input" id="addDuration">
+        <option>30 min</option>
+        <option selected>60 min</option>
+        <option>90 min</option>
+        <option>2 hours</option>
+      </select>
+      <button class="gen-btn" id="genBtn" onclick="generateLocation()">Generate with AI →</button>
+      <p class="gen-hint">AI researches history, tips & travel directions automatically</p>
+    </div>
+  </div>
+
+  <!-- SEARCH -->
+  <div class="panel" id="panel-search">
+    <div class="add-view">
+      <h2>Search &amp; Add Places</h2>
+      <p>Describe what you're looking for — the AI will find the best match near your route and add it with full history and tips.</p>
+      <label class="form-label">What are you looking for?</label>
+      <input class="form-input" id="searchQuery" type="text"
+        placeholder="e.g. rooftop bar near the City, hidden Victorian pub, healthy lunch Mayfair…"
+        onkeydown="if(event.key==='Enter') aiSearch();">
+      <label class="form-label">Add result to day</label>
+      <select class="form-input" id="searchDay">
+        <option value="0">Day 1 — City Walk</option>
+        <option value="1">Day 2 — East London</option>
+        <option value="2">Day 3 — West &amp; Mayfair</option>
+      </select>
+      <button class="gen-btn" id="searchBtn" onclick="aiSearch()">Search with AI →</button>
+      <p class="gen-hint">AI searches for the best match, writes history &amp; tips, and adds it to your itinerary</p>
+      <div id="searchResults" style="margin-top:20px;"></div>
+    </div>
+  </div>
+
+  <!-- PRE-BOOKING -->
+  <div class="panel" id="panel-prebook">
+    <div class="prebook-view">
+      <h2>Pre-booking checklist</h2>
+      <p>Book these in priority order — the top ones sell out weeks ahead.</p>
+      <div id="prebookList"></div>
+      <button class="dnak-btn dnav-next" onclick="switchDay(0)" style="width:100%;padding:14px;background:#1a1a1a;color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;margin-top:8px;">← Back to itinerary</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const days = [
+  {
+    title: "Day 1 — Marylebone to the City",
+    note: "Best on a weekday (Temple Church is Mon–Fri only)",
+    stops: [
+      {
+        time: "9:00 AM", name: "Daunt Books + Coffee", type: "Coffee & browse",
+        color: "#1a7a3a", prebook: false, free: true, weekend: false,
+        lat: 51.5204, lng: -0.152, address: "84 Marylebone High St, London W1U 4QW",
+        badges: ["free","walk"],
+        travel: "🚶 20-min walk from Piccadilly, or Tube to Baker Street (5 min). Head south on Marylebone High Street — one of London's loveliest village streets.",
+        history: `<strong>Daunt Books</strong> opened in 1990 in this stunning 1910 Edwardian building, originally built as a bookshop for travel writer and publisher James Daunt. The interior is a masterpiece of Edwardian design — a long, oak-galleried hall with a triple-height stained-glass skylight at the rear. The building was designed by architect <strong>John Edgar Chapman</strong>.\n\nMarylebone High Street itself sits on a medieval lane that existed before the Norman Conquest. The name comes from <em>"Mary-le-bourne"</em> — St Mary's Church by the stream (bourne). In the 18th century this was a fashionable village on the edge of London; today it retains that elegant village character.`,
+        todo: `<p><span class="tip-icon">☕</span><strong>Order:</strong> A flat white or filter coffee from the in-store café. Browse the legendary travel section organised by country — fiction, history, and guidebooks for each destination together on one shelf. Pick up something for the journey home.</p>`,
+        duration: "45 min"
+      },
+      {
+        time: "9:50 AM", name: "The Wallace Collection", type: "World-class free art museum",
+        color: "#5c4db1", prebook: false, free: true, weekend: false,
+        lat: 51.5173, lng: -0.1531, address: "Hertford House, Manchester Square, London W1U 3BN",
+        badges: ["free"],
+        travel: "🚶 5-min walk south then east along Wigmore Street to Manchester Square.",
+        history: `<strong>Hertford House</strong> was built in 1776 as Manchester House, one of the grandest private mansions in London. It was acquired by the 2nd Marquess of Hertford in 1797 and the family spent the next century filling it with one of the finest private art collections in history.\n\nThe 4th Marquess and his illegitimate son <strong>Sir Richard Wallace</strong> were the great collectors — amassing Rembrandt, Velázquez, Fragonard, Rubens, Titian, and Frans Hals' <em>The Laughing Cavalier</em> (1624). Wallace's widow bequeathed the entire collection to the British nation in 1897 on the condition it never leave London and never be lent out. It has been a free public museum ever since — one of the most generous gifts in art history.`,
+        todo: `<p><span class="tip-icon">🎨</span><strong>Must-see rooms:</strong> The Great Gallery (top floor) for the Old Masters. Room 22 for Hals' <em>Laughing Cavalier</em>. The European Armoury — 2,500 pieces of medieval armour — is extraordinary. The glass-roofed courtyard café is excellent for a mid-morning stop. Download the free audio guide from their website.</p>`,
+        duration: "90 min", prebookText: null, prebookUrl: null
+      },
+      {
+        time: "11:30 AM", name: "Walk through Mayfair", type: "Walking tour",
+        color: "#7b1fa2", prebook: false, free: true, weekend: false,
+        lat: 51.5113, lng: -0.1427, address: "Burlington Arcade, Piccadilly, London W1J 0QJ",
+        badges: ["free","walk"],
+        travel: "🚶 25-min walk south through Mayfair — one of London's finest walking routes.",
+        history: `<strong>Mayfair</strong> takes its name from the May Fair held annually here from 1686 until the 1760s, when it was suppressed for causing disorder. The area was developed into London's most prestigious residential district in the early 18th century by the Grosvenor family, who still own much of it today.\n\n<strong>Burlington Arcade</strong> (1819) was the first purpose-built shopping arcade in Britain. It was commissioned by Lord George Cavendish to stop people throwing oyster shells and rubbish into his garden next door. The Beadles (uniformed guards) who patrol it today date from its opening — they enforce rules against running, singing, and opening umbrellas, which have been in place since 1819.\n\n<strong>Savile Row</strong>, which you'll pass through, has been the global home of bespoke tailoring since the 1800s. The Beatles' last public performance was on the rooftop of No. 3 in January 1969.`,
+        todo: `<p><span class="tip-icon">🚶</span><strong>Route:</strong> Walk south from Wallace Collection → through Marylebone → along Bond Street → through Burlington Arcade → along Savile Row → arriving at Dishoom Carnaby on Kingly Street. This is one of London's most architecturally rewarding walking routes.</p>`,
+        duration: "25 min"
+      },
+            {
+        time: "1:00 PM", name: "Sir John Soane's Museum", type: "Hidden gem museum · Free",
+        color: "#5c4db1", prebook: false, free: true, weekend: false,
+        lat: 51.517, lng: -0.1175, address: "13 Lincoln's Inn Fields, London WC2A 3BP",
+        badges: ["free"],
+        travel: "🚶 15-min walk east along High Holborn to Lincoln's Inn Fields — London's largest public square.",
+        history: `<strong>Sir John Soane</strong> (1753–1837) was the greatest British architect of his age — designer of the original Bank of England and Dulwich Picture Gallery. He spent 40 years transforming these three terraced houses into an architectural experiment, knocking through floors and walls to create extraordinary spaces flooded with natural light via mirrors and skylights.\n\nThe house contains <strong>30,000 objects</strong> including an Egyptian sarcophagus of <strong>Seti I</strong> (1279 BC), Hogarth's complete <em>A Rake's Progress</em> series (1733), Roman antiquities, architectural models, and an entire picture gallery with walls that swing open to reveal paintings three layers deep. Soane left it to the nation on his death in 1837 with the condition it remain exactly as he left it. It has barely changed since.`,
+        todo: `<p><span class="tip-icon">🏛️</span><strong>Don't miss:</strong> Ask a guide to open the picture planes in the Picture Room to reveal the three hidden layers of paintings. Find Seti I's sarcophagus in the basement Sepulchral Chamber. Look for the monk's cell and the "Padre Giovanni" tomb — Soane's eccentric tribute to his pet dog. Download the audio guide before visiting from soane.org.</p>`,
+        duration: "90 min", prebookText: null
+      },
+      {
+        time: "2:45 PM", name: "Two Temple Place", type: "Hidden Victorian mansion · Free",
+        color: "#006064", prebook: false, free: true, weekend: false,
+        lat: 51.5116, lng: -0.1122, address: "2 Temple Pl, London WC2R 3BD",
+        badges: ["free"],
+        travel: "🚶 10-min walk south along Chancery Lane to the Victoria Embankment. The building is just off the river.",
+        history: `<strong>Two Temple Place</strong> was built in 1895 for <strong>William Waldorf Astor</strong>, the richest man in America, as his London estate office. Designed by architect John Loughborough Pearson (who also designed Truro Cathedral), it is a stunning example of Late Victorian Gothic Revival architecture.\n\nThe exterior is covered in a frieze of figures from literature and history. Inside, the main hall features a triple-height mahogany staircase with 52 carved figures representing characters from <em>The Last of the Mohicans</em>. The stained glass, gilded ceilings, and marble floors were all installed at extraordinary expense. Astor subsequently donated it to the nation. It now hosts free contemporary art exhibitions from Britain's regional museum collections — one of London's best-kept secrets.`,
+        todo: `<p><span class="tip-icon">✨</span><strong>Explore:</strong> Look up at the carved wooden staircase — spot all 52 literary figures. The main hall has extraordinary gilded detail. Check what exhibition is currently running at twotempleplace.org — they are consistently excellent. Closed Mondays.</p>`,
+        duration: "50 min"
+      },
+      {
+        time: "3:40 PM", name: "Temple Church", type: "800-year-old Knights Templar church",
+        color: "#880e4f", prebook: false, free: false, weekend: false,
+        lat: 51.5133, lng: -0.1103, address: "Temple, London EC4Y 7BB",
+        badges: ["paid","weekday"],
+        travel: "🚶 5-min walk along the Embankment then into the Temple complex through the archway on Fleet Street.",
+        history: `<strong>Temple Church</strong> was built in 1185 by the <strong>Knights Templar</strong> — the military monastic order founded in Jerusalem in 1119 to protect Christian pilgrims travelling to the Holy Land. The circular nave was deliberately modelled on the Church of the Holy Sepulchre in Jerusalem.\n\nThe nine stone effigies of crusader knights on the floor date from 1185–1250. After the Templars were suppressed and their leaders burned at the stake in 1312, the church passed to the Knights Hospitaller and then to the legal profession. It is still owned by the Inner and Middle Temple law societies. The church survived the Great Fire of 1666 but was badly damaged in the Blitz of 1941 — the current interior is a meticulous post-war restoration. <em>The Da Vinci Code</em> used it as a location, but the real history is far stranger than the novel.`,
+        todo: `<p><span class="tip-icon">⚔️</span><strong>Look for:</strong> The nine crusader knight effigies on the floor — run your eyes over the faces, they are extraordinary portraits. The Round Church (1185) vs the Chancel (1240) — you can see the architectural shift from Romanesque to Early Gothic. Open Mon–Fri only, small entry charge.</p>`,
+        duration: "35 min"
+      },
+      {
+        time: "4:20 PM", name: "Postman's Park", type: "Hidden memorial garden · Free",
+        color: "#1a7a3a", prebook: false, free: true, weekend: false,
+        lat: 51.5168, lng: -0.0977, address: "King Edward St, London EC1A 7BT",
+        badges: ["free"],
+        travel: "🚶 15-min walk north along Aldersgate Street — a classic City of London street with layers of history.",
+        history: `<strong>Postman's Park</strong> was created in 1880 on the site of three former churchyards near St Paul's. The name comes from its use as a lunchtime garden by workers from the nearby General Post Office.\n\nIn 1900, the Victorian artist <strong>George Frederic Watts</strong> fulfilled a lifelong ambition by installing the <strong>Memorial to Heroic Self-Sacrifice</strong> — a covered loggia of hand-painted Doulton ceramic tiles, each commemorating an ordinary person who died saving another. The memorial honours people like <em>"Frederick Alfred Croft, Inspector, saved a lunatic woman from suicide at Woolwich Arsenal station, January 11, 1878, but was himself run over by the train"</em>. Each tile is a complete world. There are 54 plaques — Watts planned 120 but died before completing the project.`,
+        todo: `<p><span class="tip-icon">🌿</span><strong>Take time:</strong> Read every single plaque slowly — they are extraordinary miniature stories of ordinary heroism. The stories of children saving siblings are particularly moving. The park is almost completely unknown to tourists despite being 5 minutes from St Paul's. Sit on a bench and absorb it.</p>`,
+        duration: "25 min"
+      },
+      {
+        time: "5:00 PM", name: "Leadenhall Market", type: "Victorian covered market · Free",
+        color: "#e65100", prebook: false, free: true, weekend: false,
+        lat: 51.5128, lng: -0.0835, address: "Gracechurch St, London EC3V 1LT",
+        badges: ["free"],
+        travel: "🚶 15-min walk east through the City of London — past the Bank of England and the Royal Exchange.",
+        history: `<strong>Leadenhall Market</strong> has occupied this site since the 14th century — it is the oldest market in the City of London. The site was part of the <strong>Roman forum of Londinium</strong>, the civic heart of Roman London (founded around 50 AD). Medieval London's main poultry and cheese market stood here.\n\nThe current magnificent structure was designed by <strong>Sir Horace Jones</strong> in 1881 — the same architect who designed Tower Bridge. The painted cast-iron roof structure, with its ornate green and burgundy ironwork and soaring glass roof, is one of the finest Victorian engineering achievements in London. It was used as Diagon Alley in the first Harry Potter film (2001) — the optician's shop that doubled as the Leaky Cauldron still stands on the corner.`,
+        todo: `<p><span class="tip-icon">🍷</span><strong>Stop for:</strong> A glass of wine or cocktail at one of the bars under the arches. Look up at the painted ceiling — the detail is extraordinary. Find the corner that appeared in Harry Potter. The market is at its best in the late afternoon when City workers fill the bars.</p>`,
+        duration: "40 min"
+      },
+      {
+        time: "5:50 PM", name: "Sky Garden — Sunset Cocktails", type: "Rooftop garden · Free with booking",
+        color: "#1565c0", prebook: true, free: true, weekend: false,
+        lat: 51.5112, lng: -0.0835, address: "1 Sky Garden Walk, London EC3M 8AF",
+        badges: ["free","prebook"],
+        travel: "🚶 2-min walk — the Sky Garden is in the Walkie-Talkie building (20 Fenchurch Street), directly next to Leadenhall Market.",
+        history: `The <strong>Walkie-Talkie building</strong> (officially 20 Fenchurch Street) was designed by Rafael Viñoly and completed in 2014. It is nicknamed the Walkie-Talkie because of its distinctive widening shape. In 2013, before the glass was treated, it famously focused sunlight so intensely on the street below that it melted a car and fried eggs on the pavement — earning it the tabloid nickname "the Fryscraper".\n\nThe <strong>Sky Garden</strong> on floors 35–37 was added as a public benefit — a requirement for planning permission — and opened in 2015. It is now one of London's most popular free attractions, offering some of the finest panoramic views of the city, including St Paul's Cathedral, the Shard, Tower Bridge, and the entire sweep of the Thames.`,
+        todo: `<p><span class="tip-icon">🌅</span><strong>Arrive at sunset</strong> for the most spectacular views as the city lights come on. The two outdoor terraces give you unobstructed 360° views. Order cocktails at the bar and watch the sun set over St Paul's. <strong>MUST BOOK AHEAD</strong> at skygarden.london — slots release 3 weeks in advance and sell out within hours. Free entry.</p>`,
+        duration: "75 min",
+        prebookText: "Book free entry — sells out 3 weeks ahead",
+        prebookUrl: "https://skygarden.london/sky-garden/"
+      },
+      {
+        time: "8:00 PM", name: "Duck & Waffle — Rooftop Dinner", type: "Rooftop fine dining · 40th floor",
+        color: "#c0392b", prebook: true, free: false, weekend: false,
+        lat: 51.5163, lng: -0.0812, address: "110 Bishopsgate, London EC2N 4AY",
+        badges: ["prebook"],
+        travel: "🚶 5-min walk north from Sky Garden to Heron Tower on Bishopsgate.",
+        history: `<strong>Heron Tower</strong> (now officially Salesforce Tower) is one of the City of London's tallest buildings at 230 metres, completed in 2011. It was designed by architects Kohn Pedersen Fox and features a distinctive external structural frame.\n\n<strong>Duck & Waffle</strong> opened in 2012 and was one of London's first 24-hour fine dining restaurants. At 40 floors up, it holds one of the most dramatic dining positions in the city — views of Tower Bridge, the Thames, the Gherkin, and on clear nights, all the way to the North Downs.`,
+        todo: `<p><span class="tip-icon">🍽️</span><strong>Order (healthy options):</strong> Seasonal vegetable dishes, fresh fish, and the tasting menus. Request a window table when booking — insist on it. The city views at night are extraordinary. Open 24 hours; reserve the 8pm slot for the best light transition from dusk to night.</p>`,
+        duration: "120 min",
+        prebookText: "Book online — request window table",
+        prebookUrl: "https://duckandwaffle.com/london/"
+      }
+    ]
+  },
+  {
+    title: "Day 2 — East London Immersion",
+    note: "⚠️ Must be a weekend — Columbia Road (Sunday only) and Maltby Street (Sat/Sun only)",
+    stops: [
+      {
+        time: "9:00 AM", name: "Columbia Road Flower Market + Coffee", type: "Sunday market · East London",
+        color: "#1a7a3a", prebook: false, free: true, weekend: true,
+        lat: 51.5291, lng: -0.0698, address: "Columbia Rd, London E2 7RG",
+        badges: ["free","weekend"],
+        travel: "🚇 Tube to Bethnal Green (Central line, 25 min from Piccadilly Circus). Walk 10 min north. Or take bus 8 to Columbia Road.",
+        history: `<strong>Columbia Road</strong> has been a market street since the Victorian era. The flower market was formally established in the late 19th century when <strong>Baroness Angela Burdett-Coutts</strong> — the wealthiest woman in Victorian England — built the Columbia Market building here in 1869 as a covered market for the poor of the East End. When it failed commercially, the street traders took over and the outdoor flower market evolved organically.\n\nThe East End of London was historically home to successive waves of immigrants: <strong>Huguenot silk weavers</strong> from France (1680s), then Ashkenazi Jewish immigrants fleeing Eastern European pogroms (1880s–1930s), then Bangladeshi communities (1970s–present). You can still see the layers of this history in the architecture of Bethnal Green and Shoreditch surrounding you.`,
+        todo: `<p><span class="tip-icon">🌸</span><strong>Go early (9am)</strong> for the best flowers and energy before the crowds peak. The sellers shout prices in cockney rhyming slang. Browse the tiny independent shops on the street — excellent ceramics, art books, coffee. Grab a flat white from Columbia Coffee or Jones Dairy Café. The market runs 8am–3pm Sundays only.</p>`,
+        duration: "60 min"
+      },
+      {
+        time: "10:10 AM", name: "Walk through Spitalfields & Brick Lane", type: "Walking tour · Huguenot & Jewish history",
+        color: "#7b1fa2", prebook: false, free: true, weekend: false,
+        lat: 51.5194, lng: -0.0761, address: "Brick Lane, London E1 6RF",
+        badges: ["free","walk"],
+        travel: "🚶 15-min walk west through Bethnal Green into Spitalfields — one of London's most historically layered neighbourhoods.",
+        history: `<strong>Spitalfields</strong> has been London's immigrant quarter for 350 years. The name comes from the Hospital Fields of the medieval priory of St Mary Spital (1197).\n\n<strong>Brick Lane</strong> tells the story of London's immigrants in a single street. The building at the corner of Fournier Street has been, in sequence: a Huguenot chapel (1743), a Wesleyan chapel (1819), the <strong>Great Synagogue</strong> for Jewish immigrants (1898), and now the <strong>Jamme Masjid mosque</strong> (1976) — each community transforming it for their own faith. No other building in London tells the story of immigration so vividly.\n\nThe Georgian terraced houses on Fournier Street and Elder Street were built by Huguenot silk merchants in the 1720s–30s and are among the finest unaltered 18th-century streetscapes in London.`,
+        todo: `<p><span class="tip-icon">🚶</span><strong>Walk via:</strong> Bethnal Green Road → Brick Lane (look for the multi-faith building on the corner of Fournier Street) → Elder Street (extraordinary Georgian terrace) → arriving at Rochelle Canteen on Arnold Circus. This 15-minute walk is one of the most historically rich in London.</p>`,
+        duration: "15 min"
+      },
+      {
+        time: "10:30 AM", name: "Rochelle Canteen — Brunch", type: "Cult restaurant · Seasonal British",
+        color: "#1a7a3a", prebook: true, free: false, weekend: false,
+        lat: 51.5258, lng: -0.0743, address: "16 Playground Gardens, London E2 7FA",
+        badges: ["food","prebook"],
+        travel: "🚶 Arrive via Arnold Circus — the centrepiece bandstand surrounded by the Boundary Estate, the world's first council housing (1900).",
+        history: `<strong>Rochelle Canteen</strong> opened in 2004 in a converted Victorian school bike shed — part of the <strong>Rochelle School</strong> building (1883), a former London County Council school. To find it you must ring a bell on a plain brick wall; there is no sign. It was opened by chefs <strong>Melanie Arnold and Margot Henderson</strong> (wife of Fergus Henderson of St John's fame).\n\n<strong>Arnold Circus</strong> outside is the centrepiece of the <strong>Boundary Estate</strong> — built in 1900 and the world's first social housing project. The bandstand stands on a mound made from the rubble of the Old Nichol slum it replaced. The estate is a masterpiece of Arts and Crafts social architecture.`,
+        todo: `<p><span class="tip-icon">🍳</span><strong>Order (healthy):</strong> Whatever fish or vegetables are on that day — the menu changes constantly based on what's freshest. The sea bass, seasonal grain dishes, and mushroom plates are consistently outstanding. Fresh and clean flavours — no heavy sauces. Ring the bell on the gate to enter. Book well ahead.</p>`,
+        duration: "75 min",
+        prebookText: "Book online — small restaurant, fills fast",
+        prebookUrl: "https://www.rochellecanteen.com/"
+      },
+      {
+        time: "12:00 PM", name: "Bunhill Fields Burial Ground", type: "Hidden literary cemetery · Free",
+        color: "#006064", prebook: false, free: true, weekend: false,
+        lat: 51.5237, lng: -0.0887, address: "38 City Rd, London EC1Y 2BG",
+        badges: ["free"],
+        travel: "🚶 15-min walk west through Shoreditch and Old Street.",
+        history: `<strong>Bunhill Fields</strong> has been a burial ground since at least the 13th century. The name derives from "Bone Hill" — a reference to the enormous quantity of human bones moved here from the charnel house of St Paul's Cathedral in 1549. During the Great Plague of 1665, over 120,000 bodies were buried in mass graves here.\n\nFrom 1665 it became the principal burial ground for <strong>Nonconformists</strong> — Protestant dissenters who refused to conform to the Church of England. Three of Britain's greatest writers are buried here within metres of each other: <strong>William Blake</strong> (1757–1827, poet and artist), <strong>Daniel Defoe</strong> (1660–1731, author of Robinson Crusoe), and <strong>John Bunyan</strong> (1628–1688, author of The Pilgrim's Progress). John Wesley, founder of Methodism, is buried across the road.`,
+        todo: `<p><span class="tip-icon">📚</span><strong>Find the graves of:</strong> William Blake (distinctive headstone near the north wall), Daniel Defoe (tall obelisk), and John Bunyan (elaborate tomb). Stand between them — three of the most influential writers in English literature, all buried in a park most Londoners have never visited. Allow 25 minutes.</p>`,
+        duration: "30 min"
+      },
+      {
+        time: "12:35 PM", name: "Barbican Centre — Art & Architecture", type: "Brutalist landmark · Free to explore",
+        color: "#5c4db1", prebook: false, free: true, weekend: false,
+        lat: 51.5202, lng: -0.0938, address: "Silk St, Barbican, London EC2Y 8DS",
+        badges: ["free"],
+        travel: "🚶 10-min walk south from Bunhill Fields — or take the Tube one stop to Barbican.",
+        history: `The <strong>Barbican Estate</strong> is the largest single arts and residential complex in Europe, built between 1965 and 1982 by architects <strong>Chamberlin, Powell and Bon</strong> for the City of London Corporation. It was a utopian vision of urban living — 6,500 residents in a self-contained city within the city, complete with restaurants, theatres, cinemas, gardens, and a lake.\n\nThe site was chosen because this entire area — some 35 acres — was completely flattened by the Blitz in December 1940. Before that it was a dense medieval and Victorian neighbourhood. Before that, it was the location of the <strong>Cripplegate Fort</strong>, a Roman fortification that pre-dated the main City walls. You can still see sections of the original Roman wall incorporated into the Barbican's structure.\n\nThe <strong>Barbican Centre</strong> opened in 1982 and is home to the London Symphony Orchestra.`,
+        todo: `<p><span class="tip-icon">🏗️</span><strong>Explore:</strong> Walk the elevated walkways (called "highwalks") — designed so residents could walk from home to the arts centre without touching the ground. Visit the <strong>Barbican Conservatory</strong> (check opening times — usually Sundays and occasional weekdays) — one of London's largest tropical indoor gardens. Check the free gallery exhibition. Have a coffee at the Barbican Kitchen overlooking the lake.</p>`,
+        duration: "90 min"
+      },
+      {
+        time: "2:30 PM", name: "Maltby Street Market — Lunch", type: "Weekend market · Under the arches",
+        color: "#e65100", prebook: false, free: true, weekend: true,
+        lat: 51.4995, lng: -0.0759, address: "Arch 46, Ropewalk, Maltby St, London SE1 3PA",
+        badges: ["free","weekend"],
+        travel: "🚇 Tube to London Bridge (5 min from Barbican). Walk 12 min south under the railway arches along Bermondsey Street.",
+        history: `<strong>Bermondsey</strong> has been a market and trade district since the medieval period. The area was famous for its leather tanning industry from the 12th century — the smell was so bad that it was kept south of the river. The <strong>tanneries</strong> that supplied leather to Victorian London's book-binding and shoe industries operated in these streets until the 20th century.\n\n<strong>Maltby Street Market</strong> began informally around 2010 as a handful of artisan food producers setting up under the Victorian railway arches — the same arches built for the London & Greenwich Railway (1836), the world's first purpose-built commuter railway. Unlike Borough Market (which has become a tourist destination), Maltby Street remains genuinely local — most traders are independent producers who make what they sell.`,
+        todo: `<p><span class="tip-icon">🥗</span><strong>Order:</strong> Ethiopian injera with slow-cooked stews, fresh fish tacos, handmade empanadas, or seasonal vegetable dishes — all healthy and outstanding. Get a glass of natural wine at one of the tiny arch bars and eat at the outdoor tables. Far better and less crowded than Borough Market. Open Sat 10–5, Sun 11–4.</p>`,
+        duration: "90 min"
+      },
+      {
+        time: "4:15 PM", name: "Leighton House Museum", type: "Victorian artist's home · Arab Hall",
+        color: "#880e4f", prebook: false, free: false, weekend: false,
+        lat: 51.4987, lng: -0.203, address: "12 Holland Park Rd, London W14 8LZ",
+        badges: ["paid"],
+        travel: "🚇 Tube to High Street Kensington (District/Circle line, 20 min from London Bridge). Walk 10 min north through Holland Park.",
+        history: `<strong>Leighton House</strong> was built between 1864 and 1895 for <strong>Frederic Leighton</strong> (1830–1896), the most celebrated British painter of the Victorian era and President of the Royal Academy. Leighton was obsessed with the Islamic world and spent decades collecting tiles, ceramics, and architectural fragments from across the Middle East.\n\nThe centrepiece is the <strong>Arab Hall</strong> (1877–1881), a room of extraordinary beauty designed to display Leighton's collection of <strong>Islamic tiles</strong> — 1,000 tiles dating from the 9th to the 17th century, gathered from Damascus, Cairo, Rhodes, and Syria. The golden mosaic frieze was designed by <strong>Walter Crane</strong>. A marble fountain tinkles in the centre beneath a gilded dome. Nothing in Britain prepares you for walking into this room.`,
+        todo: `<p><span class="tip-icon">🕌</span><strong>Don't miss:</strong> Stand in the Arab Hall doorway for the full impact before entering. Look up at the gilded mosaic ceiling. Find the 12th-century Syrian tiles mixed with Victorian reproductions — can you tell the difference? The garden is beautiful in spring. The café in the former studio serves excellent coffee. ~£10 entry. Closed Tuesdays.</p>`,
+        duration: "75 min",
+        prebookText: "No pre-booking needed, but check for closures",
+        prebookUrl: "https://www.rbkc.gov.uk/museums/leighton-house"
+      },
+      {
+        time: "6:00 PM", name: "Freshen up at hotel", type: "Rest · Travel back to Piccadilly",
+        color: "#666", prebook: false, free: true, weekend: false,
+        lat: 51.5071, lng: -0.1331, address: "Piccadilly, London W1",
+        badges: [],
+        travel: "🚇 Tube from High Street Kensington to Piccadilly Circus (District line to Earl's Court, then Piccadilly line, 20 min).",
+        history: "A moment to rest and prepare for the most atmospheric evening experience in London.",
+        todo: `<p><span class="tip-icon">🛁</span>Return to your Piccadilly hotel to freshen up. Tonight's Dennis Severs' House experience requires silence and presence of mind — it rewards contemplative visitors who arrive calm and ready to be transported.</p>`,
+        duration: "60 min"
+      },
+      {
+        time: "7:00 PM", name: "Dennis Severs' House — Candlelit Evening", type: "Immersive experience · Silent tour",
+        color: "#4a148c", prebook: true, free: false, weekend: false,
+        lat: 51.5209, lng: -0.0777, address: "18 Folgate St, London E1 6BX",
+        badges: ["prebook","weekday"],
+        travel: "🚇 Tube to Liverpool Street (Central line, 20 min). Walk 10 min west through Spitalfields.",
+        history: `<strong>Dennis Severs</strong> (1948–1999) was an American artist and performer who bought this Georgian townhouse in Spitalfields in 1979 for £50 and spent 20 years transforming it into what he called a "still-life drama." He invented the <strong>Jervis family</strong> — a fictional family of Huguenot silk weavers — and staged their lives across the 10 rooms of the house across three centuries.\n\nThe house is always in a state of being "just left" — fires smoldering, food half-eaten, chamber pots recently used, candles guttering. You move through in silence, from the 17th-century basement kitchen to the Victorian top-floor garret, as if the family has just stepped out. The experience is part historical recreation, part theatrical installation, part meditation on time and impermanence. Severs described it as "you either see it or you don't." Most visitors are deeply moved. Nothing else in London compares.`,
+        todo: `<p><span class="tip-icon">🕯️</span><strong>Rules:</strong> You must be silent throughout. No photography. Move slowly through each room — Severs said the house rewards people who look at everything. The smell of woodsmoke, candle wax, and old food is part of the experience. The evening sessions (5pm–8:15pm) are candlelit and the most atmospheric. Available Fri and Sat evenings only. <strong>Book online well in advance</strong> — very limited slots.</p>`,
+        duration: "75 min",
+        prebookText: "Book online — very limited Fri/Sat evening slots",
+        prebookUrl: "https://www.dennissevershouse.co.uk/"
+      },
+      {
+        time: "9:00 PM", name: "Gymkhana — Dinner", type: "Two Michelin-star Indian · Mayfair",
+        color: "#c0392b", prebook: true, free: false, weekend: false,
+        lat: 51.5085, lng: -0.1415, address: "42 Albemarle St, London W1S 4JH",
+        badges: ["prebook"],
+        travel: "🚇 Tube from Liverpool Street to Green Park (Central line to Bank, then Jubilee, 30 min). Walk 5 min north on Albemarle Street.",
+        history: `<strong>Gymkhana</strong> opened in 2013, taking its name and design inspiration from the members' clubs of the British Raj — the colonial sporting and social clubs of 19th-century India. The décor references the era of the <strong>Indian Civil Service</strong> — ceiling fans, rattan furniture, and prints of shikar (hunting) expeditions.\n\n<strong>Albemarle Street</strong> itself has a remarkable history — it was London's first one-way street (introduced in 1808 to manage the crowds attending lectures at the Royal Institution at No. 21). Lord Byron's publisher John Murray was at No. 50, where Byron's memoirs were famously burned after his death in 1824 to protect his reputation.`,
+        todo: `<p><span class="tip-icon">🍛</span><strong>Order (no bacon!):</strong> Slow-cooked black dal, kid goat methi keema, charred broccoli with paneer, and the extraordinary butter chicken. The tasting menu is excellent. The bar downstairs serves pre-dinner cocktails with Indian-inspired garnishes. <strong>Book immediately</strong> — this is the hardest reservation in Mayfair and can book out weeks in advance.</p>`,
+        duration: "120 min",
+        prebookText: "Book IMMEDIATELY — weeks in advance required",
+        prebookUrl: "https://www.gymkhanarestaurants.com/"
+      }
+    ]
+  },
+  {
+    title: "Day 3 — West London & Mayfair Elegance",
+    note: "Works any day of the week",
+    stops: [
+      {
+        time: "9:00 AM", name: "Ottolenghi Islington — Healthy Breakfast", type: "Breakfast · Middle Eastern",
+        color: "#1a7a3a", prebook: true, free: false, weekend: false,
+        lat: 51.5398, lng: -0.1023, address: "287 Upper St, London N1 2TZ",
+        badges: ["food","prebook"],
+        travel: "🚇 Tube to Angel (Northern line, 20 min from Piccadilly). The restaurant is 3 min walk on Upper Street.",
+        history: `<strong>Ottolenghi</strong> was founded in 2002 by <strong>Yotam Ottolenghi</strong> and <strong>Sami Tamimi</strong> — one Israeli, one Palestinian, both raised in Jerusalem on opposite sides of the city. Their food reflects this shared heritage: <strong>Middle Eastern, North African, and Mediterranean</strong> influences combined with the finest seasonal British produce.\n\n<strong>Islington's Upper Street</strong> is one of London's great mixed neighbourhood streets — Georgian terraces, independent cafés, and restaurants running north from the City. The Angel junction at its south end is named after a coaching inn that stood here from medieval times; travellers heading north from London stopped here before the fields began.`,
+        todo: `<p><span class="tip-icon">🥗</span><strong>Order (healthy):</strong> Soft-boiled eggs with za'atar and labneh, seasonal grain bowls, freshly baked pastries with tahini. Everything is clean, flavourful, and beautifully presented. The communal tables make it convivial. Note: Ottolenghi Islington is closed Tuesday and Wednesday — check before going. Book ahead or arrive early.</p>`,
+        duration: "60 min",
+        prebookText: "Book ahead — or arrive at opening",
+        prebookUrl: "https://ottolenghi.co.uk/"
+      },
+      {
+        time: "10:15 AM", name: "Walk through Islington & Clerkenwell", type: "Walking tour · Georgian London",
+        color: "#7b1fa2", prebook: false, free: true, weekend: false,
+        lat: 51.524, lng: -0.1026, address: "Exmouth Market, London EC1R 4QE",
+        badges: ["free","walk"],
+        travel: "🚶 20-min walk south through Islington and Clerkenwell to the Wallace Collection Tube stop.",
+        history: `<strong>Clerkenwell</strong> was one of medieval London's most important districts — home to the <strong>Knights Hospitaller</strong> (rivals to the Knights Templar) whose priory, St John's, gave London its ambulance service (St John Ambulance). The name Clerkenwell means "Clerks' Well" — a spring used by medieval students and clergy.\n\nIn the 18th and 19th centuries, Clerkenwell became London's watchmaking and clockmaking quarter — the precision engineering skills brought by Huguenot refugees who settled here after fleeing France in 1685. Many of the small workshops survive in the back streets. <strong>Exmouth Market</strong>, which you'll pass through, is a pedestrianised street of independent food stalls and restaurants that captures the neighbourhood's current character perfectly.`,
+        todo: `<p><span class="tip-icon">🚶</span><strong>Walk via:</strong> Upper Street → Exmouth Market (coffee stop if needed) → Farringdon Road → Hatton Garden (London's diamond and jewellery quarter since the 16th century) → Holborn → Tube to Bond Street for the Wallace Collection. About 20 minutes of fascinating back streets.</p>`,
+        duration: "25 min"
+      },
+      {
+        time: "10:45 AM", name: "The Wallace Collection", type: "Free world-class art museum",
+        color: "#5c4db1", prebook: false, free: true, weekend: false,
+        lat: 51.5173, lng: -0.1531, address: "Hertford House, Manchester Square, London W1U 3BN",
+        badges: ["free"],
+        travel: "🚇 Tube to Bond Street (Central or Jubilee line). Walk 8 min north through Marylebone.",
+        history: `If not visited on Day 1 — see the Day 1 entry for the full history. One of the greatest art museums on earth, housed in an 18th-century private mansion. The Laughing Cavalier, Rembrandt's Titus, and three floors of European masterpieces, all free, all in a building that feels like a private ducal palace. The glass-roofed courtyard café is excellent for a mid-morning pause.`,
+        todo: `<p><span class="tip-icon">🎨</span><strong>If you've already been on Day 1:</strong> Replace this with a visit to <strong>Daunt Books</strong> (5-min walk) for a longer browse, or walk through <strong>Marylebone Village</strong> — the high street has excellent healthy food shops, pharmacies, and cafés. Then proceed directly to Leighton House.</p>`,
+        duration: "90 min"
+      },
+      {
+        time: "12:30 PM", name: "Leighton House Museum", type: "Arab Hall · Victorian artist's home",
+        color: "#880e4f", prebook: false, free: false, weekend: false,
+        lat: 51.4987, lng: -0.203, address: "12 Holland Park Rd, London W14 8LZ",
+        badges: ["paid"],
+        travel: "🚇 Tube from Bond Street to High Street Kensington (Circle/District line, 10 min). Walk 12 min north through Holland Park.",
+        history: "See Day 2 entry for full history. If you visited on Day 2, use this slot for a long walk through Holland Park — one of London's finest parks, with a formal Italian garden, peacocks, and the Kyoto Garden (a Japanese garden gifted by the city of Kyoto in 1991).",
+        todo: `<p><span class="tip-icon">🕌</span><strong>If visiting today:</strong> Take time to sit in the Arab Hall and absorb the tiles. The garden café serves excellent coffee and light lunches. ~£10 entry. Closed Tuesdays. If already visited, walk through <strong>Holland Park</strong> instead — 15 minutes of genuine tranquillity in central London.</p>`,
+        duration: "75 min"
+      },
+      {
+        time: "2:00 PM", name: "Lunch — Farmacy or NOPI", type: "Healthy lunch · West London",
+        color: "#1a7a3a", prebook: true, free: false, weekend: false,
+        lat: 51.5149, lng: -0.197, address: "74 Westbourne Grove, London W2 5SH",
+        badges: ["food","prebook"],
+        travel: "🚶 15-min walk north through Notting Hill from Holland Park Gate.",
+        history: `<strong>Westbourne Grove</strong> and the surrounding <strong>Notting Hill</strong> area underwent a dramatic transformation from the 1990s onwards — from a somewhat run-down neighbourhood to one of London's most fashionable addresses. The area's diversity is rooted in the <strong>Windrush generation</strong> of Caribbean immigrants who settled here from the late 1940s, and is celebrated annually in the <strong>Notting Hill Carnival</strong> (established 1966), Europe's largest street festival.\n\n<strong>Farmacy</strong> is a plant-based restaurant that pioneered London's healthy dining movement when it opened in 2016. <strong>NOPI</strong> (Ottolenghi's restaurant on Warwick Street, slightly east) is one of London's finest Middle Eastern-influenced restaurants.`,
+        todo: `<p><span class="tip-icon">🥑</span><strong>Farmacy</strong> (74 Westbourne Grove): Outstanding plant-based food — jackfruit tacos, miso-glazed aubergine, excellent grain bowls. Beautiful interior. Book ahead. OR <strong>NOPI</strong> (21-22 Warwick St, W1B): Ottolenghi's flagship restaurant — more refined than the delis, exceptional vegetable-forward dishes. Both are healthy and genuinely delicious.</p>`,
+        duration: "75 min",
+        prebookText: "Book Farmacy or NOPI in advance",
+        prebookUrl: "https://www.farmacylondon.com/"
+      },
+      {
+        time: "3:30 PM", name: "Walk through Kensington & Hyde Park", type: "Walking tour · Royal London",
+        color: "#7b1fa2", prebook: false, free: true, weekend: false,
+        lat: 51.5073, lng: -0.1657, address: "Hyde Park, London W2 2UH",
+        badges: ["free","walk"],
+        travel: "🚶 Walk east from Notting Hill through Kensington to Hyde Park — about 20 minutes.",
+        history: `<strong>Hyde Park</strong> was seized from the monks of Westminster Abbey by Henry VIII in 1536 as a private hunting ground. It was opened to the public by Charles I in 1637 and has been London's great democratic outdoor space ever since — the site of mass protests, the Great Exhibition of 1851, anti-war rallies, and free concerts.\n\n<strong>Speakers' Corner</strong> at the northeast corner has been a legal site for public oratory since 1872 — Marx, Lenin, George Orwell, and William Morris have all spoken here. The <strong>Serpentine</strong> (the lake) was created in 1730 by damming the River Westbourne — which now flows underground through Chelsea.\n\nThe <strong>Albert Memorial</strong> (1872) sits on the south edge of the park — a gilded monument to Queen Victoria's beloved husband Prince Albert, who died aged 42 in 1861. The <strong>Royal Albert Hall</strong> opposite was built as part of his legacy.`,
+        todo: `<p><span class="tip-icon">🌳</span><strong>Walk via:</strong> Kensington Gardens → the Albert Memorial → along the Serpentine → up to Speakers' Corner → across to Mayfair. This is one of London's great walks — the park is at its most beautiful in May when everything is in bloom. About 40 minutes of walking.</p>`,
+        duration: "45 min"
+      },
+      {
+        time: "4:30 PM", name: "Sketch — Afternoon Tea", type: "Theatrical afternoon tea · Mayfair",
+        color: "#c0392b", prebook: true, free: false, weekend: false,
+        lat: 51.5127, lng: -0.1415, address: "9 Conduit St, London W1S 2XG",
+        badges: ["prebook"],
+        travel: "🚶 10-min walk from the east side of Hyde Park through Mayfair to Conduit Street.",
+        history: `<strong>Sketch</strong> occupies a listed Georgian townhouse on Conduit Street, originally built as a suite of townhouses in the 1770s. The building has housed private members' clubs, tailors, and restaurants over its 250-year history.\n\nThe current incarnation opened in 2002 under the creative direction of French chef <strong>Pierre Gagnaire</strong> and restaurateur <strong>Mourad Mazouz</strong>. In 2014, the Gallery room was redesigned by artist <strong>David Shrigley</strong> — the walls are now covered in his distinctive hand-drawn illustrations. The egg-pod bathrooms were designed as sculptural objects by artist <strong>Mike Figgis</strong> and became one of London's most photographed interiors.\n\n<strong>Conduit Street</strong> was named for the water conduit installed here by the Corporation of London in 1500 to carry fresh water from the fields of Marylebone into the City.`,
+        todo: `<p><span class="tip-icon">🫖</span><strong>Book The Parlour</strong> room for afternoon tea — refillable finger sandwiches (ask for vegetarian), extraordinary pastries, and 14 teas to choose from. A live violinist plays. The egg-pod bathrooms must be visited. Don't rush — the experience is designed to last 2 hours. A perfect romantic treat 10 minutes walk from your Piccadilly hotel. Book via sketch.london.</p>`,
+        duration: "120 min",
+        prebookText: "Book The Parlour room — book 2 weeks ahead",
+        prebookUrl: "https://sketch.london/afternoon-tea/"
+      },
+      {
+        time: "6:45 PM", name: "Evening walk back through St James's", type: "Evening stroll · Royal London",
+        color: "#1a7a3a", prebook: false, free: true, weekend: false,
+        lat: 51.5044, lng: -0.1335, address: "St James's Park, London SW1A 2BJ",
+        badges: ["free","walk"],
+        travel: "🚶 15-min walk south from sketch through Mayfair and into St James's Park.",
+        history: `<strong>St James's Park</strong> is the oldest of the Royal Parks, created by Henry VIII in 1536 on marshland drained from the Tyburn stream. Charles II redesigned it in 1660 in the French formal style after returning from exile in Paris. It is now a wildlife sanctuary in the heart of government London — pelicans have been kept here since 1664, a gift from the Russian ambassador.\n\nThe view from the bridge across the lake — looking east toward Whitehall, west toward Buckingham Palace — is one of the great London views, particularly in the evening light. <strong>The Mall</strong> alongside the park was laid out in 1660 as a croquet ground (the game was called "pall-mall"). The houses of <strong>St James's</strong> to the north include Christie's auction house and several of London's oldest gentlemen's clubs.`,
+        todo: `<p><span class="tip-icon">🌆</span><strong>Evening walk:</strong> From sketch → south through Mayfair → along the south edge of Green Park → through the gates into St James's Park → across the bridge (pause for the view) → back north to Piccadilly. About 30 minutes of the most beautiful evening walking in London. The park lights at dusk are magical.</p>`,
+        duration: "30 min"
+      },
+      {
+        time: "7:30 PM", name: "Barbican Centre — Evening Concert or Theatre", type: "World-class arts · LSO & theatre",
+        color: "#5c4db1", prebook: true, free: false, weekend: false,
+        lat: 51.5202, lng: -0.0938, address: "Silk St, Barbican, London EC2Y 8DS",
+        badges: ["prebook"],
+        travel: "🚇 Tube from Green Park to Barbican (Jubilee to Bank, then Northern, 25 min). Arrive by 7:15 for pre-show drinks.",
+        history: `The <strong>Barbican Centre</strong> is the most ambitious arts centre in Europe — 10 venues including the 2,000-seat Barbican Hall (home of the London Symphony Orchestra), the Barbican Theatre (home of the RSC's London productions), a cinema, art gallery, conservatory, and three restaurants.\n\nIt was built specifically to bring culture to what had been a bombed-out wasteland. The architecture — vast concrete terraces, elevated walkways, and a man-made lake — was intended to create a self-contained urban world where art was woven into daily life. When it opened in 1982, the Queen said she hoped it would become "one of the wonders of the modern world."`,
+        todo: `<p><span class="tip-icon">🎶</span><strong>Book in advance:</strong> Check barbican.org.uk for the programme on your date — the LSO performs regularly here, and the quality is extraordinary. The Barbican also hosts world-class jazz, international theatre, and film retrospectives. Pre-show drinks at the Barbican Kitchen overlooking the lake are excellent. A perfect final evening in London.</p>`,
+        duration: "150 min",
+        prebookText: "Book concert/theatre tickets at barbican.org.uk",
+        prebookUrl: "https://www.barbican.org.uk/"
+      }
+    ]
+  }
+];
+
+const prebooks = [
+  { name: "Gymkhana", urgency: "urgent", text: "Book immediately — one of London's hardest reservations. Minimum 2–3 weeks, often longer.", url: "https://www.gymkhanarestaurants.com/", day: "Day 2 evening" },
+  { name: "Sky Garden", urgency: "urgent", text: "Free entry but releases slots exactly 3 weeks ahead and sells out within hours. Set a calendar reminder.", url: "https://skygarden.london/sky-garden/", day: "Day 1 evening" },
+  { name: "Dennis Severs' House", urgency: "urgent", text: "Very limited Fri/Sat evening slots. Book online as soon as possible.", url: "https://www.dennissevershouse.co.uk/", day: "Day 2 evening" },
+  { name: "Sketch — Afternoon Tea", urgency: "medium", text: "Book The Parlour room. 1–2 weeks in advance. Request the Parlour specifically for the violinist and best atmosphere.", url: "https://sketch.london/afternoon-tea/", day: "Day 3 afternoon" },
+  { name: "Duck & Waffle", urgency: "medium", text: "Book online and request a window table explicitly. 1–2 weeks ahead should suffice.", url: "https://duckandwaffle.com/london/", day: "Day 1 dinner" },
+  { name: "Rochelle Canteen", urgency: "medium", text: "Small restaurant, fills fast. Book online 1 week ahead. Note: no dinner Sunday.", url: "https://www.rochellecanteen.com/", day: "Day 2 brunch" },
+  { name: "Dishoom Carnaby", urgency: "low", text: "Book online or arrive at opening (8am) to avoid the queue. Walk-ins accepted early in the morning.", url: "https://www.dishoom.com/reservations/", day: "Day 1 brunch" },
+  { name: "Ottolenghi Islington", urgency: "low", text: "Book or arrive at opening. Note closed Tue & Wed — plan Day 3 accordingly.", url: "https://ottolenghi.co.uk/", day: "Day 3 breakfast" },
+  { name: "Barbican Concert/Theatre", urgency: "low", text: "Check barbican.org.uk for your dates and book well ahead for popular LSO concerts.", url: "https://www.barbican.org.uk/", day: "Day 3 evening" },
+  { name: "Farmacy or NOPI (lunch)", urgency: "low", text: "Book 3–5 days ahead. Both are popular for weekend lunch.", url: "https://www.farmacylondon.com/", day: "Day 3 lunch" }
+];
+
+
+
+// ── BREAKFAST STOPS near Piccadilly ──────────────────────────────
+const BREAKFASTS = [
+  {
+    time: "9:00 AM", name: "Regency Café — Breakfast", type: "Breakfast · Legendary London caff · 1946",
+    color: "#1a1a1a", prebook: false, free: false, weekend: false,
+    lat: 51.4937725, lng: -0.132194, address: "17-19 Regency St, London SW1P 4BY",
+    badges: ["food"],
+    travel: "🚶 12-min walk from Piccadilly — south through St James's Park, past Westminster Cathedral, onto Regency Street. Or Tube to Victoria (2 min) then 8-min walk. Worth every step.",
+    history: `<strong>Regency Café</strong> opened in 1946 in a former bomb-damaged Victorian terrace and has barely changed since. The original black-and-white glazed tile exterior, the Formica counter, the hand-written menu board, the orders shouted across the room by the staff — all exactly as they were nearly 80 years ago. It is listed by English Heritage as one of London's most important surviving examples of a traditional working-class café.\n\nThe café sits in <strong>Pimlico</strong>, a neighbourhood of white stucco terraces developed by Thomas Cubitt in the 1840s as a more affordable alternative to Belgravia next door. The regulars have always been a mix of Westminster civil servants, construction workers, taxi drivers, and increasingly, food writers and chefs who make the pilgrimage for what many consider the definitive full English breakfast in London. <strong>Cash only</strong> — bring notes.`,
+    todo: `<p><span class="tip-icon">🍳</span><strong>Order:</strong> The full English — two eggs (fried or scrambled), back bacon, sausage, beans, toast, and a mug of builder's tea. Ask for bubble and squeak if it's on — a fried patty of leftover potato and cabbage that's a genuine London classic. Order at the counter, find a table, wait for your number to be called. Cash only. Arrive by 9am — it gets packed fast.</p>`,
+    duration: "60 min", prebookText: null, prebookUrl: null
+  },
+  {
+    time: "9:00 AM", name: "Ottolenghi Notting Hill — Breakfast", type: "Breakfast · Middle Eastern & healthy",
+    color: "#1a7a3a", prebook: true, free: false, weekend: false,
+    lat: 51.5149, lng: -0.197, address: "63A Ledbury Rd, London W11 2AD",
+    badges: ["food","prebook"],
+    travel: "🚇 Tube from Piccadilly Circus to Notting Hill Gate (District/Circle, 8 min). Walk 10 min north to Ledbury Road — one of London's loveliest neighbourhood streets.",
+    history: `<strong>Ottolenghi</strong> was founded in 2002 by <strong>Yotam Ottolenghi</strong> and <strong>Sami Tamimi</strong> — one Israeli, one Palestinian, both raised in Jerusalem on opposite sides of the city. Their food is a vivid expression of shared Middle Eastern and Mediterranean heritage.\n\n<strong>Ledbury Road</strong> is one of London's most beautiful neighbourhood streets — Georgian townhouses in pastel colours, independent boutiques, and the relaxed atmosphere of Notting Hill before tourists arrive.`,
+    todo: `<p><span class="tip-icon">🥗</span><strong>Order:</strong> Poached eggs with labneh and za'atar, seasonal grain bowls, or freshly baked pastries with tahini. Everything is clean, bold, beautifully presented. Note: closed Tuesdays and Wednesdays — check before going.</p>`,
+    duration: "60 min", prebookText: "Book ahead or arrive at opening — closed Tue/Wed", prebookUrl: "https://ottolenghi.co.uk/"
+  },
+  {
+    time: "9:00 AM", name: "Colbert — Breakfast", type: "Breakfast · French brasserie · 10 min from Piccadilly",
+    color: "#5c4db1", prebook: true, free: false, weekend: false,
+    lat: 51.4924, lng: -0.1572, address: "50-52 Sloane Square, London SW1W 8AX",
+    badges: ["food","prebook"],
+    travel: "🚇 Tube from Piccadilly Circus to Sloane Square (District/Circle, 10 min). Colbert is right at the station exit on the corner of the square.",
+    history: `<strong>Colbert</strong> opened in 2011, modelled on the great Parisian brasseries — democratic institutions where Parisians breakfasted since the Belle Époque. It is run by the same team as The Wolseley.\n\n<strong>Sloane Square</strong> is one of London's most elegant formal squares, completed in the 1770s. The King's Road running west from here was Henry VIII's private road to Hampton Court, later becoming the epicentre of 1970s punk fashion.`,
+    todo: `<p><span class="tip-icon">☕</span><strong>Order:</strong> Oeufs en cocotte (baked eggs with herbs), avocado and smoked salmon on toast, granola with seasonal fruit. Café au lait is excellent. Proper French brasserie breakfast — elegant, unhurried. Book ahead on weekends.</p>`,
+    duration: "60 min", prebookText: "Book online — popular at weekends", prebookUrl: "https://www.colbert-restaurant.co.uk/"
+  }
+];
+
+// Names of old first-stops to replace (they were coffee/breakfast already in the data)
+const OLD_BREAKFAST_NAMES = [
+  "Daunt Books + Coffee",
+  "Columbia Road Flower Market + Coffee",
+  "Ottolenghi Islington — Healthy Breakfast",
+  "Ottolenghi Islington",
+  "Dishoom Carnaby — Breakfast",
+  "LALÏ — Breakfast"
+];
+
+function prepareBreakfasts() {
+  days.forEach((day, di) => {
+    // Remove old breakfast/coffee first stop if it matches
+    if (day.stops.length > 0 && OLD_BREAKFAST_NAMES.includes(day.stops[0].name)) {
+      day.stops.shift();
+    }
+    // Prepend the Piccadilly-near breakfast
+    const bf = JSON.parse(JSON.stringify(BREAKFASTS[di]));
+    day.stops.unshift(bf);
+    // Reassign times
+    reassignTimesForDay(di);
+  });
+}
+
+function reassignTimesForDay(di) {
+  const TIMES = ['9:00 AM','10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM','6:00 PM','7:00 PM','8:00 PM','9:00 PM'];
+  days[di].stops.forEach((s, i) => { s.time = TIMES[i] || (9+i)+':00'; });
+}
+
+let currentDay = 0;
+let currentStop = 0;
+let currentView = 'list';
+let completed = [];
+let dragSrc = null;
+let headerH = 112;
+
+// ── MAP VIEW DRAG REORDER ─────────────────────────────────────────
+let mapDragSrc = null;
+
+function mapDragStart(e, i) {
+  mapDragSrc = i;
+  e.dataTransfer.effectAllowed = 'move';
+  setTimeout(() => { const el = document.getElementById('mcard'+i); if(el) el.style.opacity='0.4'; }, 0);
+}
+function mapDragOver(e, i) {
+  e.preventDefault();
+  document.querySelectorAll('.mini-card').forEach(el => el.style.borderTop='');
+  const el = document.getElementById('mcard'+i);
+  if (el && i !== mapDragSrc) el.style.borderTop='2px solid #1a73e8';
+}
+function mapDragDrop(e, i) {
+  e.preventDefault();
+  if (mapDragSrc === null || mapDragSrc === i) return;
+  const s = days[currentDay].stops;
+  const moved = s.splice(mapDragSrc, 1)[0];
+  s.splice(i, 0, moved);
+  reassignTimes();
+  currentStop = i;
+  renderRouteMap();
+  renderStopList();
+  showToast('Stop moved — route updated');
+}
+function mapDragEnd() {
+  mapDragSrc = null;
+  document.querySelectorAll('.mini-card').forEach(el => { el.style.opacity='1'; el.style.borderTop=''; });
+}
+
+function moveStop(i, dir) {
+  const stops = days[currentDay].stops;
+  const newI = i + dir;
+  if (newI < 0 || newI >= stops.length) return;
+  const tmp = stops[i]; stops[i] = stops[newI]; stops[newI] = tmp;
+  reassignTimes();
+  currentStop = newI;
+  renderRouteMap();
+  renderStopList();
+}
+
+// ── SAVE / LOAD ───────────────────────────────────────────────────
+function getSaveData() {
+  return JSON.stringify({ days: days, completed: completed, savedAt: new Date().toISOString() });
+}
+
+function saveToStorage() {
+  try {
+    localStorage.setItem('london_tour_v2', getSaveData());
+    showToast('Saved to device ✓');
+  } catch(e) { showToast('Storage unavailable — use Export instead', true); }
+}
+
+function tryLoadSaved() {
+  try {
+    const raw = localStorage.getItem('london_tour_v2');
+    if (!raw) return false;
+    const data = JSON.parse(raw);
+    if (data.days && Array.isArray(data.days) && data.days.length === 3) {
+      data.days.forEach((d, i) => { days[i].stops = d.stops; days[i].title = d.title || days[i].title; });
+      completed = data.completed || [];
+      showToast('Loaded your saved plan ✓');
+      return true;
+    }
+  } catch(e) { /* ignore corrupt data */ }
+  return false;
+}
+
+function exportFile() {
+  const blob = new Blob([getSaveData()], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'london-tour-' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('Exported as JSON file ✓');
+}
+
+function importFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data.days || data.days.length !== 3) throw new Error('Invalid format');
+      data.days.forEach((d, i) => { days[i].stops = d.stops; });
+      completed = data.completed || [];
+      try { localStorage.setItem('london_tour_v2', JSON.stringify(data)); } catch(e) {}
+      switchDay(currentDay);
+      renderPrebook();
+      showToast('Plan imported successfully ✓');
+    } catch(err) {
+      showToast('Could not read file — check format', true);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function clearSaved() {
+  showConfirm('Reset all days to original itinerary?', () => {
+    try { localStorage.removeItem('london_tour_v2'); } catch(e) {}
+    completed = [];
+    location.reload();
+  });
+}
+
+// Optimize for a specific day index
+function optimizeRouteForDay(di) {
+  const stops = days[di].stops;
+  if (stops.length < 3) return;
+  const dist = (a, b) => Math.sqrt((a.lat-b.lat)**2 + (a.lng-b.lng)**2);
+  const first = stops[0]; // keep breakfast first
+  const rest = stops.slice(1);
+  const ordered = [first];
+  while (rest.length) {
+    const last = ordered[ordered.length-1];
+    let best = 0, bestD = Infinity;
+    rest.forEach((s, i) => { const d = dist(last, s); if (d < bestD) { bestD=d; best=i; } });
+    ordered.push(rest.splice(best, 1)[0]);
+  }
+  days[di].stops = ordered;
+  reassignTimesForDay(di);
+}
+
+function showSaveMenu() {
+  const existing = document.getElementById('save-menu');
+  if (existing) { existing.remove(); return; }
+  const menu = document.createElement('div');
+  menu.id = 'save-menu';
+  menu.style.cssText = 'position:fixed;top:70px;right:12px;background:#fff;border:1px solid #e8e6e0;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.18);z-index:9997;min-width:200px;overflow:hidden;';
+  menu.innerHTML = `
+    <div style="padding:4px 0;">
+      <button onclick="saveToStorage();document.getElementById('save-menu').remove();"
+        style="width:100%;padding:14px 16px;text-align:left;border:none;background:none;font-size:14px;font-weight:600;cursor:pointer;color:#1a1a1a;display:flex;align-items:center;gap:10px;">
+        💾 <span>Save to this device</span>
+      </button>
+      <button onclick="exportFile();document.getElementById('save-menu').remove();"
+        style="width:100%;padding:14px 16px;text-align:left;border:none;background:none;font-size:14px;font-weight:600;cursor:pointer;color:#1a1a1a;display:flex;align-items:center;gap:10px;border-top:1px solid #f0ede8;">
+        📤 <span>Export as file (.json)</span>
+      </button>
+      <button onclick="document.getElementById('import-input').click();document.getElementById('save-menu').remove();"
+        style="width:100%;padding:14px 16px;text-align:left;border:none;background:none;font-size:14px;font-weight:600;cursor:pointer;color:#1a1a1a;display:flex;align-items:center;gap:10px;border-top:1px solid #f0ede8;">
+        📥 <span>Import from file</span>
+      </button>
+      <button onclick="clearSaved();document.getElementById('save-menu').remove();"
+        style="width:100%;padding:14px 16px;text-align:left;border:none;background:none;font-size:14px;font-weight:600;cursor:pointer;color:#c0392b;display:flex;align-items:center;gap:10px;border-top:1px solid #f0ede8;">
+        🔄 <span>Reset to original</span>
+      </button>
+    </div>`;
+  document.body.appendChild(menu);
+  setTimeout(() => document.addEventListener('click', function h(e) {
+    if (!menu.contains(e.target) && e.target.title !== 'More options') { menu.remove(); document.removeEventListener('click',h); }
+  }), 100);
+}
+
+// ── AI SEARCH ─────────────────────────────────────────────────────
+async function aiSearch() {
+  const query = document.getElementById('searchQuery').value.trim();
+  const dayIdx = parseInt(document.getElementById('searchDay').value);
+  if (!query) { showToast('Enter what you are looking for', true); return; }
+
+  const btn = document.getElementById('searchBtn');
+  btn.textContent = 'Searching…'; btn.disabled = true;
+  document.getElementById('searchResults').innerHTML = '<p style="color:#888;font-size:13px;text-align:center;padding:20px;">AI is finding the best matches in London…</p>';
+
+  const existing = days.flatMap(d => d.stops.map(s => s.name)).join(', ');
+
+  const prompt = `You are a London expert tour guide. A couple is visiting London for a few days staying near Piccadilly. They love hidden gems, healthy eating, art, culture, and rooftop dining. They have already visited: ${existing}.
+
+The user is searching for: "${query}"
+
+Find 3 real, specific London places that match this search. For each place return a JSON object. Respond ONLY with a JSON array of exactly 3 objects, no markdown:
+[
+  {
+    "name": "Exact place name",
+    "address": "Full London address",
+    "lat": 51.5XXX,
+    "lng": -0.XXXX,
+    "type_label": "Short type e.g. Rooftop bar · City of London",
+    "color": "#hex color",
+    "free": false,
+    "prebook": false,
+    "description": "2 sentences why this is perfect for them",
+    "history": "2 rich paragraphs about the history of this place in HTML with <strong> tags. Separate paragraphs with \n\n",
+    "travel": "🚶 or 🚇 Practical travel directions from Piccadilly Circus",
+    "todo": "<p><span class=\"tip-icon\">🏛️</span><strong>What to do:</strong> 3-4 specific practical sentences about what to see, order, or experience.</p>"
+  }
+]
+Only include real places. Use accurate coordinates. Return raw JSON only.`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 2000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    const data = await res.json();
+    const raw = (data.content?.[0]?.text || '[]').replace(/```json|```/g, '').trim();
+    const results = JSON.parse(raw);
+    renderSearchResults(results, dayIdx);
+  } catch(e) {
+    document.getElementById('searchResults').innerHTML =
+      '<p style="color:#c0392b;font-size:13px;text-align:center;padding:20px;">Search unavailable — try the + Add place button instead.</p>';
+    showToast('AI search unavailable', true);
+  }
+  btn.textContent = 'Search with AI →'; btn.disabled = false;
+}
+
+function renderSearchResults(results, dayIdx) {
+  if (!results || !results.length) {
+    document.getElementById('searchResults').innerHTML =
+      '<p style="color:#888;font-size:13px;text-align:center;">No results found — try a different search.</p>';
+    return;
+  }
+  const html = results.map((r, i) => `
+    <div class="search-result-card">
+      <h3>${r.name}</h3>
+      <div class="src-type">${r.type_label} &nbsp;·&nbsp; ${r.address}</div>
+      <div class="src-desc">${r.description}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="src-add-btn" onclick="addFromSearch(${i})">+ Add to Day ${dayIdx+1}</button>
+        <select onchange="document.getElementById('searchDay').value=this.value;document.getElementById('sr-day-${i}').textContent='Add to Day '+(parseInt(this.value)+1)"
+          style="padding:8px 10px;border-radius:8px;border:1px solid #ddd;font-size:13px;font-weight:600;background:#fff;cursor:pointer;">
+          <option value="0" ${dayIdx===0?'selected':''}>Day 1</option>
+          <option value="1" ${dayIdx===1?'selected':''}>Day 2</option>
+          <option value="2" ${dayIdx===2?'selected':''}>Day 3</option>
+        </select>
+      </div>
+    </div>`).join('');
+
+  document.getElementById('searchResults').innerHTML =
+    '<div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:10px;">AI found these matches — tap to add</div>' + html;
+
+  // Store results for addFromSearch
+  window._searchResults = results;
+  window._searchDayIdx = dayIdx;
+}
+
+function addFromSearch(i) {
+  const r = window._searchResults[i];
+  const dayIdx = parseInt(document.getElementById('searchDay').value);
+  addStop(dayIdx, {
+    name: r.name, address: r.address,
+    lat: r.lat || 51.515, lng: r.lng || -0.12,
+    type: r.type_label, duration: '60 min',
+    history: r.history, todo: r.todo, travel: r.travel,
+    type_label: r.type_label, prebook: r.prebook || false,
+    free: r.free !== undefined ? r.free : false,
+    color: r.color || '#5c4db1'
+  });
+  // Clear result card to show it was added
+  const cards = document.querySelectorAll('.search-result-card');
+  if (cards[i]) {
+    cards[i].style.background = '#e8f5ec';
+    cards[i].style.borderColor = '#1a7a3a';
+    cards[i].querySelector('.src-add-btn').textContent = '✓ Added!';
+    cards[i].querySelector('.src-add-btn').disabled = true;
+    cards[i].querySelector('.src-add-btn').style.background = '#1a7a3a';
+  }
+}
+
+// ── INIT ──────────────────────────────────────────────────────────
+function init() {
+  updateHeaderHeight();
+  // Load saved data if available
+  const saved = tryLoadSaved();
+  if (!saved) {
+    prepareBreakfasts();
+    // Auto-optimize each day's route on first load
+    [0,1,2].forEach(di => {
+      const tmp = currentDay;
+      currentDay = di;
+      optimizeRouteForDay(di);
+      currentDay = tmp;
+    });
+  }
+  switchDay(0);
+  renderPrebook();
+  window.addEventListener('resize', updateHeaderHeight);
+}
+
+function updateHeaderHeight() {
+  const h = document.getElementById('appHeader').offsetHeight;
+  const bh = document.getElementById('bottomNav').offsetHeight;
+  document.documentElement.style.setProperty('--header-h', h + 'px');
+  document.documentElement.style.setProperty('--bottom-h', bh + 'px');
+}
+
+// ── VIEW MANAGEMENT ───────────────────────────────────────────────
+function showView(v) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-' + v).classList.add('active');
+  document.getElementById('mainArea').scrollTop = 0;
+  currentView = v;
+  updateBottomNav();
+  updateTabHighlight();
+}
+
+function updateTabHighlight() {
+  ['dtab0','dtab1','dtab2','dtabMap','dtabAll','dtabAdd','dtabSearch'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (id === 'dtabMap' || id === 'dtabAll' || id === 'dtabAdd' || id === 'dtabSearch') return;
+    el.classList.remove('active');
+  });
+  if (currentView === 'list' || currentView === 'detail') {
+    const tab = document.getElementById('dtab' + currentDay);
+    if (tab) tab.classList.add('active');
+  }
+}
+
+function updateBottomNav() {
+  const stops = days[currentDay].stops;
+  const isFirst = currentStop === 0;
+  const isLast = currentStop === stops.length - 1;
+  const show = currentView === 'detail';
+  document.getElementById('bottomNav').style.display = show ? 'flex' : 'none';
+  if (!show) return;
+  document.getElementById('bnPrev').disabled = isFirst;
+  const s = stops[currentStop];
+  document.getElementById('bnDone').textContent = completed.includes(currentDay+'-'+currentStop) ? '✓ Done' : 'Mark done';
+  document.getElementById('bnNext').textContent = !isLast ? 'Next →' : currentDay < 2 ? 'Day '+(currentDay+2)+' →' : 'Prebook →';
+}
+
+// ── DAY SWITCHING ─────────────────────────────────────────────────
+function switchDay(d) {
+  currentDay = d;
+  currentStop = 0;
+  ['dtab0','dtab1','dtab2'].forEach((id, i) => {
+    document.getElementById(id).classList.toggle('active', i === d);
+  });
+  document.getElementById('dayNote').textContent = days[d].note || '';
+  renderStopList();
+  showView('list');
+}
+
+// ── STOP LIST ─────────────────────────────────────────────────────
+function renderStopList() {
+  const stops = days[currentDay].stops;
+  const total = stops.length;
+  const done = stops.filter((_, i) => completed.includes(currentDay+'-'+i)).length;
+  document.getElementById('progressFill').style.width = (done/total*100) + '%';
+
+  document.getElementById('stopList').innerHTML = stops.map((s, i) => `
+    <div class="stop-row ${i === currentStop && currentView === 'detail' ? 'active-row' : ''}"
+         draggable="true"
+         ondragstart="dragStart(event,${i})"
+         ondragover="dragOver(event,${i})"
+         ondrop="dragDrop(event,${i})"
+         ondragend="dragEnd()"
+         id="srow${i}"
+         onclick="selectStop(${i})">
+      <div class="stop-check ${completed.includes(currentDay+'-'+i) ? 'done' : ''}"
+           onclick="event.stopPropagation(); toggleDone(${i})"></div>
+      <span class="drag-h" onclick="event.stopPropagation()">⠿</span>
+      <div class="stop-dot" style="background:${s.color}"></div>
+      <div class="stop-meta">
+        <div class="stop-time-label">${s.time} · ${s.duration}</div>
+        <div class="stop-name-label">${s.name}</div>
+        <div class="stop-type-label">${s.type}</div>
+        <div class="stop-tags">
+          ${s.prebook ? '<span class="tag-pill prebook">Pre-book</span>' : ''}
+          ${s.free ? '<span class="tag-pill free">Free</span>' : ''}
+          ${s.isUserAdded ? '<span class="tag-pill" style="background:#e8f0fd;color:#1565c0;">Custom</span>' : ''}
+        </div>
+      </div>
+      <button onclick="event.stopPropagation(); confirmDeleteStop(${i});"
+        style="background:none;border:none;color:#ddd;font-size:18px;cursor:pointer;padding:4px 6px;flex-shrink:0;align-self:center;transition:color 0.15s;"
+        onmouseenter="this.style.color='#c0392b'" onmouseleave="this.style.color='#ddd'"
+        ontouchstart="this.style.color='#c0392b'" title="Remove stop">🗑</button>
+      <span class="stop-chevron" style="flex-shrink:0;">›</span>
+    </div>`).join('');
+}
+
+function selectStop(i) {
+  currentStop = i;
+  renderStopList();
+  renderDetail();
+  showView('detail');
+  document.getElementById('mainArea').scrollTop = 0;
+}
+
+// ── DETAIL RENDER ─────────────────────────────────────────────────
+function renderDetail() {
+  const s = days[currentDay].stops[currentStop];
+  const badgeLabels = { free:'Free entry', prebook:'Pre-book', paid:'Paid', food:'Healthy food', walk:'Walking', weekend:'Weekend only', weekday:'Weekday only' };
+  const badges = (s.badges || []).map(b => `<span class="badge ${b}">${badgeLabels[b]||b}</span>`).join('');
+  const gmSearch = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.name + ' ' + s.address)}`;
+  const gmWalk = `https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lng}&travelmode=walking`;
+  const histParas = (s.history || '').split('\n\n').map((p,i) => `<p class="history-text${i>0?' history-para':''}">${p.replace(/\n/g,' ')}</p>`).join('');
+
+  document.getElementById('detailContent').innerHTML = `
+    <div class="detail-hero">
+      <div class="detail-badge" style="border-left:3px solid ${s.color};padding-left:10px;">
+        ${s.time} &nbsp;·&nbsp; ${s.duration} &nbsp;·&nbsp; Day ${currentDay+1}
+      </div>
+      <div class="detail-title">${s.name}</div>
+      <div class="detail-subtitle">${s.type}</div>
+      <div class="badge-row">${badges}</div>
+    </div>
+
+    <div class="detail-section">
+      <div class="section-label">Getting there</div>
+      <div class="travel-box">
+        <div class="travel-icon">🗺️</div>
+        <div class="travel-text">${s.travel || ''}</div>
+      </div>
+      <div class="map-btns">
+        <a class="map-btn-a blue" href="${gmSearch}" target="_blank">
+          📍 Open in Maps
+        </a>
+        <a class="map-btn-a green-btn" href="${gmWalk}" target="_blank">
+          🚶 Directions
+        </a>
+      </div>
+      ${s.prebookText ? `
+      <div class="prebook-alert">
+        <div class="prebook-alert-title">⚠️ Pre-book required</div>
+        <p>${s.prebookText} — <a href="${s.prebookUrl}" target="_blank">Book here →</a></p>
+      </div>` : ''}
+    </div>
+
+    <div class="detail-section">
+      <div class="section-label">History & context</div>
+      ${histParas}
+    </div>
+
+    <div class="detail-section">
+      <div class="section-label">What to do</div>
+      <div class="tip-box">${s.todo || ''}</div>
+    </div>
+
+    <div class="detail-nav">
+      <button class="dnak-btn remove-btn" onclick="removeStop()" title="Remove stop">🗑</button>
+      <button class="dnak-btn dnav-back" onclick="showView('list')" style="flex:1;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--surface);font-size:13px;font-weight:700;cursor:pointer;color:var(--muted);">← List</button>
+    </div>
+  `;
+  updateBottomNav();
+}
+
+// ── BOTTOM NAV ACTIONS ────────────────────────────────────────────
+function navPrev() {
+  if (currentStop > 0) { currentStop--; renderDetail(); document.getElementById('mainArea').scrollTop = 0; }
+}
+function navNext() {
+  const stops = days[currentDay].stops;
+  if (currentStop < stops.length - 1) {
+    currentStop++;
+    renderDetail();
+    document.getElementById('mainArea').scrollTop = 0;
+  } else if (currentDay < 2) {
+    switchDay(currentDay + 1);
+  } else {
+    showView('prebook');
+  }
+}
+function markDone() {
+  toggleDone(currentStop);
+  updateBottomNav();
+}
+function toggleDone(i) {
+  const key = currentDay+'-'+i;
+  if (completed.includes(key)) completed = completed.filter(k => k !== key);
+  else completed.push(key);
+  renderStopList();
+  if (currentView === 'detail') updateBottomNav();
+}
+
+// ── DRAG REORDER ──────────────────────────────────────────────────
+function dragStart(e, i) { dragSrc = i; e.dataTransfer.effectAllowed = 'move'; setTimeout(() => { const el = document.getElementById('srow'+i); if(el) el.style.opacity='0.4'; },0); }
+function dragOver(e, i) { e.preventDefault(); document.querySelectorAll('.stop-row').forEach(el => el.style.borderTop=''); const el = document.getElementById('srow'+i); if(el && i !== dragSrc) el.style.borderTop='2px solid #1a73e8'; }
+function dragDrop(e, i) {
+  e.preventDefault();
+  if (dragSrc === null || dragSrc === i) return;
+  const s = days[currentDay].stops;
+  const moved = s.splice(dragSrc, 1)[0];
+  s.splice(i, 0, moved);
+  reassignTimes();
+  currentStop = i;
+  renderStopList();
+}
+function dragEnd() { dragSrc = null; document.querySelectorAll('.stop-row').forEach(el => { el.style.opacity='1'; el.style.borderTop=''; }); }
+
+// ── TIMES & OPTIMIZE ──────────────────────────────────────────────
+const TIME_SLOTS = ['9:00 AM','9:45 AM','10:30 AM','11:15 AM','12:00 PM','12:45 PM','1:30 PM','2:30 PM','3:15 PM','4:00 PM','4:45 PM','5:30 PM','6:15 PM','7:00 PM','8:00 PM','9:00 PM'];
+function reassignTimes() { reassignTimesForDay(currentDay); }
+
+function optimizeRoute() {
+  optimizeRouteForDay(currentDay);
+  currentStop = 0;
+  renderStopList();
+  showToast('Route optimised — shortest walking distance ✓');
+}
+
+// ── REMOVE STOP ───────────────────────────────────────────────────
+function confirmDeleteStop(i) {
+  const s = days[currentDay].stops[i];
+  showConfirm('Remove "' + s.name + '" from Day ' + (currentDay+1) + '?', () => {
+    if (days[currentDay].stops.length <= 2) { showToast('Need at least 2 stops', true); return; }
+    days[currentDay].stops.splice(i, 1);
+    reassignTimes();
+    currentStop = Math.min(currentStop, days[currentDay].stops.length - 1);
+    renderStopList();
+    showToast('Stop removed');
+  });
+}
+
+function removeStop() {
+  if (days[currentDay].stops.length <= 2) { showToast('Need at least 2 stops', true); return; }
+  const name = days[currentDay].stops[currentStop].name;
+  showConfirm('Remove "' + name + '" from Day ' + (currentDay+1) + '?', () => {
+    days[currentDay].stops.splice(currentStop, 1);
+    reassignTimes();
+    currentStop = Math.min(currentStop, days[currentDay].stops.length - 1);
+    renderStopList();
+    showView('list');
+    showToast('Stop removed');
+  });
+}
+
+function showConfirm(msg, onYes) {
+  const overlay = document.createElement('div');
+  overlay.id = 'confirm-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9998;display:flex;align-items:center;justify-content:center;padding:20px;';
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:16px;padding:24px;max-width:320px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.3);">
+      <p style="font-size:15px;font-weight:600;color:#1a1a1a;margin-bottom:20px;line-height:1.4;">${msg}</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <button onclick="document.getElementById('confirm-overlay').remove()"
+          style="padding:12px;border-radius:10px;border:1px solid #ddd;background:#fff;font-size:14px;font-weight:700;cursor:pointer;color:#666;">
+          Cancel
+        </button>
+        <button id="confirm-yes"
+          style="padding:12px;border-radius:10px;border:none;background:#c0392b;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">
+          Remove
+        </button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  document.getElementById('confirm-yes').onclick = () => { overlay.remove(); onYes(); };
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+}
+
+// ── ROUTE MAP (per day) ───────────────────────────────────────────
+function showRouteMap() {
+  document.querySelectorAll('.day-tab').forEach(t => { if(!t.classList.contains('blue') && !t.classList.contains('green-tab')) t.classList.remove('active'); });
+  renderRouteMap();
+  showView('routemap');
+  document.getElementById('bottomNav').style.display = 'none';
+}
+function showAllMap() {
+  document.querySelectorAll('.day-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('dtabAll').classList.add('active');
+  document.getElementById('mainArea').scrollTop = 0;
+  renderAllMap();
+  showView('allmap');
+  document.getElementById('bottomNav').style.display = 'none';
+}
+
+
+function renderRouteMap() {
+  const d = days[currentDay];
+  const stops = d.stops;
+  const origin = stops[0].lat+','+stops[0].lng;
+  const dest = stops[stops.length-1].lat+','+stops[stops.length-1].lng;
+  const wps = stops.slice(1,-1).map(s=>s.lat+','+s.lng).join('|');
+  const gmUrl = 'https://www.google.com/maps/dir/?api=1&origin='+origin+'&destination='+dest+'&waypoints='+encodeURIComponent(wps)+'&travelmode=walking';
+  const dayColors = ['#1a73e8','#e65100','#5c4db1'];
+  const color = dayColors[currentDay] || '#1a73e8';
+
+  const cards = stops.map((s,i) => `
+    <div class="mini-card ${i===currentStop?'active-mini':''}"
+         id="mcard${i}"
+         draggable="true"
+         ondragstart="mapDragStart(event,${i})"
+         ondragover="mapDragOver(event,${i})"
+         ondrop="mapDragDrop(event,${i})"
+         ondragend="mapDragEnd()"
+         onclick="selectStop(${i}); renderRouteMap();">
+      <div style="display:flex;flex-direction:column;gap:2px;margin-right:4px;flex-shrink:0;">
+        <button onclick="event.stopPropagation();moveStop(${i},-1);" ${i===0?'disabled':''}
+          style="background:none;border:1px solid #ddd;border-radius:4px;width:22px;height:18px;cursor:pointer;font-size:10px;color:#666;padding:0;line-height:1;">&#9650;</button>
+        <button onclick="event.stopPropagation();moveStop(${i},1);" ${i===stops.length-1?'disabled':''}
+          style="background:none;border:1px solid #ddd;border-radius:4px;width:22px;height:18px;cursor:pointer;font-size:10px;color:#666;padding:0;line-height:1;">&#9660;</button>
+      </div>
+      <div class="mini-num" style="background:${s.color}">${i+1}</div>
+      <div class="mini-info" style="flex:1;">
+        <div class="mini-time-s">${s.time} &middot; ${s.duration}</div>
+        <div class="mini-name-s">${s.name}</div>
+      </div>
+      <span style="font-size:16px;color:#ccc;cursor:grab;padding:0 4px;flex-shrink:0;">&#8286;</span>
+      ${s.prebook?'<span class="tag-pill prebook" style="flex-shrink:0;align-self:flex-start;">Pre-book</span>':''}
+    </div>`).join('');
+
+  document.getElementById('routeMapContent').innerHTML = `
+    <div class="map-header">
+      <h2>${d.title}</h2>
+      <p style="font-size:11px;color:#888;margin-bottom:8px;">${d.note || ''}</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+        <a class="map-open-btn" href="${gmUrl}" target="_blank" style="margin-bottom:0;font-size:12px;padding:10px 8px;">&#128506; Google Maps route</a>
+        <button onclick="optimizeRoute(); renderRouteMap();"
+          style="padding:10px 8px;background:#1a1a1a;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;">
+          &#9889; Optimize route
+        </button>
+      </div>
+      <p style="font-size:11px;color:#888;">Tap map pins for details. Use arrows or drag to reorder below.</p>
+    </div>
+    <div id="routeMapIframe" style="width:100%;height:340px;background:#e8f0e4;display:flex;align-items:center;justify-content:center;">
+      <span style="color:#888;font-size:13px;">Loading map...</span>
+    </div>
+    <div class="mini-stop-cards">
+      <div style="font-size:11px;font-weight:700;color:var(--hint);text-transform:uppercase;letter-spacing:0.6px;margin:12px 0 8px;">
+        ${stops.length} stops in order &mdash; tap to view details
+      </div>
+      ${cards}
+    </div>
+  `;
+
+  // Build Leaflet HTML and inject via Blob URL
+  buildRouteMapIframe(stops, color);
+}
+
+function buildRouteMapIframe(stops, color) {
+  const stopsData = stops.map((s,i) => ({
+    lat: s.lat, lng: s.lng, name: s.name, time: s.time,
+    duration: s.duration, address: s.address || '', color: s.color,
+    prebook: !!s.prebook, free: !!s.free, i
+  }));
+  const cLat = stops.reduce((a,s)=>a+s.lat,0)/stops.length;
+  const cLng = stops.reduce((a,s)=>a+s.lng,0)/stops.length;
+
+  const mapHTML = [
+    '<!DOCTYPE html><html><head>',
+    '<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">',
+    '<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>',
+    '<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>',
+    '<style>*{margin:0;padding:0;box-sizing:border-box;}html,body{height:100%;overflow:hidden;}#map{width:100%;height:100vh;}</style>',
+    '</head><body><div id="map"></div><script>',
+    'var stops=' + JSON.stringify(stopsData) + ';',
+    'var routeColor=' + JSON.stringify(color) + ';',
+    'var map=L.map("map",{zoomControl:false}).setView([' + cLat + ',' + cLng + '],14);',
+    'L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OpenStreetMap contributors",maxZoom:19}).addTo(map);',
+    'var coords=stops.map(function(s){return[s.lat,s.lng];});',
+    'L.polyline(coords,{color:routeColor,weight:5,opacity:0.85,dashArray:"10,6"}).addTo(map);',
+    'stops.forEach(function(s,i){',
+    '  var sz=i===0?32:26;',
+    '  var icon=L.divIcon({className:"",',
+    '    html:"<div style=\\"background:"+s.color+";color:#fff;width:"+sz+"px;height:"+sz+"px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:"+(i===0?13:11)+"px;font-weight:900;border:2.5px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.35);\\">"+(i+1)+"</div>",',
+    '    iconSize:[sz,sz],iconAnchor:[sz/2,sz/2],popupAnchor:[0,-(sz/2+4)]});',
+    '  var popup="<div style=\\"min-width:160px\\"><b style=\\"color:"+s.color+";font-size:13px;\\">Stop "+(i+1)+"</b><br><b style=\\"font-size:14px;\\">"+s.name+"</b><br><span style=\\"color:#666;font-size:12px;\\">"+s.time+" &middot; "+s.duration+"</span><br><span style=\\"font-size:11px;color:#888;\\">"+s.address+"</span>"+(s.prebook?"<br><span style=\\"color:#c0392b;font-size:11px;font-weight:700;\\">&#9888; Pre-book</span>":"")+(s.free?"<br><span style=\\"color:#1a7a3a;font-size:11px;font-weight:700;\\">&#10003; Free</span>":"")+"</div>";',
+    '  L.marker([s.lat,s.lng],{icon:icon}).addTo(map).bindPopup(popup);',
+    '});',
+    'map.fitBounds(L.latLngBounds(coords),{padding:[40,40]});',
+    '<\/script></body></html>'
+  ].join('\n');
+
+  var container = document.getElementById('routeMapIframe');
+  if (!container) return;
+  var iframe = document.createElement('iframe');
+  iframe.style.cssText = 'width:100%;height:340px;border:none;display:block;';
+  iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin');
+  try {
+    iframe.src = 'data:text/html;charset=utf-8,' + encodeURIComponent(mapHTML.join('\n'));
+  } catch(e) {
+    // Fallback for very large content - write directly
+    iframe.srcdoc = mapHTML.join('\n');
+  }
+  container.innerHTML = '';
+  container.appendChild(iframe);
+}
+
+
+function renderAllMap() {
+  const dayColors = ['#1a73e8','#e65100','#1a7a3a'];
+  const dayNames = ['Day 1','Day 2','Day 3'];
+  const allLats = days.flatMap(d => d.stops.map(s => s.lat));
+  const allLngs = days.flatMap(d => d.stops.map(s => s.lng));
+  const cLat = (Math.min(...allLats)+Math.max(...allLats))/2;
+  const cLng = (Math.min(...allLngs)+Math.max(...allLngs))/2;
+
+  const stopsData = days.map((d,di) => ({
+    color: dayColors[di], label: dayNames[di],
+    stops: d.stops.map(s => ({
+      lat:s.lat, lng:s.lng, name:s.name, time:s.time,
+      address:s.address||'', prebook:!!s.prebook, free:!!s.free, duration:s.duration
+    }))
+  }));
+
+  const mapHTML = [
+    '<!DOCTYPE html><html><head>',
+    '<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">',
+    '<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>',
+    '<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>',
+    '<style>*{margin:0;padding:0;}html,body{height:100%;overflow:hidden;}#map{width:100%;height:100vh;}</style>',
+    '</head><body><div id="map"></div><script>',
+    'var allData=' + JSON.stringify(stopsData) + ';',
+    'var map=L.map("map",{zoomControl:true}).setView([' + cLat + ',' + cLng + '],12);',
+    'L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"© OpenStreetMap contributors",maxZoom:19}).addTo(map);',
+    'var allBounds=[];',
+    'allData.forEach(function(day){',
+    '  var coords=day.stops.map(function(s){return[s.lat,s.lng];});',
+    '  coords.forEach(function(c){allBounds.push(c);});',
+    '  L.polyline(coords,{color:day.color,weight:4,opacity:0.8,dashArray:"8,5"}).addTo(map);',
+    '  day.stops.forEach(function(s,i){',
+    '    var icon=L.divIcon({className:"",html:"<div style=\\"background:"+day.color+";color:#fff;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;border:2.5px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.3);\\">"+(i+1)+"</div>",iconSize:[28,28],iconAnchor:[14,14],popupAnchor:[0,-18]});',
+    '    var popup="<b style=\\"color:"+day.color+"\\">"+day.label+" &middot; Stop "+(i+1)+"</b><br><b>"+s.name+"</b><br><span style=\\"color:#666;font-size:12px;\\">"+s.time+" &middot; "+s.duration+"</span><br><span style=\\"font-size:11px;\\">"+s.address+"</span>"+(s.prebook?"<br><span style=\\"color:#c0392b;font-size:11px;\\">&#9888; Pre-book</span>":"")+(s.free?"<br><span style=\\"color:#1a7a3a;font-size:11px;\\">Free</span>":"");',
+    '    L.marker([s.lat,s.lng],{icon:icon}).addTo(map).bindPopup(popup);',
+    '  });',
+    '});',
+    'map.fitBounds(L.latLngBounds(allBounds),{padding:[30,30]});',
+    '<\/script></body></html>'
+  ].join('\n');
+
+  const legend = dayColors.map((c,i) => `<div class="legend-item"><div class="legend-dot-line" style="background:${c}"></div><span>${dayNames[i]}</span></div>`).join('');
+
+  document.getElementById('allMapContent').innerHTML = `
+    <div class="all-map-header">
+      <h2>All 3 Days &mdash; London</h2>
+      <div class="map-legend">${legend}</div>
+      <div style="display:flex;gap:8px;">
+        ${dayColors.map((c,i)=>`<button onclick="switchDay(${i})" style="flex:1;padding:8px;border-radius:8px;border:2px solid ${c};background:#fff;color:${c};font-size:12px;font-weight:700;cursor:pointer;">${dayNames[i]}</button>`).join('')}
+      </div>
+    </div>
+    <div id="allMapIframe" style="flex:1;min-height:420px;display:flex;align-items:center;justify-content:center;background:#e8f0e4;">
+      <span style="color:#888;font-size:13px;">Loading map...</span>
+    </div>
+  `;
+
+  var container = document.getElementById('allMapIframe');
+  var iframe = document.createElement('iframe');
+  iframe.style.cssText = 'width:100%;height:100%;min-height:420px;border:none;display:block;flex:1;';
+  iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin');
+  try {
+    iframe.src = 'data:text/html;charset=utf-8,' + encodeURIComponent(mapHTML.join('\n'));
+  } catch(e) {
+    iframe.srcdoc = mapHTML.join('\n');
+  }
+  container.innerHTML = '';
+  container.appendChild(iframe);
+}
+
+
+// ── ADD LOCATION WITH AI ──────────────────────────────────────────
+async function generateLocation() {
+  const name = document.getElementById('addName').value.trim();
+  const address = document.getElementById('addAddress').value.trim();
+  const lat = parseFloat(document.getElementById('addLat').value) || 51.515;
+  const lng = parseFloat(document.getElementById('addLng').value) || -0.12;
+  const type = document.getElementById('addType').value;
+  const dayIdx = parseInt(document.getElementById('addDay').value);
+  const duration = document.getElementById('addDuration').value;
+  if (!name || !address) { showToast('Enter a name and address', true); return; }
+  const btn = document.getElementById('genBtn');
+  btn.textContent = 'Generating…'; btn.disabled = true;
+  const prompt = `You are a London tour guide. Write a JSON object (no markdown) for "${name}" at "${address}" (type: ${type}):\n{"history":"2-3 paragraphs in HTML with <strong> tags, \\n\\n between paragraphs","todo":"<p><span class=\\"tip-icon\\">🏛️</span><strong>What to do:</strong> 3-4 practical sentences</p>","travel":"🚶 or 🚇 practical directions from Piccadilly","type_label":"short description like Museum · Free","prebook":false,"free":true,"color":"#5c4db1"}`;
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:prompt}]})});
+    const data = await res.json();
+    const raw = (data.content?.[0]?.text||'{}').replace(/```json|```/g,'').trim();
+    const info = JSON.parse(raw);
+    addStop(dayIdx, {name, address, lat, lng, type, duration, ...info});
+  } catch(e) {
+    addStop(dayIdx, {name, address, lat, lng, type, duration, history:`<strong>${name}</strong> is at ${address}.`, todo:`<p>Explore ${name} during your visit.</p>`, travel:`🚇 Check Google Maps for directions.`, type_label:type, prebook:false, free:true, color:'#5c4db1'});
+    showToast('AI unavailable — basic entry added');
+  }
+  btn.textContent = 'Generate with AI →'; btn.disabled = false;
+}
+
+function addStop(dayIdx, info) {
+  const newStop = {
+    time:'9:00 AM', name:info.name, type:info.type_label||info.type,
+    color:info.color||'#5c4db1', prebook:info.prebook||false, free:info.free!==undefined?info.free:true,
+    weekend:false, lat:info.lat, lng:info.lng, address:info.address,
+    badges:[info.free?'free':'paid'], travel:info.travel||'🚇 Use Google Maps.',
+    history:info.history||'', todo:info.todo||'', duration:info.duration,
+    prebookText:null, prebookUrl:null, isUserAdded:true
+  };
+  days[dayIdx].stops.push(newStop);
+  // reassign times for that day
+  const saved = currentDay;
+  currentDay = dayIdx; reassignTimes(); currentDay = saved;
+  currentDay = dayIdx;
+  currentStop = days[dayIdx].stops.length - 1;
+  renderStopList();
+  selectStop(currentStop);
+  showToast('"'+info.name+'" added to Day '+(dayIdx+1)+'!');
+  document.getElementById('addName').value='';
+  document.getElementById('addAddress').value='';
+  document.getElementById('addLat').value='';
+  document.getElementById('addLng').value='';
+}
+
+// ── PRE-BOOKING LIST ──────────────────────────────────────────────
+function renderPrebook() {
+  const labels = {urgent:'Book NOW',medium:'Book this week',low:'Book soon'};
+  document.getElementById('prebookList').innerHTML = prebooks.map(p => `
+    <div class="pb-card">
+      <div class="pb-card-title">${p.name}</div>
+      <span class="pb-urgency ${p.urgency}">${labels[p.urgency]}</span>
+      <span class="pb-day">${p.day}</span>
+      <p>${p.text}</p>
+      <p style="margin-top:6px;"><a href="${p.url}" target="_blank">Book here →</a></p>
+    </div>`).join('');
+}
+
+// ── TOAST ─────────────────────────────────────────────────────────
+function showToast(msg, isError=false) {
+  const old = document.getElementById('toast-el');
+  if (old) old.remove();
+  const t = document.createElement('div');
+  t.id = 'toast-el'; t.className = 'toast' + (isError?' err':'');
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
+
+init();
+</script>
+</body>
+</html>
