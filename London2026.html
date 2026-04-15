@@ -2304,6 +2304,15 @@ function selectStop(i) {
   document.getElementById('mainArea').scrollTop = 0;
 }
 
+function goBackToList() {
+  showView('list');
+  // Scroll to the current stop row
+  requestAnimationFrame(() => {
+    const row = document.getElementById('srow' + currentStop);
+    if (row) row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  });
+}
+
 // ── DETAIL RENDER ─────────────────────────────────────────────────
 function renderDetail() {
   const s = days[currentDay].stops[currentStop];
@@ -2315,8 +2324,11 @@ function renderDetail() {
 
   document.getElementById('detailContent').innerHTML = `
     <div class="detail-hero">
-      <div class="detail-badge" style="border-left:3px solid ${s.color};padding-left:10px;">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:0;">
+        <div class="detail-badge" style="border-left:3px solid ${s.color};padding-left:10px;">
         <span onclick="editStopTime(currentStop)" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;" title="Tap to change start time">⏱ ${s.time}</span> &nbsp;·&nbsp; <span onclick="editDuration(currentStop)" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;" title="Tap to edit duration">⏳ ${s.duration}</span> &nbsp;·&nbsp; ${days[currentDay].title.split('—')[0].trim()}
+        </div>
+        <button onclick="goBackToList()" style="background:none;border:none;font-size:13px;font-weight:700;color:var(--muted);cursor:pointer;padding:4px 8px;border-radius:8px;border:1px solid var(--border);white-space:nowrap;margin-top:2px;">← List</button>
       </div>
       <div class="detail-title">${s.name}</div>
       <div class="detail-subtitle">${s.type}</div>
@@ -2356,7 +2368,7 @@ function renderDetail() {
 
     <div class="detail-nav">
       <button class="dnak-btn remove-btn" onclick="removeStop()" title="Remove stop">🗑</button>
-      <button class="dnak-btn dnav-back" onclick="showView('list')" style="flex:1;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--surface);font-size:13px;font-weight:700;cursor:pointer;color:var(--muted);">← List</button>
+      <button class="dnak-btn dnav-back" onclick="goBackToList()" style="flex:1;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--surface);font-size:13px;font-weight:700;cursor:pointer;color:var(--muted);">← List</button>
     </div>
     <div style="padding:0 16px 16px;">
       <select onchange="moveStopToDay(parseInt(this.value), ${currentStop})"
