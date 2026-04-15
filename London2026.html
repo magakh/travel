@@ -2401,6 +2401,39 @@ function moveStopFromMapToDay(stopIdx, targetDay) {
 }
 
 
+function showHotelDetail() {
+  const hd = window.HOTEL_DATA;
+  const overlay = document.createElement('div');
+  overlay.id = 'hotel-detail-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:flex-end;justify-content:center;';
+  const name = hd ? hd.name : 'Hotel not set';
+  const addr = hd ? (hd.address || '') : '';
+  const lat = hd ? hd.lat : null;
+  const lng = hd ? hd.lng : null;
+  const gmUrl = lat ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name + ' ' + addr)}` : '#';
+  const gmDir = lat ? `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=walking` : '#';
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:20px 20px 0 0;padding:24px;width:100%;max-width:500px;box-shadow:0 -4px 32px rgba(0,0,0,0.2);">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <div style="font-size:22px;font-weight:800;">🏨 ${name}</div>
+        <button onclick="document.getElementById('hotel-detail-overlay').remove()" style="background:none;border:none;font-size:22px;color:#aaa;cursor:pointer;">✕</button>
+      </div>
+      ${addr ? `<div style="font-size:13px;color:#888;margin-bottom:16px;">📍 ${addr}</div>` : ''}
+      ${!hd ? '<p style="color:#888;font-size:14px;margin-bottom:16px;">No hotel set — tap below to add your hotel.</p>' : ''}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">
+        <a href="${gmUrl}" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:6px;padding:12px;background:#1a73e8;color:#fff;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;">📍 Open in Maps</a>
+        <a href="${gmDir}" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:6px;padding:12px;background:#1a7a3a;color:#fff;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;">🚶 Directions</a>
+      </div>
+      <button onclick="document.getElementById('hotel-detail-overlay').remove();showView('hotel');"
+        style="width:100%;padding:12px;border-radius:10px;border:1px solid #ddd;background:#f5f4f0;font-size:13px;font-weight:700;cursor:pointer;color:#555;">
+        ✏️ ${hd ? 'Edit hotel details' : 'Add hotel'}
+      </button>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+}
+
+
 // ── HOTEL MANAGEMENT ──────────────────────────────────────────────
 function loadHotelUI() {
   const h = window.HOTEL_DATA || {};
@@ -2550,13 +2583,16 @@ function renderStopList() {
 
   const hotelStartTime = currentDay === 0 ? '12:00 PM' : '9:00 AM';
   const hotelEndName = currentDay === 3 ? 'Hotel — Check Out' : 'Hotel — Return for the night';
+  const hd = window.HOTEL_DATA;
+  const hotelLabel = hd ? hd.name : 'Hotel';
   const hotelBanner = (time, label) => `
-    <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;background:#f5f4f0;border-bottom:1px solid var(--border);opacity:0.75;">
-      <div style="width:22px;height:22px;border-radius:50%;background:#888;display:flex;align-items:center;justify-content:center;flex-shrink:0;">🏨</div>
+    <div onclick="showHotelDetail()" style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:#f5f4f0;border-bottom:1px solid var(--border);cursor:pointer;transition:background 0.1s;" onmouseenter="this.style.background='#ece9e4'" onmouseleave="this.style.background='#f5f4f0'">
+      <div style="width:26px;height:26px;border-radius:8px;background:#444;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;">🏨</div>
       <div style="flex:1;">
         <div style="font-size:11px;color:var(--hint);">⏱ ${time}</div>
-        <div style="font-size:13px;font-weight:700;color:#555;">${label}</div>
+        <div style="font-size:13px;font-weight:700;color:#333;">${hotelLabel} <span style="font-weight:400;color:#888;font-size:12px;">— ${label}</span></div>
       </div>
+      <span style="color:#ccc;font-size:16px;">›</span>
     </div>`;
 
   document.getElementById('stopList').innerHTML =
@@ -2921,7 +2957,7 @@ function buildRouteMapIframe(stops, color) {
   if (!container) return;
   // Destroy old Leaflet instance if any
   if (window._routeMap) { window._routeMap.remove(); window._routeMap = null; }
-  container.innerHTML = '<div id="routeMapDiv"></div>';
+  container.innerHTML = '<div id="routeMapDiv" style="width:100%;height:340px;"></div>';
 
   var cLat = stops.reduce(function(a,s){return a+s.lat;},0)/stops.length;
   var cLng = stops.reduce(function(a,s){return a+s.lng;},0)/stops.length;
