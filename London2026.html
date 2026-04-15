@@ -1612,11 +1612,26 @@ function prepareBreakfasts() {
 }
 
 function reassignTimesForDay(di) {
-  // May 7 (Day 0) starts at 1:00 PM — arrival day, hotel check-in first
-  const TIMES_NORMAL = ['9:00 AM','10:00 AM','11:00 AM','12:00 PM','1:00 PM','2:00 PM','3:00 PM','4:00 PM','5:00 PM','6:00 PM','7:00 PM','8:00 PM','9:00 PM'];
-  const TIMES_DAY1   = ['12:00 PM','1:30 PM','2:30 PM','3:30 PM','4:30 PM','5:00 PM','6:00 PM','7:00 PM','8:30 PM'];
-  const TIMES = di === 0 ? TIMES_DAY1 : TIMES_NORMAL;
-  days[di].stops.forEach((s, i) => { s.time = TIMES[i] || TIMES[TIMES.length-1]; });
+  // May 7 (Day 0) starts at 12:00 PM — arrival day
+  const START_MIN = di === 0 ? 12 * 60 : 9 * 60; // noon or 9am
+  let totalMin = START_MIN;
+  days[di].stops.forEach((s) => {
+    // Never move a reserved/fixed stop's time
+    if (s.reservation && s.reservation.time) {
+      // Resync totalMin from this stop's locked time
+      const [tp, ap] = s.time.split(' ');
+      const [h, m] = tp.split(':').map(Number);
+      totalMin = (h % 12 + (ap === 'PM' ? 12 : 0)) * 60 + (m || 0);
+      totalMin += parseDurationMins(s.duration || '60 min');
+      return;
+    }
+    const hh = Math.floor(totalMin / 60) % 24;
+    const mm = totalMin % 60;
+    const apm = hh >= 12 ? 'PM' : 'AM';
+    const h12 = hh % 12 || 12;
+    s.time = h12 + ':' + String(mm).padStart(2,'0') + ' ' + apm;
+    totalMin += parseDurationMins(s.duration || '60 min');
+  });
 }
 
 let currentDay = 0;
@@ -2334,17 +2349,10 @@ function applyStopTime(i) {
     days[currentDay].stops[i].duration = durStr;
   }
 
-  // Cascade times from this stop
+  // Set this stop's time then cascade (respecting fixed/reserved stops)
   const stops = days[currentDay].stops;
-  let totalMin = h24 * 60 + min;
-  for (let j = i; j < stops.length; j++) {
-    const hh = Math.floor(totalMin / 60) % 24;
-    const mm = totalMin % 60;
-    const ap = hh >= 12 ? 'PM' : 'AM';
-    const h12 = hh % 12 || 12;
-    stops[j].time = h12 + ':' + String(mm).padStart(2,'0') + ' ' + ap;
-    totalMin += parseDurationMins(stops[j].duration || '60 min');
-  }
+  stops[i].time = timeStr;
+  cascadeTimesFrom(i);
 
   document.getElementById('time-overlay').remove();
   renderStopList();
