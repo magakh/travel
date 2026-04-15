@@ -980,6 +980,23 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
   box-shadow: 0 4px 20px rgba(0,0,0,0.25);
 }
 .toast.err { background: var(--red); }
+
+/* ── RESERVATION ─────────────────────────────────────────────── */
+.res-badge {
+  display:inline-flex;align-items:center;gap:5px;
+  background:#fff3cd;border:1px solid #ffc107;color:#856404;
+  font-size:10px;font-weight:800;padding:3px 8px;border-radius:20px;
+  text-transform:uppercase;letter-spacing:0.4px;
+}
+.res-badge.confirmed { background:#d4edda;border-color:#28a745;color:#155724; }
+.conflict-banner {
+  background:#fde8e8;border-left:4px solid var(--red);
+  padding:10px 14px;font-size:12px;font-weight:700;color:var(--red);
+  display:flex;align-items:center;gap:8px;
+}
+.stop-row.has-conflict { border-left:3px solid var(--red) !important; }
+.stop-row.has-reservation { border-left:3px solid #ffc107; }
+.stop-row.has-reservation.confirmed { border-left:3px solid #28a745; }
 </style>
 </head>
 <body>
@@ -1982,6 +1999,131 @@ function addFromSearch(i) {
 }
 
 // ── INIT ──────────────────────────────────────────────────────────
+// ── RESERVATIONS ──────────────────────────────────────────────────
+function editReservation(i) {
+  const s = days[currentDay].stops[i];
+  const r = s.reservation || {};
+
+  // Parse stop time as default booked time
+  const overlay = document.createElement('div');
+  overlay.id = 'res-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto;';
+
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:16px;padding:24px;max-width:340px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.3);margin:auto;">
+      <p style="font-size:15px;font-weight:800;color:#1a1a1a;margin-bottom:4px;">${s.name}</p>
+      <p style="font-size:12px;color:#888;margin-bottom:18px;">Enter your reservation details</p>
+
+      <label style="font-size:11px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:5px;">Booked time (fixed)</label>
+      <input type="time" id="resTime" value="${r.time ? toTime24(r.time) : toTime24(s.time)}"
+        style="width:100%;padding:12px;border:2px solid #ffc107;border-radius:10px;font-size:20px;font-weight:700;text-align:center;margin-bottom:14px;box-sizing:border-box;background:#fffde7;">
+
+      <label style="font-size:11px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:5px;">Booking reference</label>
+      <input type="text" id="resRef" value="${r.ref||''}" placeholder="e.g. BK-38291"
+        style="width:100%;padding:11px 14px;border:1px solid #ddd;border-radius:10px;font-size:15px;margin-bottom:14px;box-sizing:border-box;">
+
+      <label style="font-size:11px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:5px;">Name on booking</label>
+      <input type="text" id="resName" value="${r.name||''}" placeholder="e.g. Smith"
+        style="width:100%;padding:11px 14px;border:1px solid #ddd;border-radius:10px;font-size:15px;margin-bottom:14px;box-sizing:border-box;">
+
+      <label style="font-size:11px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:5px;">Notes</label>
+      <textarea id="resNotes" placeholder="e.g. Window table requested, 2 people"
+        style="width:100%;padding:11px 14px;border:1px solid #ddd;border-radius:10px;font-size:14px;margin-bottom:14px;box-sizing:border-box;min-height:70px;resize:vertical;font-family:inherit;">${r.notes||''}</textarea>
+
+      <label style="display:flex;align-items:center;gap:10px;margin-bottom:18px;cursor:pointer;">
+        <input type="checkbox" id="resConfirmed" ${r.confirmed?'checked':''} style="width:18px;height:18px;cursor:pointer;">
+        <span style="font-size:14px;font-weight:600;color:#155724;">Mark as confirmed</span>
+      </label>
+
+      <p style="font-size:11px;color:#e65100;background:#fff3e0;padding:8px 12px;border-radius:8px;margin-bottom:14px;">
+        🔒 Booked time is <strong>fixed</strong> — the schedule will warn if other stops conflict with it.
+      </p>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <button onclick="document.getElementById('res-overlay').remove()"
+          style="padding:12px;border-radius:10px;border:1px solid #ddd;background:#fff;font-size:14px;font-weight:700;cursor:pointer;color:#666;">Cancel</button>
+        <button onclick="saveReservation(${i})"
+          style="padding:12px;border-radius:10px;border:none;background:#28a745;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">Save</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+}
+
+function toTime24(timeStr) {
+  if (!timeStr) return '09:00';
+  const [tp, ap] = timeStr.split(' ');
+  if (!ap) return timeStr; // already 24h
+  const [h, m] = tp.split(':').map(Number);
+  const h24 = h % 12 + (ap === 'PM' ? 12 : 0);
+  return String(h24).padStart(2,'0') + ':' + String(m||0).padStart(2,'0');
+}
+
+function saveReservation(i) {
+  const timeVal = document.getElementById('resTime').value;
+  const [h24, m] = timeVal.split(':').map(Number);
+  const ap = h24 >= 12 ? 'PM' : 'AM';
+  const h12 = h24 % 12 || 12;
+  const timeStr = h12 + ':' + String(m).padStart(2,'0') + ' ' + ap;
+
+  const s = days[currentDay].stops[i];
+  s.reservation = {
+    time: timeStr,
+    ref: document.getElementById('resRef').value.trim(),
+    name: document.getElementById('resName').value.trim(),
+    notes: document.getElementById('resNotes').value.trim(),
+    confirmed: document.getElementById('resConfirmed').checked
+  };
+  // Lock the stop time to the reservation time
+  s.time = timeStr;
+  s.fixed = true;
+
+  document.getElementById('res-overlay').remove();
+  autoSave();
+  renderStopList();
+  renderDetail();
+  showToast('Reservation saved 🔒');
+  checkConflicts();
+}
+
+function clearReservation(i) {
+  const s = days[currentDay].stops[i];
+  delete s.reservation;
+  delete s.fixed;
+  autoSave();
+  renderStopList();
+  renderDetail();
+  showToast('Reservation cleared');
+}
+
+// ── CONFLICT DETECTION ────────────────────────────────────────────
+function timeToMins(timeStr) {
+  if (!timeStr) return 0;
+  const [tp, ap] = timeStr.split(' ');
+  const [h, m] = tp.split(':').map(Number);
+  return (h % 12 + (ap === 'PM' ? 12 : 0)) * 60 + (m || 0);
+}
+
+function getConflict(i) {
+  const stops = days[currentDay].stops;
+  if (i === 0) return false;
+  const prev = stops[i - 1];
+  const curr = stops[i];
+  const prevEnd = timeToMins(prev.time) + parseDurationMins(prev.duration || '60 min');
+  const currStart = timeToMins(curr.time);
+  return currStart < prevEnd;
+}
+
+function checkConflicts() {
+  // Show a toast if any conflicts exist on current day
+  const stops = days[currentDay].stops;
+  const conflicts = stops.filter((_, i) => i > 0 && getConflict(i));
+  if (conflicts.length > 0) {
+    showToast('⚠️ ' + conflicts.length + ' time conflict' + (conflicts.length>1?'s':'') + ' on this day', true);
+  }
+}
+
+
 // ── ADJUSTABLE START TIME ─────────────────────────────────────────
 function editStopTime(i) { editTimeAndDuration(i); }
 function editDuration(i)  { editTimeAndDuration(i); }
@@ -2126,6 +2268,7 @@ function applyStopTime(i) {
   renderStopList();
   if (currentView === 'detail') renderDetail();
   autoSave();
+  checkConflicts();
   showToast('Updated ✓');
 }
 
@@ -2252,7 +2395,7 @@ function renderStopList() {
   const scrollY = area ? area.scrollTop : 0;
 
   document.getElementById('stopList').innerHTML = stops.map((s, i) => `
-    <div class="stop-row ${i === currentStop && currentView === 'detail' ? 'active-row' : ''}"
+    <div class="stop-row ${i === currentStop && currentView === 'detail' ? 'active-row' : ''} ${getConflict(i) ? 'has-conflict' : (s.reservation ? (s.reservation.confirmed ? 'confirmed' : 'has-reservation') : '')}"
          draggable="true"
          ondragstart="dragStart(event,${i})"
          ondragover="dragOver(event,${i})"
@@ -2270,7 +2413,8 @@ function renderStopList() {
           &nbsp;·&nbsp;
           <span onclick="event.stopPropagation(); editDuration(${i});" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;color:var(--muted);" title="Tap to edit duration">⏳ ${s.duration}</span>
         </div>
-        <div class="stop-name-label">${s.name}</div>
+        ${getConflict(i) ? '<div class="conflict-banner">⚠️ Time conflict with previous stop</div>' : ''}
+        <div class="stop-name-label">${s.name}${s.reservation ? ' <span class="res-badge ' + (s.reservation.confirmed?'confirmed':'') + '">' + (s.reservation.confirmed?'✓ Booked':'⏳ Pending') + '</span>' : ''}</div>
         <div class="stop-type-label">${s.type}</div>
         <div class="stop-tags">
           ${s.prebook ? '<span class="tag-pill prebook">Pre-book</span>' : ''}
@@ -2364,6 +2508,35 @@ function renderDetail() {
     <div class="detail-section">
       <div class="section-label">What to do</div>
       <div class="tip-box">${s.todo || ''}</div>
+    </div>
+
+    <div class="detail-section" id="res-section">
+      <div class="section-label">Reservation</div>
+      ${s.reservation ? `
+        <div style="background:#f8f9fa;border-radius:10px;padding:14px;border:1px solid var(--border);">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <span class="res-badge ${s.reservation.confirmed?'confirmed':''}">
+              ${s.reservation.confirmed ? '✓ Confirmed' : '⏳ Pending'}
+            </span>
+            <button onclick="clearReservation(${currentStop})" style="background:none;border:none;color:#aaa;font-size:12px;cursor:pointer;">✕ Clear</button>
+          </div>
+          <div style="font-size:13px;color:var(--text);line-height:1.7;">
+            ${s.reservation.time ? `<div>🕐 <strong>Booked time:</strong> ${s.reservation.time}</div>` : ''}
+            ${s.reservation.ref ? `<div>🔖 <strong>Ref:</strong> ${s.reservation.ref}</div>` : ''}
+            ${s.reservation.name ? `<div>👤 <strong>Name:</strong> ${s.reservation.name}</div>` : ''}
+            ${s.reservation.notes ? `<div>📝 ${s.reservation.notes}</div>` : ''}
+          </div>
+          <button onclick="editReservation(${currentStop})"
+            style="margin-top:10px;width:100%;padding:10px;border-radius:8px;border:1px solid #ffc107;background:#fff3cd;color:#856404;font-size:13px;font-weight:700;cursor:pointer;">
+            ✏️ Edit reservation
+          </button>
+        </div>
+      ` : `
+        <button onclick="editReservation(${currentStop})"
+          style="width:100%;padding:12px;border-radius:10px;border:1px dashed #ccc;background:#fafaf8;font-size:13px;font-weight:700;cursor:pointer;color:#888;">
+          + Add reservation details
+        </button>
+      `}
     </div>
 
     <div class="detail-nav">
