@@ -1603,51 +1603,47 @@ function getSaveData() {
 }
 
 // ── REAL-TIME SYNC (Firebase free REST, no auth) ─────────────────
-// ── REAL-TIME SYNC (jsonblob.com — free, no auth, CORS-open) ─────
-// Blob ID is stored in localStorage so all devices sharing the same
-// blob ID stay in sync. First device creates the blob; share the URL.
-const BLOB_BASE = 'https://jsonblob.com/api/jsonBlob';
+// ── REAL-TIME SYNC via public GitHub raw file ────────────────────
+// sync.json lives in the same repo — public read, token-gated write.
+// All devices read the same URL; writes need a GitHub token (once per session).
+const SYNC_RAW  = 'https://raw.githubusercontent.com/magakh/travel/main/sync.json';
+const SYNC_API  = 'https://api.github.com/repos/magakh/travel/contents/sync.json';
 
-async function getSyncBlobId() {
-  let id = localStorage.getItem('sync_blob_id');
-  if (id) return id;
-  // Create a new blob
-  try {
-    const res = await fetch(BLOB_BASE, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: getSaveData()
-    });
-    if (res.ok) {
-      const loc = res.headers.get('Location') || '';
-      id = loc.split('/').pop();
-      if (id) { localStorage.setItem('sync_blob_id', id); return id; }
-    }
-  } catch(e) {}
+function getSyncToken() {
+  let t = sessionStorage.getItem('gh_sync_token');
+  if (t) return t;
+  t = prompt('To sync changes with others, enter a GitHub personal access token\n(repo scope). Leave blank to use read-only mode.');
+  if (t && t.trim()) { sessionStorage.setItem('gh_sync_token', t.trim()); return t.trim(); }
   return null;
 }
 
 async function syncSave() {
   const payload = getSaveData();
   try { localStorage.setItem('london_tour_v2', payload); } catch(e) {}
+  const token = getSyncToken();
+  if (!token) { showToast('Saved locally (read-only mode)'); return; }
   try {
-    const id = await getSyncBlobId();
-    if (!id) { showToast('Saved locally ✓'); return; }
-    const res = await fetch(BLOB_BASE + '/' + id, {
+    const metaRes = await fetch(SYNC_API, { headers: { 'Authorization': 'token ' + token } });
+    const meta = metaRes.ok ? await metaRes.json() : {};
+    const body = {
+      message: 'sync',
+      content: btoa(unescape(encodeURIComponent(payload))),
+      committer: { name: 'Tour Sync', email: 'sync@tour.app' }
+    };
+    if (meta.sha) body.sha = meta.sha;
+    const putRes = await fetch(SYNC_API, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: payload
+      headers: { 'Authorization': 'token ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
     });
-    if (res.ok) { showToast('Saved & synced ✓'); window._lastSyncTime = Date.now(); return; }
-  } catch(e) {}
-  showToast('Saved locally ✓');
+    if (putRes.ok) { showToast('Saved & synced ✓'); window._lastSyncTime = Date.now(); }
+    else { showToast('Saved locally (sync failed)'); }
+  } catch(e) { showToast('Saved locally ✓'); }
 }
 
 async function syncLoad() {
-  const id = localStorage.getItem('sync_blob_id');
-  if (!id) return false;
   try {
-    const res = await fetch(BLOB_BASE + '/' + id, { headers: { 'Accept': 'application/json' } });
+    const res = await fetch(SYNC_RAW + '?t=' + Date.now());
     if (!res.ok) return false;
     const data = await res.json();
     if (data && data.days && data.days.length === 3) {
@@ -1662,10 +1658,8 @@ async function syncLoad() {
 function startSyncPolling() {
   setInterval(async () => {
     if (window._lastSyncTime && Date.now() - window._lastSyncTime < 20000) return;
-    const id = localStorage.getItem('sync_blob_id');
-    if (!id) return;
     try {
-      const res = await fetch(BLOB_BASE + '/' + id, { headers: { 'Accept': 'application/json' } });
+      const res = await fetch(SYNC_RAW + '?t=' + Date.now());
       if (!res.ok) return;
       const data = await res.json();
       if (data && data.days && data.days.length === 3) {
