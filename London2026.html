@@ -751,10 +751,85 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
   position: fixed; top: var(--header-h); left: 0; right: 0;
   bottom: var(--bottom-h); overflow-y: auto; -webkit-overflow-scrolling: touch;
 }
+#panel-list.active {
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+#panel-list.active .split-layout {
+  flex: 1;
+  min-height: 0;
+}
 
 /* ── VIEW PANELS ─────────────────────────────────────────────────── */
 .panel { display: none; }
 .panel.active { display: block; }
+
+/* ── SPLIT VIEW (list + inline map) ─────────────────────────────── */
+.split-layout {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+}
+.split-list {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  min-width: 0;
+}
+.split-map-panel {
+  width: 380px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  height: calc(100vh - var(--header-h) - var(--bottom-h));
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.split-map-panel.hidden { display: none; }
+#inlineMapDiv { width: 100%; flex: 1; z-index: 1; }
+.split-map-toggle {
+  position: fixed;
+  bottom: calc(var(--bottom-h) + 12px);
+  right: 12px;
+  background: #1a1a1a;
+  color: #fff;
+  border: none;
+  border-radius: 50px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  z-index: 500;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+@media (max-width: 700px) {
+  .split-map-panel { 
+    width: 100%;
+    position: fixed;
+    top: var(--header-h);
+    left: 0; right: 0;
+    height: 45vh;
+    border-left: none;
+    border-bottom: 2px solid var(--border);
+    z-index: 100;
+    background: #fff;
+  }
+  .split-map-panel.hidden { display: none; }
+  .split-layout.map-open .split-list {
+    margin-top: 45vh;
+  }
+}
+@media (min-width: 701px) {
+  .split-map-toggle { display: none; }
+  .split-map-panel { display: flex !important; }
+}
 
 /* ── STOP LIST (main view) ───────────────────────────────────────── */
 .stop-list-view { padding: 0; }
@@ -1040,14 +1115,25 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
 
   <!-- STOP LIST -->
   <div class="panel active" id="panel-list">
-    <div class="day-note" id="dayNote"></div>
-    <div class="progress-wrap"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
-    <div class="action-bar">
-      <button onclick="optimizeRoute()">⚡ Optimize route</button>
-      <button class="blue-btn" onclick="showView('search')">+ Add location</button>
+    <div class="split-layout" id="splitLayout">
+      <div class="split-list" id="splitListCol">
+        <div class="day-note" id="dayNote"></div>
+        <div class="progress-wrap"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+        <div class="action-bar">
+          <button onclick="optimizeRoute()">⚡ Optimize route</button>
+          <button class="blue-btn" onclick="showView('search')">+ Add location</button>
+        </div>
+        <div id="stopList"></div>
+      </div>
+      <div class="split-map-panel hidden" id="splitMapPanel">
+        <div id="inlineMapDiv"></div>
+      </div>
     </div>
-    <div id="stopList"></div>
   </div>
+  <!-- MAP TOGGLE BUTTON (mobile) -->
+  <button class="split-map-toggle" id="mapToggleBtn" onclick="toggleInlineMap()">
+    🗺 Map
+  </button>
 
   <!-- STOP DETAIL -->
   <div class="panel" id="panel-detail">
@@ -2203,6 +2289,8 @@ function showView(v) {
   document.getElementById('panel-' + v).classList.add('active');
   if (v !== currentView) document.getElementById('mainArea').scrollTop = 0;
   if (v === 'hotel') setTimeout(loadHotelUI, 50);
+  const mapBtn = document.getElementById('mapToggleBtn');
+  if (mapBtn) mapBtn.style.display = v === 'list' ? 'flex' : 'none';
   currentView = v;
   updateBottomNav();
   updateTabHighlight();
@@ -2243,6 +2331,12 @@ function updateBottomNav() {
 
 // ── DAY SWITCHING ─────────────────────────────────────────────────
 function switchDay(d) {
+  // Auto-open inline map on desktop
+  if (window.innerWidth > 700 && !_inlineMapOpen) {
+    _inlineMapOpen = true;
+    const panel = document.getElementById('splitMapPanel');
+    if (panel) panel.classList.remove('hidden');
+  }
   currentDay = d;
   currentStop = 0;
   ['dtab0','dtab1','dtab2','dtab3'].forEach((id, i) => {
@@ -2251,6 +2345,7 @@ function switchDay(d) {
   document.getElementById('dayNote').textContent = days[d].note || '';
   renderStopList();
   showView('list');
+  refreshInlineMap();
 }
 
 // ── STOP LIST ─────────────────────────────────────────────────────
@@ -2548,6 +2643,88 @@ function showConfirm(msg, onYes) {
   document.getElementById('confirm-yes').onclick = () => { overlay.remove(); onYes(); };
   overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
 }
+
+// ── INLINE LIST MAP ───────────────────────────────────────────────
+let _inlineMap = null;
+let _inlineMapDay = -1;
+let _inlineMapOpen = false;
+
+function toggleInlineMap() {
+  _inlineMapOpen = !_inlineMapOpen;
+  const panel = document.getElementById('splitMapPanel');
+  const layout = document.getElementById('splitLayout');
+  const btn = document.getElementById('mapToggleBtn');
+  if (_inlineMapOpen) {
+    panel.classList.remove('hidden');
+    layout.classList.add('map-open');
+    btn.textContent = '✕ Hide Map';
+    buildInlineMap();
+  } else {
+    panel.classList.add('hidden');
+    layout.classList.remove('map-open');
+    btn.textContent = '🗺 Map';
+  }
+}
+
+function buildInlineMap() {
+  const stops = days[currentDay].stops;
+  if (!stops || !stops.length) return;
+  const container = document.getElementById('inlineMapDiv');
+  if (!container) return;
+
+  // Destroy old map
+  if (_inlineMap) { _inlineMap.remove(); _inlineMap = null; }
+  _inlineMapDay = currentDay;
+
+  const dayColors = ['#1a73e8','#e65100','#1a7a3a','#7b1fa2'];
+  const color = dayColors[currentDay] || '#1a73e8';
+  const coords = stops.map(s => [s.lat, s.lng]);
+  const hd = window.HOTEL_DATA;
+
+  // Build map
+  const cLat = stops.reduce((a,s) => a+s.lat, 0) / stops.length;
+  const cLng = stops.reduce((a,s) => a+s.lng, 0) / stops.length;
+  const map = L.map(container, { zoomControl: true, attributionControl: false }).setView([cLat, cLng], 13);
+  _inlineMap = map;
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+
+  // Route line including hotel
+  const routeCoords = hd ? [[hd.lat, hd.lng], ...coords, [hd.lat, hd.lng]] : coords;
+  L.polyline(routeCoords, { color, weight: 4, opacity: 0.85, dashArray: '10,6' }).addTo(map);
+
+  // Hotel pin
+  if (hd) {
+    const hi = L.divIcon({ className:'', html:'<div style="background:#444;color:#fff;width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:15px;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.3);">🏨</div>', iconSize:[28,28], iconAnchor:[14,14] });
+    L.marker([hd.lat, hd.lng], { icon: hi }).addTo(map).bindPopup('<b>🏨 ' + hd.name + '</b>');
+  }
+
+  // Stop pins
+  stops.forEach((s, i) => {
+    const pinColor = s.reservation && s.reservation.confirmed ? '#28a745' : s.color;
+    const sz = 26;
+    const icon = L.divIcon({ className:'', html:'<div style="background:'+pinColor+';color:#fff;width:'+sz+'px;height:'+sz+'px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.3);">'+(i+1)+'</div>', iconSize:[sz,sz], iconAnchor:[sz/2,sz/2], popupAnchor:[0,-sz/2] });
+    const resInfo = s.reservation ? '<br><span style="color:#28a745;font-size:11px;font-weight:700;">✓ ' + (s.reservation.confirmed ? 'Confirmed' : 'Reserved') + '</span>' : '';
+    const popup = '<b style="font-size:13px;">' + s.name + '</b><br><span style="color:#666;font-size:12px;">' + s.time + ' · ' + s.duration + '</span>' + resInfo;
+    L.marker([s.lat, s.lng], { icon }).addTo(map)
+      .bindPopup(popup)
+      .on('click', () => selectStop(i));
+  });
+
+  // Fit all points
+  const allCoords = hd ? [[hd.lat, hd.lng], ...coords] : coords;
+  setTimeout(() => {
+    map.invalidateSize();
+    map.fitBounds(L.latLngBounds(allCoords), { padding: [30, 30] });
+  }, 100);
+}
+
+function refreshInlineMap() {
+  if (_inlineMapOpen && (_inlineMapDay !== currentDay || !_inlineMap)) {
+    buildInlineMap();
+  }
+}
+
 
 // ── ROUTE MAP (per day) ───────────────────────────────────────────
 function showRouteMap() {
