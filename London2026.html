@@ -463,6 +463,18 @@ const days = [
     note: "Best on a weekday (Temple Church is Mon–Fri only)",
     stops: [
       {
+        time: "8:30 AM", name: "The Wolseley", type: "Grand café · St James's",
+        color: "#b5910a", prebook: true, free: false, weekend: false,
+        lat: 51.5072, lng: -0.1416, address: "160 Piccadilly, London W1J 9EB",
+        badges: ["food","prebook"],
+        travel: "🚶 2-min walk from Piccadilly Circus or Green Park Tube. On Piccadilly itself, opposite the Ritz.",
+        history: `<strong>The Wolseley</strong> opened in 2003 in one of London's most extraordinary rooms — a vast 1920s palace built for the <strong>Wolseley Motor Company</strong> as their flagship showroom, designed by William Curtis Green in the style of a Florentine palazzo. The soaring arched ceiling, black-and-white marble floors, and gilded ironwork were designed to impress car buyers in the age of motoring glamour. When the car company failed in 1926, the building became a Barclays Bank branch for decades.\n\nRestaurateurs <strong>Chris Corbin and Jeremy King</strong> transformed it into a grand European café in 2003, modelled on the great Viennese and Parisian cafés — Café Central, Lipp, and the Deux Magots. It rapidly became the social and cultural centre of London, where politicians, authors, artists, and celebrities come for breakfast, and has remained so ever since. It is arguably London's finest all-day café.`,
+        todo: `<p><span class="tip-icon">🥐</span><strong>Order for breakfast:</strong> The Wolseley Full Breakfast or the Eggs Benedict with smoked salmon. The pastry basket is outstanding. Sit in the main room, not the booths, to absorb the full grandeur of the space. Book at least 2 weeks ahead for weekday breakfast — it fills completely. The atmosphere at 8:30am, with the room buzzing and the coffee service immaculate, is one of London's great experiences.</p>`,
+        duration: "60 min",
+        prebookText: "Book online — fills 2+ weeks ahead",
+        prebookUrl: "https://www.thewolseley.com/"
+      },
+      {
         time: "9:00 AM", name: "Daunt Books + Coffee", type: "Coffee & browse",
         color: "#1a7a3a", prebook: false, free: true, weekend: false,
         lat: 51.5204, lng: -0.152, address: "84 Marylebone High St, London W1U 4QW",
@@ -920,12 +932,87 @@ function getSaveData() {
   return JSON.stringify({ days: days, completed: completed, savedAt: new Date().toISOString() });
 }
 
-function saveToStorage() {
+// ── REAL-TIME SYNC (Firebase free REST, no auth) ─────────────────
+// ── REAL-TIME SYNC (jsonblob.com — free, no auth, CORS-open) ─────
+// Blob ID is stored in localStorage so all devices sharing the same
+// blob ID stay in sync. First device creates the blob; share the URL.
+const BLOB_BASE = 'https://jsonblob.com/api/jsonBlob';
+
+async function getSyncBlobId() {
+  let id = localStorage.getItem('sync_blob_id');
+  if (id) return id;
+  // Create a new blob
   try {
-    localStorage.setItem('london_tour_v2', getSaveData());
-    showToast('Saved to device ✓');
-  } catch(e) { showToast('Storage unavailable — use Export instead', true); }
+    const res = await fetch(BLOB_BASE, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: getSaveData()
+    });
+    if (res.ok) {
+      const loc = res.headers.get('Location') || '';
+      id = loc.split('/').pop();
+      if (id) { localStorage.setItem('sync_blob_id', id); return id; }
+    }
+  } catch(e) {}
+  return null;
 }
+
+async function syncSave() {
+  const payload = getSaveData();
+  try { localStorage.setItem('london_tour_v2', payload); } catch(e) {}
+  try {
+    const id = await getSyncBlobId();
+    if (!id) { showToast('Saved locally ✓'); return; }
+    const res = await fetch(BLOB_BASE + '/' + id, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: payload
+    });
+    if (res.ok) { showToast('Saved & synced ✓'); window._lastSyncTime = Date.now(); return; }
+  } catch(e) {}
+  showToast('Saved locally ✓');
+}
+
+async function syncLoad() {
+  const id = localStorage.getItem('sync_blob_id');
+  if (!id) return false;
+  try {
+    const res = await fetch(BLOB_BASE + '/' + id, { headers: { 'Accept': 'application/json' } });
+    if (!res.ok) return false;
+    const data = await res.json();
+    if (data && data.days && data.days.length === 3) {
+      data.days.forEach((d, i) => { days[i].stops = d.stops; days[i].title = d.title || days[i].title; });
+      completed = data.completed || [];
+      return true;
+    }
+  } catch(e) {}
+  return false;
+}
+
+function startSyncPolling() {
+  setInterval(async () => {
+    if (window._lastSyncTime && Date.now() - window._lastSyncTime < 20000) return;
+    const id = localStorage.getItem('sync_blob_id');
+    if (!id) return;
+    try {
+      const res = await fetch(BLOB_BASE + '/' + id, { headers: { 'Accept': 'application/json' } });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data && data.days && data.days.length === 3) {
+        const remote = JSON.stringify(data.days.map(d => d.stops.map(s => s.name)));
+        const local  = JSON.stringify(days.map(d => d.stops.map(s => s.name)));
+        if (remote !== local) {
+          data.days.forEach((d, i) => { days[i].stops = d.stops; });
+          completed = data.completed || [];
+          switchDay(currentDay);
+          showToast('✨ Updated from another device');
+        }
+      }
+    } catch(e) {}
+  }, 12000);
+}
+
+function saveToStorage() { syncSave(); }
 
 function tryLoadSaved() {
   try {
@@ -1128,11 +1215,17 @@ Find 3 real, specific London places that match this search. For each place retur
 Only include real places. Use accurate coordinates. Return raw JSON only.`;
 
   try {
+    const apiKey = getApiKey(); if (!apiKey) { btn.textContent = 'Search with AI →'; btn.disabled = false; return; }
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-6',
         max_tokens: 2000,
         messages: [{ role: 'user', content: prompt }]
       })
@@ -1203,23 +1296,26 @@ function addFromSearch(i) {
 }
 
 // ── INIT ──────────────────────────────────────────────────────────
-function init() {
+async function init() {
   updateHeaderHeight();
-  // Load saved data if available
-  const saved = tryLoadSaved();
-  if (!saved) {
-    prepareBreakfasts();
-    // Auto-optimize each day's route on first load
-    [0,1,2].forEach(di => {
-      const tmp = currentDay;
-      currentDay = di;
-      optimizeRouteForDay(di);
-      currentDay = tmp;
-    });
+  // Try cloud sync first, then local storage
+  const cloudLoaded = await syncLoad();
+  if (!cloudLoaded) {
+    const saved = tryLoadSaved();
+    if (!saved) {
+      prepareBreakfasts();
+      [0,1,2].forEach(di => {
+        const tmp = currentDay;
+        currentDay = di;
+        optimizeRouteForDay(di);
+        currentDay = tmp;
+      });
+    }
   }
   switchDay(0);
   renderPrebook();
   window.addEventListener('resize', updateHeaderHeight);
+  startSyncPolling(); // live updates from other devices
 }
 
 function updateHeaderHeight() {
@@ -1653,7 +1749,8 @@ async function generateLocation() {
   btn.textContent = 'Generating…'; btn.disabled = true;
   const prompt = `You are a London tour guide. Write a JSON object (no markdown) for "${name}" at "${address}" (type: ${type}):\n{"history":"2-3 paragraphs in HTML with <strong> tags, \\n\\n between paragraphs","todo":"<p><span class=\\"tip-icon\\">🏛️</span><strong>What to do:</strong> 3-4 practical sentences</p>","travel":"🚶 or 🚇 practical directions from Piccadilly","type_label":"short description like Museum · Free","prebook":false,"free":true,"color":"#5c4db1"}`;
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:prompt}]})});
+    const apiKey = getApiKey(); if (!apiKey) { btn.textContent = 'Generate with AI →'; btn.disabled = false; return; }
+    const res = await fetch('https://api.anthropic.com/v1/messages', {method:'POST',headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1000,messages:[{role:'user',content:prompt}]})});
     const data = await res.json();
     const raw = (data.content?.[0]?.text||'{}').replace(/```json|```/g,'').trim();
     const info = JSON.parse(raw);
@@ -1712,6 +1809,20 @@ function showToast(msg, isError=false) {
   document.body.appendChild(t);
   setTimeout(() => t.remove(), 3000);
 }
+
+// ── API KEY MANAGEMENT ────────────────────────────────────────────
+function getApiKey() {
+  let key = sessionStorage.getItem('anthropic_key');
+  if (key) return key;
+  key = prompt('Enter your Anthropic API key to use AI features:\n(Get one at console.anthropic.com)');
+  if (!key || !key.trim().startsWith('sk-')) {
+    showToast('Valid API key required', true);
+    return null;
+  }
+  sessionStorage.setItem('anthropic_key', key.trim());
+  return key.trim();
+}
+
 
 init();
 </script>
