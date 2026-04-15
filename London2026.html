@@ -2005,74 +2005,65 @@ function addFromSearch(i) {
 
 // ── INIT ──────────────────────────────────────────────────────────
 // ── ADJUSTABLE START TIME ─────────────────────────────────────────
-function editStopTime(i) {
+function editStopTime(i) { editTimeAndDuration(i); }
+function editDuration(i)  { editTimeAndDuration(i); }
+
+function editTimeAndDuration(i) {
   const s = days[currentDay].stops[i];
+
+  // Parse start time
+  const [timePart, ampm] = s.time.split(' ');
+  const [h, m] = timePart.split(':').map(Number);
+  const h24 = h % 12 + (ampm === 'PM' ? 12 : 0);
+  const timeVal = String(h24).padStart(2,'0') + ':' + String(m||0).padStart(2,'0');
+
+  // Parse current duration into hrs + mins
+  const totalDurMins = parseDurationMins(s.duration || '60 min');
+  const durH = Math.floor(totalDurMins / 60);
+  const durM = totalDurMins % 60;
+
   const overlay = document.createElement('div');
   overlay.id = 'time-overlay';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
 
-  // Parse current time to set input default
-  const [timePart, ampm] = s.time.split(' ');
-  const [h, m] = timePart.split(':').map(Number);
-  let h24 = h % 12 + (ampm === 'PM' ? 12 : 0);
-  const timeVal = String(h24).padStart(2,'0') + ':' + String(m||0).padStart(2,'0');
-
   overlay.innerHTML = `
     <div style="background:#fff;border-radius:16px;padding:24px;max-width:320px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.3);">
-      <p style="font-size:15px;font-weight:700;color:#1a1a1a;margin-bottom:6px;">${s.name}</p>
-      <p style="font-size:12px;color:#888;margin-bottom:16px;">Set start time — later stops will shift accordingly</p>
+      <p style="font-size:15px;font-weight:700;color:#1a1a1a;margin-bottom:4px;">${s.name}</p>
+      <p style="font-size:12px;color:#888;margin-bottom:16px;">Changes cascade to all following stops</p>
+
+      <p style="font-size:11px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Start time</p>
       <input type="time" id="timeInput" value="${timeVal}"
-        style="width:100%;padding:14px;border:1px solid #ddd;border-radius:10px;font-size:20px;font-weight:700;text-align:center;margin-bottom:12px;box-sizing:border-box;">
+        style="width:100%;padding:12px;border:1px solid #ddd;border-radius:10px;font-size:22px;font-weight:700;text-align:center;margin-bottom:8px;box-sizing:border-box;">
       <button onclick="setNowTime(${i})"
-        style="width:100%;padding:11px;border-radius:10px;border:1px solid #1a73e8;background:#e8f0fd;color:#1a73e8;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:12px;">
+        style="width:100%;padding:9px;border-radius:8px;border:1px solid #1a73e8;background:#e8f0fd;color:#1a73e8;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:16px;">
         📍 Use current time
       </button>
+
+      <p style="font-size:11px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Duration</p>
+      <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;margin-bottom:16px;">
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <label style="font-size:11px;color:#888;text-align:center;">Hours</label>
+          <input type="number" id="durHrs" value="${durH}" min="0" max="12" step="1"
+            style="padding:12px;border:1px solid #ddd;border-radius:10px;font-size:22px;font-weight:700;text-align:center;width:100%;box-sizing:border-box;">
+        </div>
+        <span style="font-size:22px;font-weight:700;color:#ccc;padding-top:18px;">:</span>
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <label style="font-size:11px;color:#888;text-align:center;">Minutes</label>
+          <input type="number" id="durMins" value="${durM}" min="0" max="55" step="5"
+            style="padding:12px;border:1px solid #ddd;border-radius:10px;font-size:22px;font-weight:700;text-align:center;width:100%;box-sizing:border-box;">
+        </div>
+      </div>
+
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
         <button onclick="document.getElementById('time-overlay').remove()"
-          style="padding:12px;border-radius:10px;border:1px solid #ddd;background:#fff;font-size:14px;font-weight:700;cursor:pointer;color:#666;">
-          Cancel
-        </button>
+          style="padding:12px;border-radius:10px;border:1px solid #ddd;background:#fff;font-size:14px;font-weight:700;cursor:pointer;color:#666;">Cancel</button>
         <button onclick="applyStopTime(${i})"
-          style="padding:12px;border-radius:10px;border:none;background:#1a1a1a;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">
-          Set time
-        </button>
+          style="padding:12px;border-radius:10px;border:none;background:#1a1a1a;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">Apply</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
   overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
   setTimeout(() => document.getElementById('timeInput')?.focus(), 100);
-}
-
-function editDuration(i) {
-  const s = days[currentDay].stops[i];
-  const overlay = document.createElement('div');
-  overlay.id = 'dur-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
-
-  const presets = ['15 min','20 min','30 min','45 min','60 min','75 min','90 min','2 hours','2.5 hours','3 hours'];
-
-  overlay.innerHTML = `
-    <div style="background:#fff;border-radius:16px;padding:24px;max-width:320px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.3);">
-      <p style="font-size:15px;font-weight:700;color:#1a1a1a;margin-bottom:6px;">${s.name}</p>
-      <p style="font-size:12px;color:#888;margin-bottom:14px;">Set duration — following stops will shift accordingly</p>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px;">
-        ${presets.map(p => `<button onclick="applyDuration(${i},'${p}')"
-          style="padding:10px 4px;border-radius:8px;border:1px solid ${s.duration===p?'#1a1a1a':'#ddd'};background:${s.duration===p?'#1a1a1a':'#fff'};color:${s.duration===p?'#fff':'#333'};font-size:12px;font-weight:600;cursor:pointer;">${p}</button>`).join('')}
-      </div>
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
-        <input type="number" id="durMins" placeholder="mins" min="5" max="360" step="5"
-          style="flex:1;padding:12px;border:1px solid #ddd;border-radius:10px;font-size:16px;font-weight:700;text-align:center;">
-        <span style="color:#888;font-size:13px;">min custom</span>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-        <button onclick="document.getElementById('dur-overlay').remove()"
-          style="padding:12px;border-radius:10px;border:1px solid #ddd;background:#fff;font-size:14px;font-weight:700;cursor:pointer;color:#666;">Cancel</button>
-        <button onclick="applyDurationMins(${i})"
-          style="padding:12px;border-radius:10px;border:none;background:#1a1a1a;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">Set</button>
-      </div>
-    </div>`;
-  document.body.appendChild(overlay);
-  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
 }
 
 function applyDuration(i, durStr) {
@@ -2130,10 +2121,20 @@ function applyStopTime(i) {
   const h12 = h24 % 12 || 12;
   const timeStr = h12 + ':' + String(min).padStart(2,'0') + ' ' + ampm;
 
-  // Set this stop's time, then cascade subsequent stops by duration
+  // Save duration from hr:min inputs
+  const dHrs = parseInt(document.getElementById('durHrs')?.value || '0') || 0;
+  const dMins = parseInt(document.getElementById('durMins')?.value || '0') || 0;
+  const totalDurMins = dHrs * 60 + dMins;
+  if (totalDurMins > 0) {
+    const durStr = dHrs > 0 && dMins > 0 ? dHrs + 'h ' + dMins + 'min'
+                 : dHrs > 0 ? dHrs + (dHrs === 1 ? ' hour' : ' hours')
+                 : dMins + ' min';
+    days[currentDay].stops[i].duration = durStr;
+  }
+
+  // Cascade times from this stop
   const stops = days[currentDay].stops;
   let totalMin = h24 * 60 + min;
-
   for (let j = i; j < stops.length; j++) {
     const hh = Math.floor(totalMin / 60) % 24;
     const mm = totalMin % 60;
@@ -2146,7 +2147,7 @@ function applyStopTime(i) {
   document.getElementById('time-overlay').remove();
   renderStopList();
   if (currentView === 'detail') renderDetail();
-  showToast('Times updated from ' + timeStr);
+  showToast('Updated ✓');
 }
 
 function parseDurationMins(dur) {
