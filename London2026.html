@@ -2072,6 +2072,113 @@ function addFromSearch(i) {
 }
 
 // ── INIT ──────────────────────────────────────────────────────────
+// ── ADJUSTABLE START TIME ─────────────────────────────────────────
+function editStopTime(i) {
+  const s = days[currentDay].stops[i];
+  const overlay = document.createElement('div');
+  overlay.id = 'time-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+
+  // Parse current time to set input default
+  const [timePart, ampm] = s.time.split(' ');
+  const [h, m] = timePart.split(':').map(Number);
+  let h24 = h % 12 + (ampm === 'PM' ? 12 : 0);
+  const timeVal = String(h24).padStart(2,'0') + ':' + String(m||0).padStart(2,'0');
+
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:16px;padding:24px;max-width:320px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.3);">
+      <p style="font-size:15px;font-weight:700;color:#1a1a1a;margin-bottom:6px;">${s.name}</p>
+      <p style="font-size:12px;color:#888;margin-bottom:16px;">Set start time — later stops will shift accordingly</p>
+      <input type="time" id="timeInput" value="${timeVal}"
+        style="width:100%;padding:14px;border:1px solid #ddd;border-radius:10px;font-size:20px;font-weight:700;text-align:center;margin-bottom:12px;box-sizing:border-box;">
+      <button onclick="setNowTime(${i})"
+        style="width:100%;padding:11px;border-radius:10px;border:1px solid #1a73e8;background:#e8f0fd;color:#1a73e8;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:12px;">
+        📍 Use current time
+      </button>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <button onclick="document.getElementById('time-overlay').remove()"
+          style="padding:12px;border-radius:10px;border:1px solid #ddd;background:#fff;font-size:14px;font-weight:700;cursor:pointer;color:#666;">
+          Cancel
+        </button>
+        <button onclick="applyStopTime(${i})"
+          style="padding:12px;border-radius:10px;border:none;background:#1a1a1a;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">
+          Set time
+        </button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  setTimeout(() => document.getElementById('timeInput')?.focus(), 100);
+}
+
+function setNowTime(i) {
+  const now = new Date();
+  const h = String(now.getHours()).padStart(2,'0');
+  const m = String(now.getMinutes()).padStart(2,'0');
+  document.getElementById('timeInput').value = h + ':' + m;
+}
+
+function applyStopTime(i) {
+  const val = document.getElementById('timeInput').value;
+  if (!val) return;
+  const [h24, min] = val.split(':').map(Number);
+  const ampm = h24 >= 12 ? 'PM' : 'AM';
+  const h12 = h24 % 12 || 12;
+  const timeStr = h12 + ':' + String(min).padStart(2,'0') + ' ' + ampm;
+
+  // Set this stop's time, then cascade subsequent stops by duration
+  const stops = days[currentDay].stops;
+  let totalMin = h24 * 60 + min;
+
+  for (let j = i; j < stops.length; j++) {
+    const hh = Math.floor(totalMin / 60) % 24;
+    const mm = totalMin % 60;
+    const ap = hh >= 12 ? 'PM' : 'AM';
+    const h = hh % 12 || 12;
+    stops[j].time = h + ':' + String(mm).padStart(2,'0') + ' ' + ap;
+
+    // Advance by this stop's duration
+    const dur = stops[j].duration || '60 min';
+    const mins = parseDurationMins(dur);
+    totalMin += mins;
+  }
+
+  document.getElementById('time-overlay').remove();
+  renderStopList();
+  if (currentView === 'detail') renderDetail();
+  showToast('Times updated from ' + timeStr);
+}
+
+function parseDurationMins(dur) {
+  const h = dur.match(/(\d+)\s*hour/i);
+  const m = dur.match(/(\d+)\s*min/i);
+  return (h ? parseInt(h[1]) * 60 : 0) + (m ? parseInt(m[1]) : 0) || 60;
+}
+
+// ── MOVE STOP BETWEEN DAYS ────────────────────────────────────────
+function moveStopToDay(targetDay) {
+  if (targetDay === currentDay) return;
+  const stop = days[currentDay].stops.splice(currentStop, 1)[0];
+  days[targetDay].stops.push(stop);
+  reassignTimesForDay(currentDay);
+  reassignTimesForDay(targetDay);
+  currentStop = Math.min(currentStop, days[currentDay].stops.length - 1);
+  renderStopList();
+  showView('list');
+  showToast('"' + stop.name + '" moved to ' + days[targetDay].title.split('—')[0].trim());
+}
+
+function moveStopFromMapToDay(stopIdx, targetDay) {
+  if (targetDay === currentDay) return;
+  const stop = days[currentDay].stops.splice(stopIdx, 1)[0];
+  days[targetDay].stops.push(stop);
+  reassignTimesForDay(currentDay);
+  reassignTimesForDay(targetDay);
+  renderRouteMap();
+  showToast('"' + stop.name + '" moved to ' + days[targetDay].title.split('—')[0].trim());
+}
+
+
 async function init() {
   updateHeaderHeight();
   // Try cloud sync first, then local storage
@@ -2183,7 +2290,7 @@ function renderStopList() {
       <span class="drag-h" onclick="event.stopPropagation()">⠿</span>
       <div class="stop-dot" style="background:${s.color}"></div>
       <div class="stop-meta">
-        <div class="stop-time-label">${s.time} · ${s.duration}</div>
+        <div class="stop-time-label" onclick="event.stopPropagation(); editStopTime(${i});" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;" title="Tap to edit time">⏱ ${s.time} · ${s.duration}</div>
         <div class="stop-name-label">${s.name}</div>
         <div class="stop-type-label">${s.type}</div>
         <div class="stop-tags">
@@ -2220,7 +2327,7 @@ function renderDetail() {
   document.getElementById('detailContent').innerHTML = `
     <div class="detail-hero">
       <div class="detail-badge" style="border-left:3px solid ${s.color};padding-left:10px;">
-        ${s.time} &nbsp;·&nbsp; ${s.duration} &nbsp;·&nbsp; Day ${currentDay+1}
+        <span onclick="editStopTime(currentStop)" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;" title="Tap to change start time">⏱ ${s.time}</span> &nbsp;·&nbsp; ${s.duration} &nbsp;·&nbsp; ${days[currentDay].title.split('—')[0].trim()}
       </div>
       <div class="detail-title">${s.name}</div>
       <div class="detail-subtitle">${s.type}</div>
@@ -2258,6 +2365,13 @@ function renderDetail() {
       <div class="tip-box">${s.todo || ''}</div>
     </div>
 
+    <div style="padding:0 16px 4px;display:flex;gap:8px;">
+      <select id="moveDaySelect" onchange="moveStopToDay(parseInt(this.value))"
+        style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--surface);font-size:13px;font-weight:600;cursor:pointer;color:var(--muted);">
+        <option value="${currentDay}" disabled selected>Move to another day…</option>
+        ${days.map((d,di) => di !== currentDay ? `<option value="${di}">${d.title.split('—')[0].trim()}</option>` : '').join('')}
+      </select>
+    </div>
     <div class="detail-nav">
       <button class="dnak-btn remove-btn" onclick="removeStop()" title="Remove stop">🗑</button>
       <button class="dnak-btn dnav-back" onclick="showView('list')" style="flex:1;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--surface);font-size:13px;font-weight:700;cursor:pointer;color:var(--muted);">← List</button>
@@ -2413,6 +2527,11 @@ function renderRouteMap() {
       </div>
       <div class="mini-num" style="background:${s.color}">${i+1}</div>
       <div class="mini-info" style="flex:1;">
+        <select onchange="event.stopPropagation(); moveStopFromMapToDay(${i}, parseInt(this.value)); this.value='${currentDay}'"
+          style="font-size:10px;color:#888;border:none;background:transparent;cursor:pointer;padding:0;margin-bottom:2px;width:100%;">
+          <option value="${currentDay}" disabled selected>↔ Move to…</option>
+          ${days.map((d,di) => di !== currentDay ? `<option value="${di}">${d.title.split('—')[0].trim()}</option>` : '').join('')}
+        </select>
         <div class="mini-time-s">${s.time} &middot; ${s.duration}</div>
         <div class="mini-name-s">${s.name}</div>
       </div>
