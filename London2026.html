@@ -2043,6 +2043,78 @@ function editStopTime(i) {
   setTimeout(() => document.getElementById('timeInput')?.focus(), 100);
 }
 
+function editDuration(i) {
+  const s = days[currentDay].stops[i];
+  const overlay = document.createElement('div');
+  overlay.id = 'dur-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+
+  const presets = ['15 min','20 min','30 min','45 min','60 min','75 min','90 min','2 hours','2.5 hours','3 hours'];
+
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:16px;padding:24px;max-width:320px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.3);">
+      <p style="font-size:15px;font-weight:700;color:#1a1a1a;margin-bottom:6px;">${s.name}</p>
+      <p style="font-size:12px;color:#888;margin-bottom:14px;">Set duration — following stops will shift accordingly</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px;">
+        ${presets.map(p => `<button onclick="applyDuration(${i},'${p}')"
+          style="padding:10px 4px;border-radius:8px;border:1px solid ${s.duration===p?'#1a1a1a':'#ddd'};background:${s.duration===p?'#1a1a1a':'#fff'};color:${s.duration===p?'#fff':'#333'};font-size:12px;font-weight:600;cursor:pointer;">${p}</button>`).join('')}
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
+        <input type="number" id="durMins" placeholder="mins" min="5" max="360" step="5"
+          style="flex:1;padding:12px;border:1px solid #ddd;border-radius:10px;font-size:16px;font-weight:700;text-align:center;">
+        <span style="color:#888;font-size:13px;">min custom</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <button onclick="document.getElementById('dur-overlay').remove()"
+          style="padding:12px;border-radius:10px;border:1px solid #ddd;background:#fff;font-size:14px;font-weight:700;cursor:pointer;color:#666;">Cancel</button>
+        <button onclick="applyDurationMins(${i})"
+          style="padding:12px;border-radius:10px;border:none;background:#1a1a1a;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">Set</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+}
+
+function applyDuration(i, durStr) {
+  days[currentDay].stops[i].duration = durStr;
+  // Cascade times from this stop onward
+  cascadeTimesFrom(i);
+  document.getElementById('dur-overlay').remove();
+  renderStopList();
+  if (currentView === 'detail') renderDetail();
+  showToast('Duration set to ' + durStr);
+}
+
+function applyDurationMins(i) {
+  const mins = parseInt(document.getElementById('durMins').value);
+  if (!mins || mins < 1) return;
+  const durStr = mins >= 60 ? (mins % 60 === 0 ? (mins/60) + ' hour' + (mins/60 > 1 ? 's' : '') : Math.floor(mins/60) + 'h ' + (mins%60) + 'min') : mins + ' min';
+  days[currentDay].stops[i].duration = durStr;
+  cascadeTimesFrom(i);
+  document.getElementById('dur-overlay').remove();
+  renderStopList();
+  if (currentView === 'detail') renderDetail();
+  showToast('Duration set to ' + durStr);
+}
+
+function cascadeTimesFrom(fromIdx) {
+  const stops = days[currentDay].stops;
+  if (fromIdx >= stops.length - 1) return;
+  // Parse start time of fromIdx stop
+  const [tp, ap] = stops[fromIdx].time.split(' ');
+  const [h, m] = tp.split(':').map(Number);
+  let totalMin = (h % 12 + (ap === 'PM' ? 12 : 0)) * 60 + (m || 0);
+  totalMin += parseDurationMins(stops[fromIdx].duration || '60 min');
+  for (let j = fromIdx + 1; j < stops.length; j++) {
+    const hh = Math.floor(totalMin / 60) % 24;
+    const mm = totalMin % 60;
+    const apm = hh >= 12 ? 'PM' : 'AM';
+    const h12 = hh % 12 || 12;
+    stops[j].time = h12 + ':' + String(mm).padStart(2,'0') + ' ' + apm;
+    totalMin += parseDurationMins(stops[j].duration || '60 min');
+  }
+}
+
 function setNowTime(i) {
   const now = new Date();
   const h = String(now.getHours()).padStart(2,'0');
@@ -2066,13 +2138,9 @@ function applyStopTime(i) {
     const hh = Math.floor(totalMin / 60) % 24;
     const mm = totalMin % 60;
     const ap = hh >= 12 ? 'PM' : 'AM';
-    const h = hh % 12 || 12;
-    stops[j].time = h + ':' + String(mm).padStart(2,'0') + ' ' + ap;
-
-    // Advance by this stop's duration
-    const dur = stops[j].duration || '60 min';
-    const mins = parseDurationMins(dur);
-    totalMin += mins;
+    const h12 = hh % 12 || 12;
+    stops[j].time = h12 + ':' + String(mm).padStart(2,'0') + ' ' + ap;
+    totalMin += parseDurationMins(stops[j].duration || '60 min');
   }
 
   document.getElementById('time-overlay').remove();
@@ -2222,7 +2290,11 @@ function renderStopList() {
       <span class="drag-h" onclick="event.stopPropagation()">⠿</span>
       <div class="stop-dot" style="background:${s.color};width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:800;flex-shrink:0;margin-top:2px;">${i+1}</div>
       <div class="stop-meta">
-        <div class="stop-time-label" onclick="event.stopPropagation(); editStopTime(${i});" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;" title="Tap to edit time">⏱ ${s.time} · ${s.duration}</div>
+        <div class="stop-time-label">
+          <span onclick="event.stopPropagation(); editStopTime(${i});" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;" title="Tap to edit start time">⏱ ${s.time}</span>
+          &nbsp;·&nbsp;
+          <span onclick="event.stopPropagation(); editDuration(${i});" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;color:var(--muted);" title="Tap to edit duration">⏳ ${s.duration}</span>
+        </div>
         <div class="stop-name-label">${s.name}</div>
         <div class="stop-type-label">${s.type}</div>
         <div class="stop-tags">
@@ -2266,7 +2338,7 @@ function renderDetail() {
   document.getElementById('detailContent').innerHTML = `
     <div class="detail-hero">
       <div class="detail-badge" style="border-left:3px solid ${s.color};padding-left:10px;">
-        <span onclick="editStopTime(currentStop)" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;" title="Tap to change start time">⏱ ${s.time}</span> &nbsp;·&nbsp; ${s.duration} &nbsp;·&nbsp; ${days[currentDay].title.split('—')[0].trim()}
+        <span onclick="editStopTime(currentStop)" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;" title="Tap to change start time">⏱ ${s.time}</span> &nbsp;·&nbsp; <span onclick="editDuration(currentStop)" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;" title="Tap to edit duration">⏳ ${s.duration}</span> &nbsp;·&nbsp; ${days[currentDay].title.split('—')[0].trim()}
       </div>
       <div class="detail-title">${s.name}</div>
       <div class="detail-subtitle">${s.type}</div>
