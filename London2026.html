@@ -1121,7 +1121,9 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
       <label class="form-label">What are you looking for?</label>
       <input class="form-input" id="searchQuery" type="text"
         placeholder="e.g. rooftop bar near the City, hidden Victorian pub, healthy lunch Mayfair…"
+        oninput="searchExisting(this.value)"
         onkeydown="if(event.key==='Enter') aiSearch();">
+      <div id="existingResults" style="margin-bottom:8px;"></div>
       <label class="form-label">Add result to day</label>
       <select class="form-input" id="searchDay">
         <option value="0">May 7 — Arrival & City</option>
@@ -1148,11 +1150,33 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
 </div>
 
 <script>
+// ── HOTEL (fixed anchor for each day) ────────────────────────────
+const HOTEL = {
+  name: 'Hotel · Piccadilly',
+  type: 'Your base · Piccadilly area',
+  color: '#444444',
+  lat: 51.5072, lng: -0.1416,
+  address: 'Piccadilly, London W1',
+  badges: [],
+  travel: '🏨 Your hotel base in the Piccadilly area.',
+  history: 'Your hotel in central London.',
+  todo: '<p>Return to the hotel to freshen up or drop bags.</p>',
+  duration: '30 min',
+  isHotel: true,
+  fixed: true
+};
+
+function hotelStop(time, label) {
+  return Object.assign({}, HOTEL, { time: time, name: label || 'Hotel · Piccadilly' });
+}
+
+
 const days = [
   {
     title: "May 7 — Arrival · Royal & River",
     note: "Arriving 9:35 · check in · afternoon start · light day",
     stops: [
+      Object.assign({}, HOTEL, {time:"12:00 PM", name:"Hotel Check-In", duration:"60 min"}),
       {
         time: "1:00 PM", name: "Check In & Freshen Up",
         type: "Hotel · Piccadilly area",
@@ -1999,6 +2023,34 @@ function addFromSearch(i) {
 }
 
 // ── INIT ──────────────────────────────────────────────────────────
+// ── SEARCH EXISTING STOPS ─────────────────────────────────────────
+function searchExisting(q) {
+  const el = document.getElementById('existingResults');
+  if (!el) return;
+  if (!q || q.length < 2) { el.innerHTML = ''; return; }
+  const lq = q.toLowerCase();
+  const matches = [];
+  days.forEach((d, di) => {
+    d.stops.forEach((s, si) => {
+      if ((s.name + ' ' + s.type + ' ' + (s.address||'')).toLowerCase().includes(lq)) {
+        matches.push({s, di, si, dayTitle: d.title.split('—')[0].trim()});
+      }
+    });
+  });
+  if (!matches.length) { el.innerHTML = ''; return; }
+  el.innerHTML = '<div style="font-size:11px;font-weight:700;color:#1a73e8;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Already in your itinerary:</div>' +
+    matches.map(m => `
+      <div onclick="switchDay(${m.di});selectStop(${m.si});"
+        style="background:#e8f0fd;border:1px solid #c5d8fa;border-radius:8px;padding:10px 12px;margin-bottom:6px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:#1a1a1a;">${m.s.name}</div>
+          <div style="font-size:11px;color:#666;">${m.dayTitle} · ${m.s.time}</div>
+        </div>
+        <span style="color:#1a73e8;font-size:18px;">›</span>
+      </div>`).join('');
+}
+
+
 // ── RESERVATIONS ──────────────────────────────────────────────────
 function editReservation(i) {
   const s = days[currentDay].stops[i];
@@ -2201,18 +2253,27 @@ function applyDurationMins(i) {
 function cascadeTimesFrom(fromIdx) {
   const stops = days[currentDay].stops;
   if (fromIdx >= stops.length - 1) return;
-  // Parse start time of fromIdx stop
   const [tp, ap] = stops[fromIdx].time.split(' ');
   const [h, m] = tp.split(':').map(Number);
   let totalMin = (h % 12 + (ap === 'PM' ? 12 : 0)) * 60 + (m || 0);
   totalMin += parseDurationMins(stops[fromIdx].duration || '60 min');
   for (let j = fromIdx + 1; j < stops.length; j++) {
+    const s = stops[j];
+    // Skip fixed/reserved stops — they don't move
+    if (s.fixed || (s.reservation && s.reservation.time)) {
+      // Sync totalMin to this stop's actual time to continue cascade after it
+      const [stp, sap] = s.time.split(' ');
+      const [sh, sm] = stp.split(':').map(Number);
+      totalMin = (sh % 12 + (sap === 'PM' ? 12 : 0)) * 60 + (sm || 0);
+      totalMin += parseDurationMins(s.duration || '60 min');
+      continue;
+    }
     const hh = Math.floor(totalMin / 60) % 24;
     const mm = totalMin % 60;
     const apm = hh >= 12 ? 'PM' : 'AM';
     const h12 = hh % 12 || 12;
-    stops[j].time = h12 + ':' + String(mm).padStart(2,'0') + ' ' + apm;
-    totalMin += parseDurationMins(stops[j].duration || '60 min');
+    s.time = h12 + ':' + String(mm).padStart(2,'0') + ' ' + apm;
+    totalMin += parseDurationMins(s.duration || '60 min');
   }
 }
 
@@ -2271,16 +2332,22 @@ function parseDurationMins(dur) {
 // ── MOVE STOP BETWEEN DAYS ────────────────────────────────────────
 function moveStopToDay(targetDay, stopIdx) {
   if (targetDay === undefined || targetDay === '' || targetDay === currentDay) return;
-  // Use explicitly passed index — never rely on currentStop
   const idx = parseInt(stopIdx);
   if (isNaN(idx) || idx < 0 || idx >= days[currentDay].stops.length) return;
-  const stop = days[currentDay].stops.splice(idx, 1)[0];
-  days[targetDay].stops.push(stop);
-  currentStop = Math.min(currentStop, days[currentDay].stops.length - 1);
-  autoSave();
-  renderStopList();
-  showView('list');
-  showToast('"' + stop.name + '" → ' + days[targetDay].title.split('—')[0].trim() + ' ✓');
+  const stop = days[currentDay].stops[idx];
+  if (stop.isHotel) { showToast('Cannot move hotel stop', true); return; }
+  const doMove = () => {
+    days[currentDay].stops.splice(idx, 1);
+    days[targetDay].stops.push(stop);
+    currentStop = Math.min(currentStop, days[currentDay].stops.length - 1);
+    autoSave(); renderStopList(); showView('list');
+    showToast('"' + stop.name + '" moved to ' + days[targetDay].title.split('—')[0].trim());
+  };
+  if (stop.fixed || stop.reservation) {
+    showConfirm('⚠️ "' + stop.name + '" has a reservation. Move anyway?', doMove);
+  } else {
+    doMove();
+  }
 }
 
 function moveStopFromMapToDay(stopIdx, targetDay) {
@@ -2375,7 +2442,21 @@ function switchDay(d) {
 
 // ── STOP LIST ─────────────────────────────────────────────────────
 function renderStopList() {
-  const stops = days[currentDay].stops;
+  // Ensure hotel anchors exist as first/last stops
+  const dayHotelStart = Object.assign({}, HOTEL, {
+    time: currentDay === 0 ? '12:00 PM' : '9:00 AM',
+    name: currentDay === 0 ? 'Hotel Check-In 🏨' : 'Hotel — Morning Start 🏨',
+    duration: currentDay === 0 ? '60 min' : '15 min'
+  });
+  const dayHotelEnd = Object.assign({}, HOTEL, {
+    time: '10:00 PM',
+    name: currentDay === 3 ? 'Hotel — Check Out 🏨' : 'Hotel — Return 🏨',
+    duration: '30 min'
+  });
+  let rawStops = days[currentDay].stops;
+  // Remove any existing hotel anchors first to avoid duplicates
+  rawStops = rawStops.filter(s => !s.isHotel);
+  const stops = [dayHotelStart, ...rawStops, dayHotelEnd];
   const total = stops.length;
   const done = stops.filter((_, i) => completed.includes(currentDay+'-'+i)).length;
   document.getElementById('progressFill').style.width = (done/total*100) + '%';
@@ -2419,10 +2500,11 @@ function renderStopList() {
           </select>
         </div>
       </div>
+      ${s.isHotel ? '<span style="font-size:16px;padding:4px 8px;color:#aaa;" title="Hotel anchor">🏨</span>' : `
       <button onclick="event.stopPropagation(); confirmDeleteStop(${i});"
         style="background:none;border:none;color:#ddd;font-size:18px;cursor:pointer;padding:4px 6px;flex-shrink:0;align-self:center;transition:color 0.15s;"
         onmouseenter="this.style.color='#c0392b'" onmouseleave="this.style.color='#ddd'"
-        ontouchstart="this.style.color='#c0392b'" title="Remove stop">🗑</button>
+        ontouchstart="this.style.color='#c0392b'" title="Remove stop">🗑</button>`}
       <span class="stop-chevron" style="flex-shrink:0;">›</span>
     </div>`).join('');
 
