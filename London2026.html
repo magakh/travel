@@ -1685,7 +1685,7 @@ function moveStop(i, dir) {
 
 // ── SAVE / LOAD ───────────────────────────────────────────────────
 function getSaveData() {
-  return JSON.stringify({ days: days, completed: completed, savedAt: new Date().toISOString() });
+  return JSON.stringify({ days: days, completed: completed, hotel: window.HOTEL_DATA || null, savedAt: new Date().toISOString() });
 }
 
 // ── REAL-TIME SYNC via GitHub API (no CDN cache) ─────────────────
@@ -1754,6 +1754,7 @@ async function manualRefresh() {
     if (data && data.days && data.days.length >= 3) {
       data.days.forEach((d, i) => { if (days[i]) days[i].stops = d.stops; });
       completed = data.completed || [];
+      if (data.hotel) { window.HOTEL_DATA = data.hotel; HOTEL.name = data.hotel.name; HOTEL.address = data.hotel.address; HOTEL.lat = data.hotel.lat; HOTEL.lng = data.hotel.lng; }
       switchDay(currentDay);
       renderPrebook();
       showToast('✨ Refreshed!');
@@ -1770,6 +1771,7 @@ async function syncLoad() {
     if (data && data.days && data.days.length >= 3) {
       data.days.forEach((d, i) => { if (days[i]) days[i].stops = d.stops; });
       completed = data.completed || [];
+      if (data.hotel) { window.HOTEL_DATA = data.hotel; HOTEL.name = data.hotel.name; HOTEL.address = data.hotel.address; HOTEL.lat = data.hotel.lat; HOTEL.lng = data.hotel.lng; }
       return true;
     }
   } catch(e) {}
@@ -1785,6 +1787,8 @@ function saveToStorage() { syncSave(); }
 function autoSave() {
   // Save locally immediately on every change — push to cloud only on explicit 💾
   try { localStorage.setItem('london2026_v1', getSaveData()); } catch(e) {}
+  // Also persist hotel separately for quick init
+  if (window.HOTEL_DATA) try { localStorage.setItem('hotel_data', JSON.stringify(window.HOTEL_DATA)); } catch(e) {}
 }
 
 function tryLoadSaved() {
@@ -1795,6 +1799,7 @@ function tryLoadSaved() {
     if (data.days && Array.isArray(data.days) && data.days.length >= 3) {
       data.days.forEach((d, i) => { if (days[i] && d.stops && d.stops.length) days[i].stops = d.stops; });
       completed = data.completed || [];
+      if (data.hotel) { window.HOTEL_DATA = data.hotel; HOTEL.name = data.hotel.name; HOTEL.address = data.hotel.address; HOTEL.lat = data.hotel.lat; HOTEL.lng = data.hotel.lng; }
       return true;
     }
   } catch(e) {}
