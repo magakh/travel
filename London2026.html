@@ -2157,9 +2157,10 @@ function parseDurationMins(dur) {
 }
 
 // ── MOVE STOP BETWEEN DAYS ────────────────────────────────────────
-function moveStopToDay(targetDay) {
+function moveStopToDay(targetDay, stopIdx) {
   if (targetDay === currentDay) return;
-  const stop = days[currentDay].stops.splice(currentStop, 1)[0];
+  const idx = (stopIdx !== undefined) ? stopIdx : currentStop;
+  const stop = days[currentDay].stops.splice(idx, 1)[0];
   days[targetDay].stops.push(stop);
   reassignTimesForDay(currentDay);
   reassignTimesForDay(targetDay);
@@ -2304,7 +2305,7 @@ function renderStopList() {
           ${s.isUserAdded ? '<span class="tag-pill" style="background:#e8f0fd;color:#1565c0;">Custom</span>' : ''}
         </div>
         <div onclick="event.stopPropagation();" style="margin-top:5px;">
-          <select onchange="moveStopToDay(parseInt(this.value)); this.selectedIndex=0;"
+          <select onchange="moveStopToDay(parseInt(this.value), ${i}); this.selectedIndex=0;"
             style="font-size:11px;color:#1a73e8;border:1px solid #c5d8fa;background:#e8f0fd;border-radius:6px;padding:2px 6px;font-weight:700;cursor:pointer;max-width:160px;">
             <option value="" disabled selected>↔ Move to day…</option>
             ${days.map((d,di) => di !== currentDay ? `<option value="${di}">${d.title.split('—')[0].trim()}</option>` : '').join('')}
@@ -2382,7 +2383,7 @@ function renderDetail() {
       <button class="dnak-btn dnav-back" onclick="showView('list')" style="flex:1;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--surface);font-size:13px;font-weight:700;cursor:pointer;color:var(--muted);">← List</button>
     </div>
     <div style="padding:0 16px 16px;">
-      <select onchange="moveStopToDay(parseInt(this.value))"
+      <select onchange="moveStopToDay(parseInt(this.value), currentStop)"
         style="width:100%;padding:12px 14px;border-radius:10px;border:1px solid var(--border);background:#f5f4f0;font-size:13px;font-weight:700;cursor:pointer;color:var(--text);appearance:none;-webkit-appearance:none;">
         <option value="${currentDay}" disabled selected>↔ Move to a different day…</option>
         ${days.map((d,di) => di !== currentDay ? `<option value="${di}">${d.title.split('—')[0].trim()}</option>` : '').join('')}
