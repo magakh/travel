@@ -2843,8 +2843,10 @@ function renderRouteMap() {
   const d = days[currentDay];
   const stops = d.stops;
   const origin = stops[0].lat+','+stops[0].lng;
-  const dest = stops[stops.length-1].lat+','+stops[stops.length-1].lng;
-  const wps = stops.slice(1,-1).map(s=>s.lat+','+s.lng).join('|');
+  // Use hotel as final destination if set, otherwise last stop
+  const hd = window.HOTEL_DATA;
+  const dest = hd ? hd.lat+','+hd.lng : stops[stops.length-1].lat+','+stops[stops.length-1].lng;
+  const wps = (hd ? stops.slice(1) : stops.slice(1,-1)).map(s=>s.lat+','+s.lng).join('|');
   const gmUrl = 'https://www.google.com/maps/dir/?api=1&origin='+origin+'&destination='+dest+'&waypoints='+encodeURIComponent(wps)+'&travelmode=walking';
   const dayColors = ['#1a73e8','#e65100','#5c4db1'];
   const color = dayColors[currentDay] || '#1a73e8';
