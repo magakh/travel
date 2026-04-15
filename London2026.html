@@ -2483,10 +2483,14 @@ function renderDetail() {
           🚶 Directions
         </a>
       </div>
-      ${s.prebookText ? `
+      ${s.prebookText && !s.reservation ? `
       <div class="prebook-alert">
         <div class="prebook-alert-title">⚠️ Pre-book required</div>
         <p>${s.prebookText} — <a href="${s.prebookUrl}" target="_blank">Book here →</a></p>
+      </div>` : s.reservation ? `
+      <div style="background:#d4edda;border:1px solid #28a745;border-radius:10px;padding:12px 14px;">
+        <div style="font-size:11px;font-weight:800;color:#155724;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px;">✓ ${s.reservation.confirmed ? 'Confirmed' : 'Reserved'}</div>
+        <p style="font-size:13px;color:#155724;">${s.reservation.notes || 'Reservation added'}</p>
       </div>` : ''}
     </div>
 
@@ -2750,11 +2754,16 @@ function buildRouteMapIframe(stops, color) {
 
   stops.forEach(function(s, i) {
     var sz = i===0 ? 32 : 26;
-    var icon = L.divIcon({className:'', html:'<div style="background:'+s.color+';color:#fff;width:'+sz+'px;height:'+sz+'px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:'+(i===0?13:11)+'px;font-weight:900;border:2.5px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.35);">'+(i+1)+'</div>', iconSize:[sz,sz], iconAnchor:[sz/2,sz/2], popupAnchor:[0,-(sz/2+4)]});
-    var popup = '<div style="min-width:160px"><b style="color:'+s.color+';font-size:13px;">Stop '+(i+1)+'</b><br><b style="font-size:14px;">'+s.name+'</b><br><span style="color:#666;font-size:12px;">'+s.time+' · '+s.duration+'</span><br><span style="font-size:11px;color:#888;">'+s.address+'</span>'+(s.prebook?'<br><span style="color:#c0392b;font-size:11px;font-weight:700;">⚠ Pre-book</span>':'')+(s.free?'<br><span style="color:#1a7a3a;font-size:11px;font-weight:700;">✓ Free</span>':'')+'</div>';
+    var resInfo = s.reservation ? '<br><span style="color:#28a745;font-size:11px;font-weight:700;">✓ ' + (s.reservation.confirmed ? 'Confirmed' : 'Reserved') + (s.reservation.notes ? ' · ' + s.reservation.notes : '') + '</span>' : '';
+    var icon = L.divIcon({className:'', html:'<div style="background:'+(s.reservation&&s.reservation.confirmed?'#28a745':s.color)+';color:#fff;width:'+sz+'px;height:'+sz+'px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:'+(i===0?13:11)+'px;font-weight:900;border:2.5px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.35);">'+(i+1)+'</div>', iconSize:[sz,sz], iconAnchor:[sz/2,sz/2], popupAnchor:[0,-(sz/2+4)]});
+    var popup = '<div style="min-width:180px"><b style="color:'+s.color+';font-size:13px;">Stop '+(i+1)+'</b><br><b style="font-size:14px;">'+s.name+'</b><br><span style="color:#666;font-size:12px;">'+s.time+' · '+s.duration+'</span><br><span style="font-size:11px;color:#888;">'+s.address+'</span>'+resInfo+(s.prebook&&!s.reservation?'<br><span style="color:#c0392b;font-size:11px;font-weight:700;">⚠ Pre-book needed</span>':'')+(s.free?'<br><span style="color:#1a7a3a;font-size:11px;font-weight:700;">✓ Free</span>':'')+'</div>';
     L.marker([s.lat, s.lng], {icon:icon}).addTo(map).bindPopup(popup);
   });
-  map.fitBounds(L.latLngBounds(coords), {padding:[40,40]});
+  // Wait for map container to have dimensions before fitting bounds
+  setTimeout(function() {
+    map.invalidateSize();
+    map.fitBounds(L.latLngBounds(coords), {padding:[40,40]});
+  }, 100);
 }
 
 
@@ -2804,7 +2813,10 @@ function renderAllMap() {
       L.marker([s.lat, s.lng], {icon:icon}).addTo(map).bindPopup(popup);
     });
   });
-  map.fitBounds(L.latLngBounds(allBounds), {padding:[30,30]});
+  setTimeout(function() {
+    map.invalidateSize();
+    map.fitBounds(L.latLngBounds(allBounds), {padding:[30,30]});
+  }, 100);
 }
 
 
@@ -2861,16 +2873,84 @@ function addStop(dayIdx, info) {
 }
 
 // ── PRE-BOOKING LIST ──────────────────────────────────────────────
+function getReservationForName(name) {
+  for (var di = 0; di < days.length; di++) {
+    for (var si = 0; si < days[di].stops.length; si++) {
+      var s = days[di].stops[si];
+      if (s.name && s.name.toLowerCase().includes(name.toLowerCase()) && s.reservation) {
+        return s.reservation;
+      }
+    }
+  }
+  return null;
+}
+
 function renderPrebook() {
-  const labels = {urgent:'Book NOW',medium:'Book this week',low:'Book soon'};
-  document.getElementById('prebookList').innerHTML = prebooks.map(p => `
-    <div class="pb-card">
-      <div class="pb-card-title">${p.name}</div>
-      <span class="pb-urgency ${p.urgency}">${labels[p.urgency]}</span>
-      <span class="pb-day">${p.day}</span>
-      <p>${p.text}</p>
-      <p style="margin-top:6px;"><a href="${p.url}" target="_blank">Book here →</a></p>
-    </div>`).join('');
+  const labels = {urgent:'Book NOW', medium:'Book this week', low:'Book soon'};
+
+  // Split into booked and needs-booking
+  const booked = [];
+  const needed = [];
+
+  prebooks.forEach(p => {
+    const res = getReservationForName(p.name);
+    if (res) booked.push({...p, res});
+    else needed.push(p);
+  });
+
+  // Also find any stops with reservations not in the prebooks list
+  const allReserved = [];
+  days.forEach((d, di) => {
+    d.stops.forEach(s => {
+      if (s.reservation && !prebooks.find(p => s.name.toLowerCase().includes(p.name.toLowerCase()))) {
+        allReserved.push({name: s.name, day: d.title.split('—')[0].trim(), res: s.reservation, time: s.time});
+      }
+    });
+  });
+
+  let html = '';
+
+  if (booked.length || allReserved.length) {
+    html += '<div style="font-size:11px;font-weight:800;color:#155724;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:10px;margin-top:4px;">✓ Booked & Reserved</div>';
+    booked.forEach(p => {
+      html += `<div class="pb-card" style="border-left:4px solid #28a745;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+          <span class="res-badge confirmed">✓ ${p.res.confirmed ? 'Confirmed' : 'Reserved'}</span>
+          <span class="pb-day">${p.day}</span>
+        </div>
+        <div class="pb-card-title">${p.name}</div>
+        ${p.res.notes ? `<p style="color:#155724;margin-top:4px;">📝 ${p.res.notes}</p>` : ''}
+        ${p.res.time ? `<p style="color:#555;font-size:12px;">🕐 ${p.res.time}</p>` : ''}
+      </div>`;
+    });
+    allReserved.forEach(r => {
+      html += `<div class="pb-card" style="border-left:4px solid #28a745;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+          <span class="res-badge confirmed">✓ ${r.res.confirmed ? 'Confirmed' : 'Reserved'}</span>
+          <span class="pb-day">${r.day}</span>
+        </div>
+        <div class="pb-card-title">${r.name}</div>
+        ${r.res.notes ? `<p style="color:#155724;margin-top:4px;">📝 ${r.res.notes}</p>` : ''}
+        ${r.res.time ? `<p style="color:#555;font-size:12px;">🕐 ${r.res.time}</p>` : ''}
+      </div>`;
+    });
+  }
+
+  if (needed.length) {
+    html += '<div style="font-size:11px;font-weight:800;color:#c0392b;text-transform:uppercase;letter-spacing:0.6px;margin:14px 0 10px;">⚠️ Still needs booking</div>';
+    needed.forEach(p => {
+      html += `<div class="pb-card">
+        <div class="pb-card-title">${p.name}</div>
+        <span class="pb-urgency ${p.urgency}">${labels[p.urgency]}</span>
+        <span class="pb-day">${p.day}</span>
+        <p>${p.text}</p>
+        <p style="margin-top:6px;"><a href="${p.url}" target="_blank">Book here →</a></p>
+      </div>`;
+    });
+  }
+
+  if (!html) html = '<p style="color:#888;font-size:14px;text-align:center;padding:20px;">No bookings needed — you are all set!</p>';
+  document.getElementById('prebookList').innerHTML = html;
 }
 
 // ── TOAST ─────────────────────────────────────────────────────────
