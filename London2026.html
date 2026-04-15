@@ -1023,8 +1023,8 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
     <button class="day-tab" onclick="switchDay(3)" id="dtab3">May 10</button>
     <button class="day-tab blue" onclick="showRouteMap()" id="dtabMap">Route Map</button>
     <button class="day-tab green-tab" onclick="showAllMap()" id="dtabAll">All Days Map</button>
-    <button class="day-tab" onclick="showView('add')" id="dtabAdd" style="border-color:#1a73e8;color:#1a73e8;">+ Add place</button>
-    <button class="day-tab" onclick="showView('search')" id="dtabSearch" style="border-color:#7b1fa2;color:#7b1fa2;">🔍 Search</button>
+    <button class="day-tab" onclick="showView('search')" id="dtabSearch" style="border-color:#1a73e8;color:#1a73e8;">+ Add / Search</button>
+    <button class="day-tab" onclick="showView('hotel')" id="dtabHotel" style="border-color:#888;color:#888;">🏨 Hotel</button>
   </div>
 </div>
 
@@ -1044,7 +1044,7 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
     <div class="progress-wrap"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
     <div class="action-bar">
       <button onclick="optimizeRoute()">⚡ Optimize route</button>
-      <button class="blue-btn" onclick="showView('add')">+ Add location</button>
+      <button class="blue-btn" onclick="showView('search')">+ Add location</button>
     </div>
     <div id="stopList"></div>
   </div>
@@ -1064,76 +1064,107 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
     <div class="all-map-view" id="allMapContent"></div>
   </div>
 
-  <!-- ADD LOCATION -->
-  <div class="panel" id="panel-add">
+  <!-- COMBINED SEARCH / ADD / HOTEL -->
+  <div class="panel" id="panel-search">
     <div class="add-view">
-      <h2>Add a location</h2>
-      <p>Enter any London place — AI will write the history, tips, and tour guide content for it.</p>
-      <label class="form-label">Place name *</label>
-      <input class="form-input" id="addName" type="text" placeholder="e.g. Hunterian Museum">
-      <label class="form-label">Address *</label>
-      <input class="form-input" id="addAddress" type="text" placeholder="e.g. 35 Lincoln's Inn Fields, WC2A">
-      <div class="form-row">
-        <div>
-          <label class="form-label">Latitude</label>
-          <input class="form-input" id="addLat" type="number" step="0.0001" placeholder="51.5174">
-        </div>
-        <div>
-          <label class="form-label">Longitude</label>
-          <input class="form-input" id="addLng" type="number" step="0.0001" placeholder="-0.118">
-        </div>
+
+      <!-- ── SEARCH EXISTING ── -->
+      <h2 style="margin-bottom:4px;">Search &amp; Add</h2>
+      <p style="margin-bottom:12px;">Search your itinerary or find new places with AI.</p>
+
+      <input class="form-input" id="searchQuery" type="text"
+        placeholder="🔍 Search existing stops or describe a new place…"
+        oninput="searchExisting(this.value)"
+        onkeydown="if(event.key==='Enter') aiSearch();"
+        style="margin-bottom:6px;">
+      <div id="existingResults" style="margin-bottom:12px;"></div>
+
+      <!-- ── AI SEARCH ── -->
+      <div style="border-top:1px solid var(--border);padding-top:14px;margin-bottom:14px;">
+        <p style="font-size:12px;color:var(--muted);margin-bottom:8px;">Nothing found? Search with AI for new places:</p>
+        <label class="form-label">Add result to day</label>
+        <select class="form-input" id="searchDay">
+          <option value="0">May 7 — Arrival & City</option>
+          <option value="1">May 8 — East London</option>
+          <option value="2">May 9 — West & Mayfair</option>
+          <option value="3">May 10 — Final Day</option>
+        </select>
+        <button class="gen-btn" id="searchBtn" onclick="aiSearch()" style="background:#5c4db1;">🤖 Search with AI →</button>
+        <p class="gen-hint">AI finds the best match, writes history &amp; tips, and adds it to your itinerary</p>
+        <div id="searchResults" style="margin-top:16px;"></div>
       </div>
-      <label class="form-label">Type</label>
-      <select class="form-input" id="addType">
-        <option value="museum">Museum / Gallery</option>
-        <option value="restaurant">Restaurant / Café</option>
-        <option value="market">Market / Street food</option>
-        <option value="park">Park / Garden</option>
-        <option value="landmark">Historic landmark</option>
-        <option value="church">Church / Cathedral</option>
-        <option value="walk">Walking / Neighbourhood</option>
-        <option value="rooftop">Rooftop / View</option>
-      </select>
-      <label class="form-label">Add to day</label>
-      <select class="form-input" id="addDay">
-        <option value="0">May 7 — Arrival & City</option>
-        <option value="1">May 8 — East London</option>
-        <option value="2">May 9 — West & Mayfair</option>
-        <option value="3">May 10 — Final Day</option>
-      </select>
-      <label class="form-label">Duration</label>
-      <select class="form-input" id="addDuration">
-        <option>30 min</option>
-        <option selected>60 min</option>
-        <option>90 min</option>
-        <option>2 hours</option>
-      </select>
-      <button class="gen-btn" id="genBtn" onclick="generateLocation()">Generate with AI →</button>
-      <p class="gen-hint">AI researches history, tips & travel directions automatically</p>
+
+      <!-- ── ADD MANUALLY ── -->
+      <div style="border-top:1px solid var(--border);padding-top:14px;">
+        <p style="font-size:12px;color:var(--muted);margin-bottom:12px;">Or add a specific place manually:</p>
+        <label class="form-label">Place name *</label>
+        <input class="form-input" id="addName" type="text" placeholder="e.g. Hunterian Museum">
+        <label class="form-label">Address *</label>
+        <input class="form-input" id="addAddress" type="text" placeholder="e.g. 35 Lincoln's Inn Fields, WC2A">
+        <div class="form-row">
+          <div>
+            <label class="form-label">Latitude</label>
+            <input class="form-input" id="addLat" type="number" step="0.0001" placeholder="51.5174">
+          </div>
+          <div>
+            <label class="form-label">Longitude</label>
+            <input class="form-input" id="addLng" type="number" step="0.0001" placeholder="-0.118">
+          </div>
+        </div>
+        <label class="form-label">Type</label>
+        <select class="form-input" id="addType">
+          <option value="museum">Museum / Gallery</option>
+          <option value="restaurant">Restaurant / Café</option>
+          <option value="market">Market / Street food</option>
+          <option value="park">Park / Garden</option>
+          <option value="landmark">Historic landmark</option>
+          <option value="church">Church / Cathedral</option>
+          <option value="walk">Walking / Neighbourhood</option>
+          <option value="rooftop">Rooftop / View</option>
+        </select>
+        <label class="form-label">Add to day</label>
+        <select class="form-input" id="addDay">
+          <option value="0">May 7 — Arrival & City</option>
+          <option value="1">May 8 — East London</option>
+          <option value="2">May 9 — West & Mayfair</option>
+          <option value="3">May 10 — Final Day</option>
+        </select>
+        <label class="form-label">Duration</label>
+        <select class="form-input" id="addDuration">
+          <option>30 min</option>
+          <option selected>60 min</option>
+          <option>90 min</option>
+          <option>2 hours</option>
+        </select>
+        <button class="gen-btn" id="genBtn" onclick="generateLocation()">Generate with AI →</button>
+        <p class="gen-hint">AI researches history, tips &amp; travel directions automatically</p>
+      </div>
     </div>
   </div>
 
-  <!-- SEARCH -->
-  <div class="panel" id="panel-search">
+  <!-- HOTEL -->
+  <div class="panel" id="panel-hotel">
     <div class="add-view">
-      <h2>Search &amp; Add Places</h2>
-      <p>Describe what you're looking for — the AI will find the best match near your route and add it with full history and tips.</p>
-      <label class="form-label">What are you looking for?</label>
-      <input class="form-input" id="searchQuery" type="text"
-        placeholder="e.g. rooftop bar near the City, hidden Victorian pub, healthy lunch Mayfair…"
-        oninput="searchExisting(this.value)"
-        onkeydown="if(event.key==='Enter') aiSearch();">
-      <div id="existingResults" style="margin-bottom:8px;"></div>
-      <label class="form-label">Add result to day</label>
-      <select class="form-input" id="searchDay">
-        <option value="0">May 7 — Arrival & City</option>
-        <option value="1">May 8 — East London</option>
-        <option value="2">May 9 — West & Mayfair</option>
-        <option value="3">May 10 — Final Day</option>
-      </select>
-      <button class="gen-btn" id="searchBtn" onclick="aiSearch()">Search with AI →</button>
-      <p class="gen-hint">AI searches for the best match, writes history &amp; tips, and adds it to your itinerary</p>
-      <div id="searchResults" style="margin-top:20px;"></div>
+      <h2>🏨 Your Hotel</h2>
+      <p>Enter your hotel details — it will appear as a pin on the map and anchor the start and end of each day.</p>
+
+      <label class="form-label">Hotel name *</label>
+      <input class="form-input" id="hotelName" type="text" placeholder="e.g. The Ritz London" oninput="updateHotelPreview()">
+      <label class="form-label">Address *</label>
+      <input class="form-input" id="hotelAddress" type="text" placeholder="e.g. 150 Piccadilly, London W1J 9BR" oninput="updateHotelPreview()">
+      <div class="form-row">
+        <div>
+          <label class="form-label">Latitude</label>
+          <input class="form-input" id="hotelLat" type="number" step="0.0001" placeholder="51.5072">
+        </div>
+        <div>
+          <label class="form-label">Longitude</label>
+          <input class="form-input" id="hotelLng" type="number" step="0.0001" placeholder="-0.1416">
+        </div>
+      </div>
+      <div id="hotelPreview" style="margin-bottom:12px;"></div>
+      <button class="gen-btn" onclick="saveHotel()" style="background:#444;">🏨 Save Hotel</button>
+      <p class="gen-hint">Hotel pin will appear on all maps as your base</p>
     </div>
   </div>
 
@@ -2362,8 +2393,65 @@ function moveStopFromMapToDay(stopIdx, targetDay) {
 }
 
 
+// ── HOTEL MANAGEMENT ──────────────────────────────────────────────
+function loadHotelUI() {
+  const h = window.HOTEL_DATA || {};
+  if (h.name) {
+    document.getElementById('hotelName').value = h.name;
+    document.getElementById('hotelAddress').value = h.address || '';
+    document.getElementById('hotelLat').value = h.lat || '';
+    document.getElementById('hotelLng').value = h.lng || '';
+    updateHotelPreview();
+  }
+}
+
+function updateHotelPreview() {
+  const name = document.getElementById('hotelName').value.trim();
+  const addr = document.getElementById('hotelAddress').value.trim();
+  const el = document.getElementById('hotelPreview');
+  if (name) {
+    el.innerHTML = `<div style="background:#f5f4f0;border-radius:10px;padding:12px 14px;border:1px solid var(--border);">
+      <div style="font-size:13px;font-weight:700;">🏨 ${name}</div>
+      ${addr ? `<div style="font-size:12px;color:var(--muted);margin-top:2px;">${addr}</div>` : ''}
+    </div>`;
+  } else {
+    el.innerHTML = '';
+  }
+}
+
+function saveHotel() {
+  const name = document.getElementById('hotelName').value.trim();
+  const address = document.getElementById('hotelAddress').value.trim();
+  const lat = parseFloat(document.getElementById('hotelLat').value) || 51.5072;
+  const lng = parseFloat(document.getElementById('hotelLng').value) || -0.1416;
+  if (!name) { showToast('Enter hotel name', true); return; }
+  window.HOTEL_DATA = { name, address, lat, lng };
+  // Update HOTEL constant
+  HOTEL.name = name;
+  HOTEL.address = address;
+  HOTEL.lat = lat;
+  HOTEL.lng = lng;
+  try { localStorage.setItem('hotel_data', JSON.stringify(window.HOTEL_DATA)); } catch(e) {}
+  showToast('Hotel saved — pin will appear on maps 📍');
+  renderStopList();
+}
+
+function initHotel() {
+  try {
+    const raw = localStorage.getItem('hotel_data');
+    if (raw) {
+      const h = JSON.parse(raw);
+      window.HOTEL_DATA = h;
+      HOTEL.name = h.name; HOTEL.address = h.address;
+      HOTEL.lat = h.lat; HOTEL.lng = h.lng;
+    }
+  } catch(e) {}
+}
+
+
 async function init() {
   updateHeaderHeight();
+  initHotel();
   // Try cloud sync first, then local storage
   const cloudLoaded = await syncLoad();
   if (!cloudLoaded) {
@@ -2390,6 +2478,7 @@ function showView(v) {
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.getElementById('panel-' + v).classList.add('active');
   if (v !== currentView) document.getElementById('mainArea').scrollTop = 0;
+  if (v === 'hotel') setTimeout(loadHotelUI, 50);
   currentView = v;
   updateBottomNav();
   updateTabHighlight();
@@ -2403,10 +2492,10 @@ function showView(v) {
 }
 
 function updateTabHighlight() {
-  ['dtab0','dtab1','dtab2','dtab3','dtabMap','dtabAll','dtabAdd','dtabSearch'].forEach(id => {
+  ['dtab0','dtab1','dtab2','dtab3','dtabMap','dtabAll','dtabSearch','dtabHotel'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
-    if (id === 'dtabMap' || id === 'dtabAll' || id === 'dtabAdd' || id === 'dtabSearch') return;
+    if (id === 'dtabMap' || id === 'dtabAll' || id === 'dtabSearch' || id === 'dtabHotel') return;
     el.classList.remove('active');
   });
   if (currentView === 'list' || currentView === 'detail') {
@@ -2831,7 +2920,14 @@ function buildRouteMapIframe(stops, color) {
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution:'© OpenStreetMap contributors', maxZoom:19}).addTo(map);
 
   var coords = stops.map(function(s){return [s.lat, s.lng];});
-  L.polyline(coords, {color:color, weight:5, opacity:0.85, dashArray:'10,6'}).addTo(map);
+  // Add hotel to start and end of route line if set
+  var h = window.HOTEL_DATA;
+  var routeCoords = h ? [[h.lat, h.lng]].concat(coords).concat([[h.lat, h.lng]]) : coords;
+  L.polyline(routeCoords, {color:color, weight:5, opacity:0.85, dashArray:'10,6'}).addTo(map);
+  if (h) {
+    var hotelIcon = L.divIcon({className:'', html:'<div style="background:#444;color:#fff;width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;border:2.5px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.35);">🏨</div>', iconSize:[32,32], iconAnchor:[16,16], popupAnchor:[0,-20]});
+    L.marker([h.lat, h.lng], {icon:hotelIcon}).addTo(map).bindPopup('<b>🏨 ' + h.name + '</b><br><span style="font-size:11px;color:#888;">' + (h.address||'Your hotel') + '</span>');
+  }
 
   stops.forEach(function(s, i) {
     var sz = i===0 ? 32 : 26;
@@ -2884,6 +2980,12 @@ function renderAllMap() {
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution:'© OpenStreetMap contributors', maxZoom:19}).addTo(map);
 
   var allBounds = [];
+  var hd = window.HOTEL_DATA;
+  if (hd) {
+    var hotelIcon = L.divIcon({className:'', html:'<div style="background:#444;color:#fff;width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.4);">🏨</div>', iconSize:[34,34], iconAnchor:[17,17], popupAnchor:[0,-20]});
+    L.marker([hd.lat, hd.lng], {icon:hotelIcon}).addTo(map).bindPopup('<b>🏨 ' + hd.name + '</b><br><span style="font-size:11px;">' + (hd.address||'Your hotel') + '</span>');
+    allBounds.push([hd.lat, hd.lng]);
+  }
   stopsData.forEach(function(day) {
     var coords = day.stops.map(function(s){return [s.lat, s.lng];});
     coords.forEach(function(c){allBounds.push(c);});
