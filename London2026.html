@@ -1690,22 +1690,7 @@ async function syncLoad() {
 }
 
 function startSyncPolling() {
-  setInterval(async () => {
-    if (window._lastSyncTime && Date.now() - window._lastSyncTime < 25000) return;
-    try {
-      const data = await ghRead();
-      if (data && data.days && data.days.length >= 3) {
-        const remote = JSON.stringify(data.days.map(d => d.stops.map(s => s.name)));
-        const local  = JSON.stringify(days.map(d => d.stops.map(s => s.name)));
-        if (remote !== local) {
-          data.days.forEach((d, i) => { if (days[i]) days[i].stops = d.stops; });
-          completed = data.completed || [];
-          switchDay(currentDay);
-          showToast('✨ Updated from another device');
-        }
-      }
-    } catch(e) {}
-  }, 15000);
+  // Polling disabled — use the 🔄 refresh button to pull updates manually
 }
 
 function saveToStorage() { syncSave(); }
@@ -2197,7 +2182,7 @@ function updateHeaderHeight() {
 function showView(v) {
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.getElementById('panel-' + v).classList.add('active');
-  document.getElementById('mainArea').scrollTop = 0;
+  if (v !== currentView) document.getElementById('mainArea').scrollTop = 0;
   currentView = v;
   updateBottomNav();
   updateTabHighlight();
@@ -2255,6 +2240,10 @@ function renderStopList() {
   const done = stops.filter((_, i) => completed.includes(currentDay+'-'+i)).length;
   document.getElementById('progressFill').style.width = (done/total*100) + '%';
 
+  // Preserve scroll position
+  const area = document.getElementById('mainArea');
+  const scrollY = area ? area.scrollTop : 0;
+
   document.getElementById('stopList').innerHTML = stops.map((s, i) => `
     <div class="stop-row ${i === currentStop && currentView === 'detail' ? 'active-row' : ''}"
          draggable="true"
@@ -2295,6 +2284,9 @@ function renderStopList() {
         ontouchstart="this.style.color='#c0392b'" title="Remove stop">🗑</button>
       <span class="stop-chevron" style="flex-shrink:0;">›</span>
     </div>`).join('');
+
+  // Restore scroll position after re-render
+  if (area && scrollY) requestAnimationFrame(() => { area.scrollTop = scrollY; });
 }
 
 function selectStop(i) {
