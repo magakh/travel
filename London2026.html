@@ -2086,7 +2086,13 @@ async function init() {
         optimizeRouteForDay(di);
         currentDay = tmp;
       });
+    } else {
+      // Loaded from local — still reassign times correctly for each day
+      [0,1,2,3].forEach(di => reassignTimesForDay(di));
     }
+  } else {
+    // Loaded from cloud — still reassign times correctly for each day
+    [0,1,2,3].forEach(di => reassignTimesForDay(di));
   }
   switchDay(0);
   renderPrebook();
