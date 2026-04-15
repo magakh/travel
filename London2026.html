@@ -2442,21 +2442,7 @@ function switchDay(d) {
 
 // ── STOP LIST ─────────────────────────────────────────────────────
 function renderStopList() {
-  // Ensure hotel anchors exist as first/last stops
-  const dayHotelStart = Object.assign({}, HOTEL, {
-    time: currentDay === 0 ? '12:00 PM' : '9:00 AM',
-    name: currentDay === 0 ? 'Hotel Check-In 🏨' : 'Hotel — Morning Start 🏨',
-    duration: currentDay === 0 ? '60 min' : '15 min'
-  });
-  const dayHotelEnd = Object.assign({}, HOTEL, {
-    time: '10:00 PM',
-    name: currentDay === 3 ? 'Hotel — Check Out 🏨' : 'Hotel — Return 🏨',
-    duration: '30 min'
-  });
-  let rawStops = days[currentDay].stops;
-  // Remove any existing hotel anchors first to avoid duplicates
-  rawStops = rawStops.filter(s => !s.isHotel);
-  const stops = [dayHotelStart, ...rawStops, dayHotelEnd];
+  const stops = days[currentDay].stops;
   const total = stops.length;
   const done = stops.filter((_, i) => completed.includes(currentDay+'-'+i)).length;
   document.getElementById('progressFill').style.width = (done/total*100) + '%';
@@ -2465,7 +2451,20 @@ function renderStopList() {
   const area = document.getElementById('mainArea');
   const scrollY = area ? area.scrollTop : 0;
 
-  document.getElementById('stopList').innerHTML = stops.map((s, i) => `
+  const hotelStartTime = currentDay === 0 ? '12:00 PM' : '9:00 AM';
+  const hotelEndName = currentDay === 3 ? 'Hotel — Check Out' : 'Hotel — Return for the night';
+  const hotelBanner = (time, label) => `
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;background:#f5f4f0;border-bottom:1px solid var(--border);opacity:0.75;">
+      <div style="width:22px;height:22px;border-radius:50%;background:#888;display:flex;align-items:center;justify-content:center;flex-shrink:0;">🏨</div>
+      <div style="flex:1;">
+        <div style="font-size:11px;color:var(--hint);">⏱ ${time}</div>
+        <div style="font-size:13px;font-weight:700;color:#555;">${label}</div>
+      </div>
+    </div>`;
+
+  document.getElementById('stopList').innerHTML =
+    hotelBanner(hotelStartTime, currentDay === 0 ? 'Hotel Check-In' : 'Hotel — Morning departure') +
+    stops.map((s, i) => `
     <div class="stop-row ${i === currentStop && currentView === 'detail' ? 'active-row' : ''} ${getConflict(i) ? 'has-conflict' : (s.reservation ? (s.reservation.confirmed ? 'confirmed' : 'has-reservation') : '')}"
          draggable="true"
          ondragstart="dragStart(event,${i})"
@@ -2506,7 +2505,7 @@ function renderStopList() {
         onmouseenter="this.style.color='#c0392b'" onmouseleave="this.style.color='#ddd'"
         ontouchstart="this.style.color='#c0392b'" title="Remove stop">🗑</button>`}
       <span class="stop-chevron" style="flex-shrink:0;">›</span>
-    </div>`).join('');
+    </div>`).join('') + hotelBanner('~10:00 PM', hotelEndName);
 
   // Restore scroll position after re-render
   if (area && scrollY) requestAnimationFrame(() => { area.scrollTop = scrollY; });
