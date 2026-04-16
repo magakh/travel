@@ -2430,7 +2430,9 @@ function updateHeaderHeight() {
 // ── VIEW MANAGEMENT ───────────────────────────────────────────────
 function showView(v) {
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-  document.getElementById('panel-' + v).classList.add('active');
+  const panelEl = document.getElementById('panel-' + v);
+  if (!panelEl) { console.warn('No panel:', v); return; }
+  panelEl.classList.add('active');
   if (v !== currentView) document.getElementById('mainArea').scrollTop = 0;
   if (v === 'hotel') setTimeout(loadHotelUI, 50);
   if (v === 'settings') setTimeout(loadSettingsUI, 50);
@@ -2476,6 +2478,7 @@ function updateBottomNav() {
 
 // ── DAY SWITCHING ─────────────────────────────────────────────────
 function switchDay(d) {
+  if (d < 0 || d >= days.length || !days[d]) return;
   // Auto-open inline map on desktop
   if (window.innerWidth > 700 && !_inlineMapOpen) {
     _inlineMapOpen = true;
@@ -2495,15 +2498,16 @@ function switchDay(d) {
 // ── STOP LIST ─────────────────────────────────────────────────────
 // ── SINGLE RENDER ENTRY POINT — keeps all views in sync ──────────
 function renderAll() {
-  renderStopList();
-  refreshInlineMap();
-  if (currentView === 'routemap') renderRouteMap();
-  renderPrebook();
+  try { renderStopList(); } catch(e) { console.error('renderStopList:', e); }
+  try { refreshInlineMap(); } catch(e) {}
+  try { if (currentView === 'routemap') renderRouteMap(); } catch(e) {}
+  try { renderPrebook(); } catch(e) {}
   autoSave();
 }
 
 
 function renderStopList() {
+  if (!days[currentDay] || !days[currentDay].stops) return;
   const stops = days[currentDay].stops;
   const total = stops.length;
   const done = stops.filter((_, i) => completed.includes(currentDay+'-'+i)).length;
@@ -3037,8 +3041,7 @@ function applyConfig() {
     }
   });
 
-  // Update move-to-day dropdowns (re-render list)
-  renderAll();
+  // renderAll() is called after data loads in init()
 }
 
 function confirmResetAll() {
