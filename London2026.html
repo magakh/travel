@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>London 2026</title>
+<title id="pageTitle">London 2026</title>
 <style>
 /* required styles */
 
@@ -1096,8 +1096,8 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
 <div class="header" id="appHeader">
   <div class="header-top">
     <div>
-      <h1>London 2026</h1>
-      <div class="header-sub">May 7–10 · hidden gems · rooftop dining</div>
+      <h1 id="appTitleEl">London 2026</h1>
+      <div class="header-sub" id="appSubtitleEl">May 7–10 · hidden gems · rooftop dining</div>
     </div>
     <div style="display:flex;gap:6px;flex-shrink:0;">
       <button class="prebook-pill" onclick="saveToStorage()" title="Save & sync" style="border-color:#88d8a0;color:#88d8a0;">💾</button>
@@ -1111,10 +1111,14 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
     <button class="day-tab" onclick="switchDay(1)" id="dtab1">May 8</button>
     <button class="day-tab" onclick="switchDay(2)" id="dtab2">May 9</button>
     <button class="day-tab" onclick="switchDay(3)" id="dtab3">May 10</button>
+    <button class="day-tab" onclick="switchDay(4)" id="dtab4" style="display:none;">Day 5</button>
+    <button class="day-tab" onclick="switchDay(5)" id="dtab5" style="display:none;">Day 6</button>
+    <button class="day-tab" onclick="switchDay(6)" id="dtab6" style="display:none;">Day 7</button>
     <button class="day-tab blue" onclick="showRouteMap()" id="dtabMap">Route Map</button>
     <button class="day-tab green-tab" onclick="showAllMap()" id="dtabAll">All Days Map</button>
     <button class="day-tab" onclick="showView('search')" id="dtabSearch" style="border-color:#1a73e8;color:#1a73e8;">+ Add / Search</button>
     <button class="day-tab" onclick="showView('hotel')" id="dtabHotel" style="border-color:#888;color:#888;">🏨 Hotel</button>
+    <button class="day-tab" onclick="showView('settings')" id="dtabSettings" style="border-color:#555;color:#555;">⚙ Settings</button>
   </div>
 </div>
 
@@ -1266,6 +1270,38 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
       <div id="hotelPreview" style="margin-bottom:12px;"></div>
       <button class="gen-btn" onclick="saveHotel()" style="background:#444;">🏨 Save Hotel</button>
       <p class="gen-hint">Save hotel here, then tap 💾 in the header to sync it to all devices</p>
+    </div>
+  </div>
+
+  <!-- SETTINGS -->
+  <div class="panel" id="panel-settings">
+    <div class="add-view">
+      <h2>⚙ Settings</h2>
+
+      <label class="form-label">Trip title</label>
+      <input class="form-input" id="setTitle" type="text" placeholder="e.g. London 2026">
+
+      <label class="form-label">Subtitle</label>
+      <input class="form-input" id="setSubtitle" type="text" placeholder="e.g. May 7–10 · hidden gems">
+
+      <label class="form-label">Number of days (1–7)</label>
+      <input class="form-input" id="setNumDays" type="number" min="1" max="7" placeholder="4" oninput="renderDayLabelInputs()">
+
+      <div id="setDayLabelsWrap"></div>
+
+      <label class="form-label" style="margin-top:14px;">GitHub repository (user/repo)</label>
+      <input class="form-input" id="setGhRepo" type="text" placeholder="e.g. magakh/travel">
+
+      <label class="form-label">Sync file name in repo</label>
+      <input class="form-input" id="setSyncFile" type="text" placeholder="e.g. sync_london2026.json">
+
+      <button class="gen-btn" onclick="saveSettings()" style="background:#1a1a1a;margin-top:8px;">💾 Save Settings</button>
+      <p class="gen-hint">Changes take effect immediately. Sync file change applies on next save/load.</p>
+
+      <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:8px;">
+        <p style="font-size:12px;color:#888;margin-bottom:8px;">Danger zone</p>
+        <button onclick="confirmResetAll()" style="width:100%;padding:12px;border-radius:10px;border:1px solid #c0392b;background:#fde8e8;color:#c0392b;font-size:13px;font-weight:700;cursor:pointer;">🗑 Reset all data</button>
+      </div>
     </div>
   </div>
 
@@ -1463,7 +1499,28 @@ function getSaveData() {
 }
 
 // ── REAL-TIME SYNC via GitHub API (no CDN cache) ─────────────────
-const SYNC_API = 'https://api.github.com/repos/magakh/travel/contents/sync_london2026.json';
+// App config — loaded from localStorage, can be changed in Settings
+const DEFAULT_CONFIG = {
+  title: 'London 2026',
+  subtitle: 'May 7–10 · hidden gems · rooftop dining',
+  syncFile: 'sync_london2026.json',
+  ghRepo: 'magakh/travel',
+  numDays: 4,
+  dayLabels: ['May 7', 'May 8', 'May 9', 'May 10'],
+  dayTitles: [
+    'May 7 — Arrival · Royal & River',
+    'May 8 — Greenwich & the East',
+    'May 9 — South Bank & Soho',
+    'May 10 — Parks, Mayfair & Farewell'
+  ]
+};
+let APP_CONFIG = Object.assign({}, DEFAULT_CONFIG);
+try {
+  const saved = localStorage.getItem('app_config');
+  if (saved) APP_CONFIG = Object.assign({}, DEFAULT_CONFIG, JSON.parse(saved));
+} catch(e) {}
+
+let SYNC_API = 'https://api.github.com/repos/' + APP_CONFIG.ghRepo + '/contents/' + APP_CONFIG.syncFile;
 // Token stored once in localStorage (survives sessions, only on this device)
 const GH_TOKEN = ['ghp_TynMbg3orl8OjQ', 'e70IoVrrXQEEVmSC3YJLIs'].join('');
 
@@ -2340,6 +2397,7 @@ function initHotel() {
 
 async function init() {
   updateHeaderHeight();
+  applyConfig();
   initHotel();
   document.getElementById('stopList').innerHTML = '<div style="text-align:center;padding:40px;color:#888;">⏳ Loading…</div>';
   const cloudLoaded = await syncLoad();
@@ -2368,6 +2426,7 @@ function showView(v) {
   document.getElementById('panel-' + v).classList.add('active');
   if (v !== currentView) document.getElementById('mainArea').scrollTop = 0;
   if (v === 'hotel') setTimeout(loadHotelUI, 50);
+  if (v === 'settings') setTimeout(loadSettingsUI, 50);
   const mapBtn = document.getElementById('mapToggleBtn');
   if (mapBtn) mapBtn.style.display = v === 'list' ? 'flex' : 'none';
   currentView = v;
@@ -2383,10 +2442,10 @@ function showView(v) {
 }
 
 function updateTabHighlight() {
-  ['dtab0','dtab1','dtab2','dtab3','dtabMap','dtabAll','dtabSearch','dtabHotel'].forEach(id => {
+  ['dtab0','dtab1','dtab2','dtab3','dtab4','dtab5','dtab6','dtabMap','dtabAll','dtabSearch','dtabHotel','dtabSettings'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
-    if (id === 'dtabMap' || id === 'dtabAll' || id === 'dtabSearch' || id === 'dtabHotel') return;
+    if (['dtabMap','dtabAll','dtabSearch','dtabHotel','dtabSettings'].includes(id)) return;
     el.classList.remove('active');
   });
   if (currentView === 'list' || currentView === 'detail') {
@@ -2646,6 +2705,103 @@ function renderDetail() {
   `;
   updateBottomNav();
 }
+
+// ── SETTINGS ──────────────────────────────────────────────────────
+function loadSettingsUI() {
+  const c = APP_CONFIG;
+  document.getElementById('setTitle').value = c.title || '';
+  document.getElementById('setSubtitle').value = c.subtitle || '';
+  document.getElementById('setNumDays').value = c.numDays || 4;
+  document.getElementById('setGhRepo').value = c.ghRepo || '';
+  document.getElementById('setSyncFile').value = c.syncFile || '';
+  renderDayLabelInputs();
+}
+
+function renderDayLabelInputs() {
+  const n = parseInt(document.getElementById('setNumDays').value) || 4;
+  const labels = APP_CONFIG.dayLabels || [];
+  const titles = APP_CONFIG.dayTitles || [];
+  const wrap = document.getElementById('setDayLabelsWrap');
+  if (!wrap) return;
+  let html = '<label class="form-label" style="margin-top:10px;">Day tab labels & titles</label>';
+  for (let i = 0; i < n; i++) {
+    html += `
+      <div style="display:grid;grid-template-columns:1fr 2fr;gap:8px;margin-bottom:8px;">
+        <input class="form-input" id="setDayLabel${i}" type="text" placeholder="Day ${i+1} label" value="${labels[i]||''}" style="margin:0;">
+        <input class="form-input" id="setDayTitle${i}" type="text" placeholder="Full title" value="${(titles[i]||'').replace(/"/g,'&quot;')}" style="margin:0;">
+      </div>`;
+  }
+  wrap.innerHTML = html;
+}
+
+function saveSettings() {
+  const n = parseInt(document.getElementById('setNumDays').value) || 4;
+  const dayLabels = [], dayTitles = [];
+  for (let i = 0; i < n; i++) {
+    dayLabels.push(document.getElementById('setDayLabel'+i)?.value.trim() || ('Day '+(i+1)));
+    dayTitles.push(document.getElementById('setDayTitle'+i)?.value.trim() || ('Day '+(i+1)));
+  }
+
+  APP_CONFIG.title    = document.getElementById('setTitle').value.trim() || APP_CONFIG.title;
+  APP_CONFIG.subtitle = document.getElementById('setSubtitle').value.trim() || APP_CONFIG.subtitle;
+  APP_CONFIG.numDays  = n;
+  APP_CONFIG.dayLabels = dayLabels;
+  APP_CONFIG.dayTitles = dayTitles;
+  APP_CONFIG.ghRepo   = document.getElementById('setGhRepo').value.trim() || APP_CONFIG.ghRepo;
+  APP_CONFIG.syncFile = document.getElementById('setSyncFile').value.trim() || APP_CONFIG.syncFile;
+
+  // Update SYNC_API
+  SYNC_API = 'https://api.github.com/repos/' + APP_CONFIG.ghRepo + '/contents/' + APP_CONFIG.syncFile;
+
+  // Update days array to match new count/titles
+  while (days.length < n) days.push({ title: dayLabels[days.length] + ' — New Day', note: '', stops: [] });
+  days.length = n;
+  days.forEach((d, i) => {
+    if (dayTitles[i]) d.title = dayTitles[i];
+  });
+
+  // Save to localStorage
+  try { localStorage.setItem('app_config', JSON.stringify(APP_CONFIG)); } catch(e) {}
+
+  // Update UI
+  applyConfig();
+  showToast('Settings saved ✓');
+  showView('list');
+}
+
+function applyConfig() {
+  const c = APP_CONFIG;
+  // Update page title and header
+  document.title = c.title || 'Travel 2026';
+  const titleEl = document.getElementById('appTitleEl');
+  const subEl = document.getElementById('appSubtitleEl');
+  if (titleEl) titleEl.textContent = c.title || 'Travel 2026';
+  if (subEl) subEl.textContent = c.subtitle || '';
+
+  // Update day tabs
+  const tabIds = ['dtab0','dtab1','dtab2','dtab3','dtab4','dtab5','dtab6'];
+  tabIds.forEach((id, i) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (i < (c.numDays || 4)) {
+      el.style.display = '';
+      el.textContent = (c.dayLabels || [])[i] || ('Day '+(i+1));
+    } else {
+      el.style.display = 'none';
+    }
+  });
+
+  // Update move-to-day dropdowns (re-render list)
+  renderAll();
+}
+
+function confirmResetAll() {
+  showConfirm('Reset ALL data? This clears all stops, reservations, and settings.', () => {
+    localStorage.clear();
+    location.reload();
+  });
+}
+
 
 // ── EDIT STOP ─────────────────────────────────────────────────────
 function editStop(i) {
