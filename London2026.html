@@ -2729,16 +2729,17 @@ function renderDetail() {
 
 // ── AI SUGGEST BETWEEN STOPS ──────────────────────────────────────
 const SUGGEST_CATEGORIES = [
-  { icon:'☕', label:'Coffee / Café' },
-  { icon:'🍽️', label:'Restaurant' },
-  { icon:'🏛️', label:'Museum' },
-  { icon:'🍺', label:'Pub / Bar' },
-  { icon:'🛍️', label:'Shop / Market' },
-  { icon:'🌿', label:'Park / Garden' },
-  { icon:'🎭', label:'Arts / Theatre' },
-  { icon:'📸', label:'Viewpoint' },
-  { icon:'🎵', label:'Live Music' },
-  { icon:'🧇', label:'Breakfast spot' },
+  { icon:'🚶', label:'Scenic walking route between these stops' },
+  { icon:'🏘️', label:'Historic neighbourhood worth exploring on foot' },
+  { icon:'☕', label:'Coffee or café worth a stop' },
+  { icon:'🍽️', label:'Restaurant for a meal here' },
+  { icon:'🏛️', label:'Museum or gallery nearby' },
+  { icon:'🍺', label:'Pub or bar' },
+  { icon:'🛍️', label:'Market or local shops' },
+  { icon:'🌿', label:'Park or garden to walk through' },
+  { icon:'📸', label:'Viewpoint or photo spot' },
+  { icon:'🎭', label:'Arts venue or theatre' },
+  { icon:'🎵', label:'Live music nearby' },
 ];
 
 let _suggestInsertAfter = -1; // insert after this stop index (-1 = before first)
@@ -2837,7 +2838,10 @@ async function runSuggest(midLat, midLng, afterIdx, dayIdx) {
   _suggestResults = [];
 
   try {
-    const prompt = 'You are a London travel expert. Suggest 4 excellent real places matching: "' + query + '" near lat ' + midLat.toFixed(3) + ', lng ' + midLng.toFixed(3) + ' in London. Return ONLY a JSON array (no markdown): [{"name":"...","type":"...","address":"...","lat":0.0,"lng":0.0,"why":"1 sentence why it fits here","duration":"45 min"}]. Use real places with accurate coordinates.';
+    const isWalk = query.toLowerCase().includes('walk') || query.toLowerCase().includes('neighbourhood') || query.toLowerCase().includes('route');
+    const prompt = isWalk
+      ? 'You are a London walking tour expert. Suggest 4 excellent short walking experiences or scenic routes between lat ' + midLat.toFixed(3) + ', lng ' + midLng.toFixed(3) + ' matching: "' + query + '". Each should be a specific street, lane, square or area worth strolling through. Return ONLY a JSON array (no markdown): [{"name":"...","type":"Walking route · neighbourhood","address":"...","lat":0.0,"lng":0.0,"why":"1 sentence why this walk is special","duration":"20 min"}]. Use real London locations with accurate coordinates.'
+      : 'You are a London travel expert. Suggest 4 excellent real places matching: "' + query + '" near lat ' + midLat.toFixed(3) + ', lng ' + midLng.toFixed(3) + ' in London. Return ONLY a JSON array (no markdown): [{"name":"...","type":"...","address":"...","lat":0.0,"lng":0.0,"why":"1 sentence why it fits here","duration":"45 min"}]. Use real places with accurate coordinates.';
 
     const apiKey = getApiKey();
     if (!apiKey) {
