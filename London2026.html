@@ -2833,18 +2833,30 @@ Return ONLY a JSON array (no markdown):
 
 Use real places with accurate coordinates near the given location.\`;
 
+    const apiKey = getApiKey();
+    if (!apiKey) {
+      listEl.innerHTML = '<p style="color:#c0392b;font-size:13px;text-align:center;padding:20px;">API key required — set it in the Search tab first</p>';
+      return;
+    }
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 1000, messages: [{ role: 'user', content: prompt }] })
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1000, messages: [{ role: 'user', content: prompt }] })
     });
+    if (!res.ok) throw new Error('API error ' + res.status);
     const data = await res.json();
     const text = data.content?.[0]?.text || '[]';
-    const clean = text.replace(/\`\`\`json|\`\`\`/g, '').trim();
+    const clean = text.replace(/```json|```/g, '').trim();
     _suggestResults = JSON.parse(clean);
     renderSuggestResults(_suggestResults, afterIdx, dayIdx);
   } catch(e) {
-    listEl.innerHTML = '<p style="color:#c0392b;font-size:13px;text-align:center;padding:20px;">Could not get suggestions — try again</p>';
+    console.error('Suggest error:', e);
+    listEl.innerHTML = '<p style="color:#c0392b;font-size:13px;text-align:center;padding:20px;">Could not get suggestions — check API key or try again</p>';
   }
 }
 
