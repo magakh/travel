@@ -2825,8 +2825,8 @@ function buildInlineMap() {
 }
 
 function refreshInlineMap() {
-  if (_inlineMapOpen && (_inlineMapDay !== currentDay || !_inlineMap)) {
-    buildInlineMap();
+  if (_inlineMapOpen) {
+    buildInlineMap(); // always rebuild to reflect latest data
   }
 }
 
