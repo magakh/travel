@@ -1437,8 +1437,8 @@ function mapDragDrop(e, i) {
   s.splice(i, 0, moved);
   reassignTimes();
   currentStop = i;
+  renderAll();
   renderRouteMap();
-  renderStopList();
   showToast('Stop moved — route updated');
 }
 function mapDragEnd() {
@@ -1453,8 +1453,8 @@ function moveStop(i, dir) {
   const tmp = stops[i]; stops[i] = stops[newI]; stops[newI] = tmp;
   reassignTimes();
   currentStop = newI;
-  renderRouteMap();
-  renderStopList();
+  renderAll();
+  if (currentView === 'routemap') renderRouteMap();
 }
 
 // ── SAVE / LOAD ───────────────────────────────────────────────────
@@ -2018,8 +2018,7 @@ function saveReservation(i) {
   s.fixed = true;
 
   document.getElementById('res-overlay').remove();
-  autoSave();
-  renderStopList();
+  renderAll();
   renderDetail();
   showToast('Reservation saved 🔒');
   checkConflicts();
@@ -2029,8 +2028,7 @@ function clearReservation(i) {
   const s = days[currentDay].stops[i];
   delete s.reservation;
   delete s.fixed;
-  autoSave();
-  renderStopList();
+  renderAll();
   renderDetail();
   showToast('Reservation cleared');
 }
@@ -2130,7 +2128,7 @@ function applyDuration(i, durStr) {
   // Cascade times from this stop onward
   cascadeTimesFrom(i);
   document.getElementById('dur-overlay').remove();
-  renderStopList();
+  renderAll();
   if (currentView === 'detail') renderDetail();
   showToast('Duration set to ' + durStr);
 }
@@ -2206,9 +2204,8 @@ function applyStopTime(i) {
   cascadeTimesFrom(i);
 
   document.getElementById('time-overlay').remove();
-  renderStopList();
+  renderAll();
   if (currentView === 'detail') renderDetail();
-  autoSave();
   checkConflicts();
   showToast('Updated ✓');
 }
@@ -2230,7 +2227,7 @@ function moveStopToDay(targetDay, stopIdx) {
     days[currentDay].stops.splice(idx, 1);
     days[targetDay].stops.push(stop);
     currentStop = Math.min(currentStop, days[currentDay].stops.length - 1);
-    autoSave(); renderStopList(); showView('list');
+    renderAll(); showView('list');
     showToast('"' + stop.name + '" moved to ' + days[targetDay].title.split('—')[0].trim());
   };
   if (stop.fixed || stop.reservation) {
@@ -2425,12 +2422,21 @@ function switchDay(d) {
     document.getElementById(id).classList.toggle('active', i === d);
   });
   document.getElementById('dayNote').textContent = days[d].note || '';
-  renderStopList();
+  renderAll();
   showView('list');
-  refreshInlineMap();
 }
 
 // ── STOP LIST ─────────────────────────────────────────────────────
+// ── SINGLE RENDER ENTRY POINT — keeps all views in sync ──────────
+function renderAll() {
+  renderStopList();
+  refreshInlineMap();
+  if (currentView === 'routemap') renderRouteMap();
+  renderPrebook();
+  autoSave();
+}
+
+
 function renderStopList() {
   const stops = days[currentDay].stops;
   const total = stops.length;
@@ -2659,7 +2665,6 @@ function markDone() {
   updateBottomNav();
 }
 function toggleDone(i) {
-  setTimeout(autoSave, 0);
   const key = currentDay+'-'+i;
   if (completed.includes(key)) completed = completed.filter(k => k !== key);
   else completed.push(key);
@@ -2678,7 +2683,8 @@ function dragDrop(e, i) {
   s.splice(i, 0, moved);
   reassignTimes();
   currentStop = i;
-  renderStopList();
+  renderAll();
+  if (currentView === 'routemap') renderRouteMap();
 }
 function dragEnd() { dragSrc = null; document.querySelectorAll('.stop-row').forEach(el => { el.style.opacity='1'; el.style.borderTop=''; }); }
 
@@ -2689,7 +2695,8 @@ function reassignTimes() { reassignTimesForDay(currentDay); }
 function optimizeRoute() {
   optimizeRouteForDay(currentDay);
   currentStop = 0;
-  renderStopList();
+  renderAll();
+  if (currentView === 'routemap') renderRouteMap();
   showToast('Route optimised — shortest walking distance ✓');
 }
 
@@ -2701,8 +2708,7 @@ function confirmDeleteStop(i) {
     days[currentDay].stops.splice(i, 1);
     reassignTimes();
     currentStop = Math.min(currentStop, days[currentDay].stops.length - 1);
-    autoSave();
-    renderStopList();
+    renderAll();
     showToast('Stop removed');
   });
 }
@@ -2714,7 +2720,7 @@ function removeStop() {
     days[currentDay].stops.splice(currentStop, 1);
     reassignTimes();
     currentStop = Math.min(currentStop, days[currentDay].stops.length - 1);
-    renderStopList();
+    renderAll();
     showView('list');
     showToast('Stop removed');
   });
@@ -3052,7 +3058,7 @@ function addStop(dayIdx, info) {
   currentStop = days[dayIdx].stops.length - 1;
   renderStopList();
   selectStop(currentStop);
-  autoSave();
+  renderAll();
   showToast('"'+info.name+'" added to Day '+(dayIdx+1)+'!');
   document.getElementById('addName').value='';
   document.getElementById('addAddress').value='';
