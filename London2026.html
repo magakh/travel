@@ -1304,6 +1304,12 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
       <p class="gen-hint">Changes take effect immediately. Sync file change applies on next save/load.</p>
 
       <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:8px;">
+        <label class="form-label">Anthropic API Key (for AI features)</label>
+        <input class="form-input" id="setApiKey" type="password" placeholder="sk-ant-…">
+        <p class="gen-hint" style="margin-bottom:12px;">Get a key at console.anthropic.com — stored in session only</p>
+        <button class="gen-btn" onclick="saveApiKey()" style="background:#5c4db1;margin-bottom:16px;">🔑 Save API Key</button>
+      </div>
+      <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:8px;">
         <p style="font-size:12px;color:#888;margin-bottom:8px;">Danger zone</p>
         <button onclick="confirmResetAll()" style="width:100%;padding:12px;border-radius:10px;border:1px solid #c0392b;background:#fde8e8;color:#c0392b;font-size:13px;font-weight:700;cursor:pointer;">🗑 Reset all data</button>
       </div>
@@ -2540,7 +2546,7 @@ function renderStopList() {
     return `
     <div class="travel-connector tc-loading" id="tc-${currentDay}-${connectorIdx}">
       <span class="tc-walk-text">🚶 …</span>
-      <button class="tc-suggest-btn" onclick="event.stopPropagation();suggestBetween(${i > 0 ? i-1 : -1}, ${i}, ${currentDay})" title="AI: suggest a place here">✨ Add here</button>
+      <button class="tc-suggest-btn" onclick="event.stopPropagation();suggestBetween(${i-1},${i},${currentDay})" title="AI: suggest a place here">✨ Add here</button>
     </div>
     <div class="stop-row ${i === currentStop && currentView === 'detail' ? 'active-row' : ''} ${getConflict(i) ? 'has-conflict' : (s.reservation ? (s.reservation.confirmed ? 'confirmed' : 'has-reservation') : '')}"
          draggable="true"
@@ -2586,7 +2592,8 @@ function renderStopList() {
   }).join('');
 
   // Last connector: last stop → hotel
-  const lastConn = `<div class="travel-connector tc-loading" id="tc-${currentDay}-${stops.length}"><span class="tc-walk-text">🚶 …</span><button class="tc-suggest-btn" onclick="event.stopPropagation();suggestBetween(stops.length-1, -1, ${currentDay})" title="Add before hotel">✨ Add here</button></div>`;
+  const lastConnIdx = stops.length - 1;
+  const lastConn = '<div class="travel-connector tc-loading" id="tc-'+currentDay+'-'+stops.length+'"><span class="tc-walk-text">🚶 …</span><button class="tc-suggest-btn" onclick="event.stopPropagation();suggestBetween('+lastConnIdx+',-1,'+currentDay+')" title="Add before hotel return">✨ Add here</button></div>';
 
   document.getElementById('stopList').innerHTML =
     hotelBanner(hotelStartTime, currentDay === 0 ? 'Hotel Check-In' : 'Hotel — Morning departure') +
@@ -2959,6 +2966,9 @@ function insertSuggestedStop(resultIdx, afterIdx, dayIdx) {
 // ── SETTINGS ──────────────────────────────────────────────────────
 function loadSettingsUI() {
   const c = APP_CONFIG;
+  const savedKey = sessionStorage.getItem('anthropic_key');
+  const keyEl = document.getElementById('setApiKey');
+  if (keyEl) keyEl.placeholder = savedKey ? '••••• key saved (enter to replace)' : 'sk-ant-…';
   document.getElementById('setTitle').value = c.title || '';
   document.getElementById('setSubtitle').value = c.subtitle || '';
   document.getElementById('setNumDays').value = c.numDays || 4;
@@ -3667,15 +3677,22 @@ function showToast(msg, isError=false) {
 
 // ── API KEY MANAGEMENT ────────────────────────────────────────────
 function getApiKey() {
-  let key = sessionStorage.getItem('anthropic_key');
+  const key = sessionStorage.getItem('anthropic_key');
   if (key) return key;
-  key = prompt('Enter your Anthropic API key to use AI features:\n(Get one at console.anthropic.com)');
-  if (!key || !key.trim().startsWith('sk-')) {
-    showToast('Valid API key required', true);
-    return null;
+  showToast('Set your API key in ⚙ Settings first', true);
+  showView('settings');
+  return null;
+}
+
+function saveApiKey() {
+  const key = (document.getElementById('setApiKey')?.value || '').trim();
+  if (!key || !key.startsWith('sk-')) {
+    showToast('Enter a valid API key (starts with sk-)', true);
+    return;
   }
-  sessionStorage.setItem('anthropic_key', key.trim());
-  return key.trim();
+  sessionStorage.setItem('anthropic_key', key);
+  document.getElementById('setApiKey').value = '';
+  showToast('API key saved ✓');
 }
 
 
