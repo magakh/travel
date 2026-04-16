@@ -1384,13 +1384,15 @@ function prepareBreakfasts() {
 }
 
 function reassignTimesForDay(di) {
-  // May 7 (Day 0) starts at 12:00 PM — arrival day
-  const START_MIN = di === 0 ? 12 * 60 : 9 * 60; // noon or 9am
-  let totalMin = START_MIN;
-  days[di].stops.forEach((s) => {
+  const stops = days[di].stops;
+  if (!stops || !stops.length) return;
+  // Use first stop's existing time as anchor — never hardcode a start time
+  const [tp0, ap0] = (stops[0].time || '9:00 AM').split(' ');
+  const [h0, m0] = tp0.split(':').map(Number);
+  let totalMin = (h0 % 12 + (ap0 === 'PM' ? 12 : 0)) * 60 + (m0 || 0);
+  stops.forEach((s) => {
     // Never move a reserved/fixed stop's time
     if (s.reservation && s.reservation.time) {
-      // Resync totalMin from this stop's locked time
       const [tp, ap] = s.time.split(' ');
       const [h, m] = tp.split(':').map(Number);
       totalMin = (h % 12 + (ap === 'PM' ? 12 : 0)) * 60 + (m || 0);
@@ -1926,11 +1928,18 @@ async function loadTravelTimes(stops) {
   stops.forEach(s => points.push({ lat: s.lat, lng: s.lng, name: s.name }));
   if (hd) points.push({ lat: hd.lat, lng: hd.lng, name: 'Hotel' });
 
+  // Segments: hotel->s0, s0->s1, ..., sN->hotel
+  // Connector IDs: tc-day-0 before stop0, tc-day-1 before stop1, ..., tc-day-N for return
   for (let i = 0; i < points.length - 1; i++) {
     const a = points[i], b = points[i+1];
     const mins = await fetchWalkTime(a.lat, a.lng, b.lat, b.lng);
-    const key = `tc-${currentDay}-${i}`;
-    const el = document.getElementById(key);
+    // i=0: hotel->stop0 uses connector id 0 (before stop 0)
+    // i=1: stop0->stop1 uses connector id 1 (before stop 1)
+    // i=N: stopN->hotel uses lastConnIdx
+    const stops2 = days[currentDay].stops;
+    const isLast = i === points.length - 2;
+    const elId = isLast ? `tc-${currentDay}-${stops2.length}` : `tc-${currentDay}-${i}`;
+    const el = document.getElementById(elId);
     if (el && mins !== null) {
       el.textContent = fmtWalkMins(mins);
       el.classList.remove('tc-loading');
@@ -2498,12 +2507,10 @@ function renderStopList() {
   }).join('');
 
   // Last connector: last stop → hotel
-  const lastConnIdx = hd2 ? stops.length + 1 : stops.length;
-  const lastConn = `<div class="travel-connector tc-loading" id="tc-${currentDay}-${lastConnIdx}">🚶 …</div>`;
+  const lastConn = `<div class="travel-connector tc-loading" id="tc-${currentDay}-${stops.length}">🚶 …</div>`;
 
   document.getElementById('stopList').innerHTML =
     hotelBanner(hotelStartTime, currentDay === 0 ? 'Hotel Check-In' : 'Hotel — Morning departure') +
-    (hd2 ? `<div class="travel-connector tc-loading" id="tc-${currentDay}-0">🚶 …</div>` : '') +
     stopRows + lastConn +
     hotelBanner('~10:00 PM', hotelEndName);
 
