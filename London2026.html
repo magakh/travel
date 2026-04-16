@@ -2559,7 +2559,10 @@ function renderDetail() {
         <div class="detail-badge" style="border-left:3px solid ${s.color};padding-left:10px;">
         <span onclick="editStopTime(currentStop)" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;" title="Tap to change start time">⏱ ${s.time}</span> &nbsp;·&nbsp; <span onclick="editDuration(currentStop)" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;" title="Tap to edit duration">⏳ ${s.duration}</span> &nbsp;·&nbsp; ${days[currentDay].title.split('—')[0].trim()}
         </div>
-        <button onclick="goBackToList()" style="background:none;border:none;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;padding:3px 8px;border-radius:8px;border:1px solid var(--border);white-space:nowrap;margin-top:0;align-self:flex-start;">← List</button>
+        <div style="display:flex;gap:6px;align-self:flex-start;">
+          <button onclick="editStop(currentStop)" style="background:none;border:none;font-size:12px;font-weight:700;color:#1a73e8;cursor:pointer;padding:3px 8px;border-radius:8px;border:1px solid #c5d8fa;white-space:nowrap;">✏️ Edit</button>
+          <button onclick="goBackToList()" style="background:none;border:none;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;padding:3px 8px;border-radius:8px;border:1px solid var(--border);white-space:nowrap;">← List</button>
+        </div>
       </div>
       <div class="detail-title">${s.name}</div>
       <div class="detail-subtitle">${s.type}</div>
@@ -2643,6 +2646,105 @@ function renderDetail() {
   `;
   updateBottomNav();
 }
+
+// ── EDIT STOP ─────────────────────────────────────────────────────
+function editStop(i) {
+  const s = days[currentDay].stops[i];
+  const overlay = document.createElement('div');
+  overlay.id = 'edit-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:flex-end;justify-content:center;overflow-y:auto;';
+
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:20px 20px 0 0;padding:24px;width:100%;max-width:560px;box-shadow:0 -4px 32px rgba(0,0,0,0.2);max-height:90vh;overflow-y:auto;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+        <div style="font-size:16px;font-weight:800;">✏️ Edit stop</div>
+        <button onclick="document.getElementById('edit-overlay').remove()" style="background:none;border:none;font-size:22px;color:#aaa;cursor:pointer;">✕</button>
+      </div>
+
+      <label style="font-size:11px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:5px;">Name</label>
+      <input id="editName" type="text" value="${(s.name||'').replace(/"/g,'&quot;')}"
+        style="width:100%;padding:11px 14px;border:1px solid #ddd;border-radius:10px;font-size:15px;font-weight:600;margin-bottom:12px;box-sizing:border-box;">
+
+      <label style="font-size:11px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:5px;">Type / subtitle</label>
+      <input id="editType" type="text" value="${(s.type||'').replace(/"/g,'&quot;')}"
+        style="width:100%;padding:11px 14px;border:1px solid #ddd;border-radius:10px;font-size:14px;margin-bottom:12px;box-sizing:border-box;">
+
+      <label style="font-size:11px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:5px;">Address</label>
+      <input id="editAddress" type="text" value="${(s.address||'').replace(/"/g,'&quot;')}"
+        style="width:100%;padding:11px 14px;border:1px solid #ddd;border-radius:10px;font-size:14px;margin-bottom:12px;box-sizing:border-box;">
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:5px;">Latitude</label>
+          <input id="editLat" type="number" step="0.0001" value="${s.lat||''}"
+            style="width:100%;padding:11px 14px;border:1px solid #ddd;border-radius:10px;font-size:14px;box-sizing:border-box;">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:5px;">Longitude</label>
+          <input id="editLng" type="number" step="0.0001" value="${s.lng||''}"
+            style="width:100%;padding:11px 14px;border:1px solid #ddd;border-radius:10px;font-size:14px;box-sizing:border-box;">
+        </div>
+      </div>
+
+      <label style="font-size:11px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:5px;">Notes / what to do</label>
+      <textarea id="editTodo" style="width:100%;padding:11px 14px;border:1px solid #ddd;border-radius:10px;font-size:13px;min-height:80px;resize:vertical;font-family:inherit;margin-bottom:12px;box-sizing:border-box;">${(s.todo||'').replace(/<[^>]+>/g,'').trim()}</textarea>
+
+      <label style="font-size:11px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:5px;">Flags</label>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:18px;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+          <input type="checkbox" id="editFree" ${s.free?'checked':''} style="width:16px;height:16px;"> Free entry
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;">
+          <input type="checkbox" id="editPrebook" ${s.prebook?'checked':''} style="width:16px;height:16px;"> Pre-book required
+        </label>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <button onclick="document.getElementById('edit-overlay').remove()"
+          style="padding:13px;border-radius:10px;border:1px solid #ddd;background:#fff;font-size:14px;font-weight:700;cursor:pointer;color:#666;">Cancel</button>
+        <button onclick="saveStopEdit(${i})"
+          style="padding:13px;border-radius:10px;border:none;background:#1a1a1a;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">Save changes</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+}
+
+function saveStopEdit(i) {
+  const s = days[currentDay].stops[i];
+  const name = document.getElementById('editName').value.trim();
+  const type = document.getElementById('editType').value.trim();
+  const address = document.getElementById('editAddress').value.trim();
+  const lat = parseFloat(document.getElementById('editLat').value);
+  const lng = parseFloat(document.getElementById('editLng').value);
+  const todo = document.getElementById('editTodo').value.trim();
+  const free = document.getElementById('editFree').checked;
+  const prebook = document.getElementById('editPrebook').checked;
+
+  if (!name) { showToast('Name is required', true); return; }
+
+  s.name = name;
+  s.type = type;
+  if (address) s.address = address;
+  if (!isNaN(lat)) s.lat = lat;
+  if (!isNaN(lng)) s.lng = lng;
+  if (todo) s.todo = '<p>' + todo + '</p>';
+  s.free = free;
+  s.prebook = prebook;
+
+  // Update badges
+  s.badges = s.badges || [];
+  if (free && !s.badges.includes('free')) s.badges.push('free');
+  if (!free) s.badges = s.badges.filter(b => b !== 'free');
+  if (prebook && !s.badges.includes('prebook')) s.badges.push('prebook');
+  if (!prebook) s.badges = s.badges.filter(b => b !== 'prebook');
+
+  document.getElementById('edit-overlay').remove();
+  renderAll();
+  renderDetail();
+  showToast('"' + name + '" updated ✓');
+}
+
 
 // ── BOTTOM NAV ACTIONS ────────────────────────────────────────────
 function navPrev() {
