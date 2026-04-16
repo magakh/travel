@@ -1074,15 +1074,20 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
 .stop-row.has-reservation.confirmed { border-left:3px solid #28a745; }
 .travel-connector {
   display: flex; align-items: center; gap: 8px;
-  padding: 5px 14px 5px 52px;
+  padding: 4px 10px 4px 48px;
   background: #fafaf8; border-bottom: 1px solid var(--border);
   font-size: 11px; color: var(--muted); font-weight: 500;
 }
-.travel-connector .tc-line {
-  width: 2px; height: 18px; background: #ddd;
-  flex-shrink: 0; margin-left: -30px; margin-right: 8px;
-}
 .travel-connector.tc-loading { color: #bbb; font-style: italic; }
+.tc-suggest-btn {
+  margin-left: auto; flex-shrink: 0;
+  background: none; border: 1px dashed #c5d8fa;
+  border-radius: 20px; padding: 2px 8px;
+  font-size: 10px; font-weight: 700; color: #1a73e8;
+  cursor: pointer; white-space: nowrap;
+  transition: background 0.15s;
+}
+.tc-suggest-btn:hover, .tc-suggest-btn:active { background: #e8f0fd; }
 .stop-end-time {
   font-size: 10px; color: var(--hint); font-weight: 500;
   margin-top: 2px; opacity: 0.8;
@@ -1998,7 +2003,9 @@ async function loadTravelTimes(stops) {
     const elId = isLast ? `tc-${currentDay}-${stops2.length}` : `tc-${currentDay}-${i}`;
     const el = document.getElementById(elId);
     if (el && mins !== null) {
-      el.textContent = fmtWalkMins(mins);
+      const span = el.querySelector('.tc-walk-text');
+      if (span) span.textContent = fmtWalkMins(mins);
+      else el.childNodes[0] && (el.childNodes[0].textContent = fmtWalkMins(mins));
       el.classList.remove('tc-loading');
     }
   }
@@ -2527,7 +2534,10 @@ function renderStopList() {
     const endTime = calcEndTime(s.time, s.duration);
     const connectorIdx = hd2 ? i + 1 : i; // offset if hotel is first point
     return `
-    <div class="travel-connector tc-loading" id="tc-${currentDay}-${connectorIdx}">🚶 …</div>
+    <div class="travel-connector tc-loading" id="tc-${currentDay}-${connectorIdx}">
+      <span class="tc-walk-text">🚶 …</span>
+      <button class="tc-suggest-btn" onclick="event.stopPropagation();suggestBetween(${i > 0 ? i-1 : -1}, ${i}, ${currentDay})" title="AI: suggest a place here">✨ Add here</button>
+    </div>
     <div class="stop-row ${i === currentStop && currentView === 'detail' ? 'active-row' : ''} ${getConflict(i) ? 'has-conflict' : (s.reservation ? (s.reservation.confirmed ? 'confirmed' : 'has-reservation') : '')}"
          draggable="true"
          ondragstart="dragStart(event,${i})"
@@ -2572,7 +2582,7 @@ function renderStopList() {
   }).join('');
 
   // Last connector: last stop → hotel
-  const lastConn = `<div class="travel-connector tc-loading" id="tc-${currentDay}-${stops.length}">🚶 …</div>`;
+  const lastConn = `<div class="travel-connector tc-loading" id="tc-${currentDay}-${stops.length}"><span class="tc-walk-text">🚶 …</span><button class="tc-suggest-btn" onclick="event.stopPropagation();suggestBetween(stops.length-1, -1, ${currentDay})" title="Add before hotel">✨ Add here</button></div>`;
 
   document.getElementById('stopList').innerHTML =
     hotelBanner(hotelStartTime, currentDay === 0 ? 'Hotel Check-In' : 'Hotel — Morning departure') +
@@ -2705,6 +2715,237 @@ function renderDetail() {
   `;
   updateBottomNav();
 }
+
+// ── AI SUGGEST BETWEEN STOPS ──────────────────────────────────────
+const SUGGEST_CATEGORIES = [
+  { icon:'☕', label:'Coffee / Café' },
+  { icon:'🍽️', label:'Restaurant' },
+  { icon:'🏛️', label:'Museum' },
+  { icon:'🍺', label:'Pub / Bar' },
+  { icon:'🛍️', label:'Shop / Market' },
+  { icon:'🌿', label:'Park / Garden' },
+  { icon:'🎭', label:'Arts / Theatre' },
+  { icon:'📸', label:'Viewpoint' },
+  { icon:'🎵', label:'Live Music' },
+  { icon:'🧇', label:'Breakfast spot' },
+];
+
+let _suggestInsertAfter = -1; // insert after this stop index (-1 = before first)
+let _suggestInsertDay = 0;
+let _suggestMap = null;
+let _suggestMarkers = [];
+let _suggestResults = [];
+
+function suggestBetween(afterIdx, beforeIdx, dayIdx) {
+  _suggestInsertAfter = afterIdx; // insert AFTER this index
+  _suggestInsertDay = dayIdx;
+
+  // Get midpoint between the two stops for location context
+  const stops = days[dayIdx].stops;
+  let midLat = 51.515, midLng = -0.13; // London default
+  if (afterIdx >= 0 && afterIdx < stops.length) {
+    const a = stops[afterIdx];
+    const b = beforeIdx >= 0 && beforeIdx < stops.length ? stops[beforeIdx] : (window.HOTEL_DATA || a);
+    midLat = (a.lat + b.lat) / 2;
+    midLng = (a.lng + b.lng) / 2;
+  } else if (window.HOTEL_DATA) {
+    midLat = window.HOTEL_DATA.lat;
+    midLng = window.HOTEL_DATA.lng;
+  }
+
+  const afterName = afterIdx >= 0 ? stops[afterIdx]?.name : (window.HOTEL_DATA?.name || 'Hotel');
+  const beforeName = beforeIdx >= 0 && beforeIdx < stops.length ? stops[beforeIdx]?.name : (window.HOTEL_DATA?.name || 'Hotel');
+
+  const overlay = document.createElement('div');
+  overlay.id = 'suggest-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;';
+
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:20px 20px 0 0;width:100%;max-width:600px;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 -4px 32px rgba(0,0,0,0.25);">
+      <div style="padding:18px 20px 0;flex-shrink:0;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+          <div style="font-size:15px;font-weight:800;">✨ Add a stop</div>
+          <button onclick="document.getElementById('suggest-overlay').remove();if(_suggestMap){_suggestMap.remove();_suggestMap=null;}" style="background:none;border:none;font-size:22px;color:#aaa;cursor:pointer;">✕</button>
+        </div>
+        <div style="font-size:11px;color:#888;margin-bottom:14px;">Between <b>${afterName}</b> → <b>${beforeName}</b></div>
+
+        <input id="suggestQuery" type="text" placeholder="Describe what you're looking for…"
+          style="width:100%;padding:11px 14px;border:1px solid #ddd;border-radius:10px;font-size:14px;margin-bottom:10px;box-sizing:border-box;"
+          onkeydown="if(event.key==='Enter')runSuggest(${midLat},${midLng},${afterIdx},${dayIdx})">
+
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;">
+          ${SUGGEST_CATEGORIES.map(c => `<button onclick="document.getElementById('suggestQuery').value='${c.label}';runSuggest(${midLat},${midLng},${afterIdx},${dayIdx})"
+            style="padding:5px 10px;border-radius:20px;border:1px solid #ddd;background:#f5f4f0;font-size:12px;font-weight:600;cursor:pointer;">${c.icon} ${c.label}</button>`).join('')}
+        </div>
+      </div>
+
+      <div id="suggestMapDiv" style="width:100%;height:200px;flex-shrink:0;background:#e8f0e4;"></div>
+
+      <div id="suggestResultsList" style="flex:1;overflow-y:auto;padding:10px 16px 20px;min-height:80px;">
+        <p style="color:#aaa;font-size:13px;text-align:center;padding:20px 0;">Choose a category or type to search</p>
+      </div>
+    </div>`;
+
+  document.body.appendChild(overlay);
+  overlay.onclick = (e) => { if (e.target === overlay) { overlay.remove(); if(_suggestMap){_suggestMap.remove();_suggestMap=null;} } };
+
+  // Init mini map
+  setTimeout(() => {
+    if (_suggestMap) { _suggestMap.remove(); _suggestMap = null; }
+    const mapEl = document.getElementById('suggestMapDiv');
+    if (!mapEl) return;
+    _suggestMap = L.map(mapEl, { zoomControl: true, attributionControl: false }).setView([midLat, midLng], 15);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(_suggestMap);
+    // Show surrounding stops as context pins
+    const ctx = days[dayIdx].stops;
+    if (afterIdx >= 0 && ctx[afterIdx]) {
+      const a = ctx[afterIdx];
+      L.circleMarker([a.lat, a.lng], {radius:8, color:a.color||'#888', fillColor:a.color||'#888', fillOpacity:0.7}).addTo(_suggestMap).bindPopup('<b>From:</b> ' + a.name);
+    }
+    if (beforeIdx >= 0 && ctx[beforeIdx]) {
+      const b = ctx[beforeIdx];
+      L.circleMarker([b.lat, b.lng], {radius:8, color:b.color||'#888', fillColor:b.color||'#888', fillOpacity:0.7}).addTo(_suggestMap).bindPopup('<b>To:</b> ' + b.name);
+    }
+    if (window.HOTEL_DATA && (afterIdx < 0 || beforeIdx < 0)) {
+      const h = window.HOTEL_DATA;
+      L.marker([h.lat, h.lng]).addTo(_suggestMap).bindPopup('🏨 ' + h.name);
+    }
+  }, 150);
+}
+
+async function runSuggest(midLat, midLng, afterIdx, dayIdx) {
+  const query = document.getElementById('suggestQuery')?.value.trim();
+  if (!query) return;
+  const listEl = document.getElementById('suggestResultsList');
+  if (!listEl) return;
+  listEl.innerHTML = '<p style="color:#888;font-size:13px;text-align:center;padding:20px;">🔍 Searching…</p>';
+
+  // Clear old markers
+  _suggestMarkers.forEach(m => m.remove());
+  _suggestMarkers = [];
+  _suggestResults = [];
+
+  try {
+    const prompt = \`You are a London travel expert. Suggest 4 excellent, real places matching: "\${query}" near lat \${midLat.toFixed(3)}, lng \${midLng.toFixed(3)} in London.
+
+Return ONLY a JSON array (no markdown):
+[{"name":"...","type":"...","address":"...","lat":0.0,"lng":0.0,"why":"1 sentence why it fits here","duration":"45 min"}]
+
+Use real places with accurate coordinates near the given location.\`;
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 1000, messages: [{ role: 'user', content: prompt }] })
+    });
+    const data = await res.json();
+    const text = data.content?.[0]?.text || '[]';
+    const clean = text.replace(/\`\`\`json|\`\`\`/g, '').trim();
+    _suggestResults = JSON.parse(clean);
+    renderSuggestResults(_suggestResults, afterIdx, dayIdx);
+  } catch(e) {
+    listEl.innerHTML = '<p style="color:#c0392b;font-size:13px;text-align:center;padding:20px;">Could not get suggestions — try again</p>';
+  }
+}
+
+function renderSuggestResults(results, afterIdx, dayIdx) {
+  const listEl = document.getElementById('suggestResultsList');
+  if (!listEl || !results.length) {
+    if (listEl) listEl.innerHTML = '<p style="color:#888;font-size:13px;text-align:center;padding:20px;">No results found — try a different search</p>';
+    return;
+  }
+
+  // Clear old map markers
+  _suggestMarkers.forEach(m => m.remove());
+  _suggestMarkers = [];
+
+  const colors = ['#e53935','#1a73e8','#1a7a3a','#ff6f00'];
+
+  results.forEach((r, i) => {
+    if (!r.lat || !r.lng || !_suggestMap) return;
+    const icon = L.divIcon({ className:'', html:\`<div style="background:\${colors[i]};color:#fff;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.3);">\${i+1}</div>\`, iconSize:[28,28], iconAnchor:[14,14] });
+    const marker = L.marker([r.lat, r.lng], { icon })
+      .addTo(_suggestMap)
+      .bindPopup(\`<b>\${r.name}</b><br><span style="font-size:11px;color:#666;">\${r.address}</span>\`);
+    marker.on('click', () => highlightSuggestResult(i));
+    _suggestMarkers.push(marker);
+  });
+
+  // Fit map to results
+  try {
+    const bounds = L.latLngBounds(results.filter(r=>r.lat).map(r=>[r.lat,r.lng]));
+    _suggestMap.fitBounds(bounds, { padding: [30,30] });
+  } catch(e) {}
+
+  listEl.innerHTML = results.map((r, i) => \`
+    <div id="suggestResult\${i}" onclick="highlightSuggestResult(\${i})"
+      style="border:2px solid \${colors[i]};border-radius:12px;padding:12px;margin-bottom:10px;cursor:pointer;transition:background 0.15s;"
+      onmouseenter="this.style.background='#f5f9ff'" onmouseleave="this.style.background='#fff'">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:700;color:#1a1a1a;">\${i+1}. \${r.name}</div>
+          <div style="font-size:11px;color:#888;margin:2px 0;">\${r.type} · \${r.address}</div>
+          <div style="font-size:12px;color:#555;margin-top:4px;">\${r.why}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px;">⏳ \${r.duration || '60 min'}</div>
+        </div>
+        <button onclick="event.stopPropagation();insertSuggestedStop(\${i},\${afterIdx},\${dayIdx})"
+          style="background:#1a1a1a;color:#fff;border:none;border-radius:20px;padding:6px 14px;font-size:13px;font-weight:700;cursor:pointer;flex-shrink:0;">+ Add</button>
+      </div>
+    </div>\`).join('');
+}
+
+function highlightSuggestResult(i) {
+  // Scroll map to this marker
+  if (_suggestMarkers[i] && _suggestMap) {
+    const r = _suggestResults[i];
+    _suggestMap.setView([r.lat, r.lng], 16);
+    _suggestMarkers[i].openPopup();
+  }
+  // Highlight card
+  document.querySelectorAll('[id^="suggestResult"]').forEach((el,j) => {
+    el.style.background = j === i ? '#f0f7ff' : '#fff';
+  });
+}
+
+function insertSuggestedStop(resultIdx, afterIdx, dayIdx) {
+  const r = _suggestResults[resultIdx];
+  if (!r) return;
+
+  const stop = {
+    time: '12:00 PM', // will be recalculated
+    name: r.name,
+    type: r.type || 'Point of interest',
+    address: r.address || '',
+    lat: r.lat, lng: r.lng,
+    color: '#5c4db1',
+    prebook: false, free: false,
+    badges: [],
+    duration: r.duration || '60 min',
+    travel: '🗺️ Check Google Maps for walking directions from the previous stop.',
+    history: r.why || '',
+    todo: '<p>' + (r.why || '') + '</p>',
+    isUserAdded: true
+  };
+
+  // Insert after afterIdx
+  const insertAt = afterIdx + 1;
+  days[dayIdx].stops.splice(insertAt, 0, stop);
+
+  // Cascade times from afterIdx
+  const savedDay = currentDay;
+  currentDay = dayIdx;
+  if (afterIdx >= 0) cascadeTimesFrom(afterIdx);
+  currentDay = savedDay;
+
+  // Close overlay
+  const ov = document.getElementById('suggest-overlay');
+  if (ov) ov.remove();
+  if (_suggestMap) { _suggestMap.remove(); _suggestMap = null; }
+
+  renderAll();
+  showToast('"' + r.name + '" added ✓');
+}
+
 
 // ── SETTINGS ──────────────────────────────────────────────────────
 function loadSettingsUI() {
