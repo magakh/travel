@@ -2017,13 +2017,9 @@ async function loadTravelTimes(stops) {
   }
   // First time walk data loads: cascade from stop 0 to fix all times
   if (anyNew && days[currentDay] && days[currentDay].stops.length > 0) {
-    if (!window._walkCascadedDays) window._walkCascadedDays = {};
-    if (!window._walkCascadedDays[currentDay]) {
-      window._walkCascadedDays[currentDay] = true;
-      cascadeTimesFrom(0);
-      renderStopList();
-      autoSave();
-    }
+    cascadeTimesFrom(0);
+    renderStopList();
+    autoSave();
   }
 }
 
@@ -2226,9 +2222,9 @@ function applyDurationMins(i) {
 }
 
 function getWalkMinsBetween(fromStop, toStop) {
-  // Look up cached walk time from _travelCache
   if (!fromStop || !toStop) return 0;
   const key = fromStop.lat.toFixed(4)+','+fromStop.lng.toFixed(4)+'->'+toStop.lat.toFixed(4)+','+toStop.lng.toFixed(4);
+  // Return cached value, or 0 if not yet loaded (cascade will re-run when loaded)
   return _travelCache[key] || 0;
 }
 
@@ -2507,8 +2503,7 @@ function updateBottomNav() {
 // ── DAY SWITCHING ─────────────────────────────────────────────────
 function switchDay(d) {
   if (d < 0 || d >= days.length || !days[d]) return;
-  // Allow walk cascade on day switch
-  if (window._walkCascadedDays) delete window._walkCascadedDays[d];
+
   // Auto-open inline map on desktop
   if (window.innerWidth > 700 && !_inlineMapOpen) {
     _inlineMapOpen = true;
