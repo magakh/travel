@@ -2016,12 +2016,8 @@ async function loadTravelTimes(stops) {
       el.classList.remove('tc-loading');
     }
   }
-  // Re-assign times now that walk data is in cache
-  if (anyNew && days[currentDay] && days[currentDay].stops.length > 0) {
-    reassignTimesForDay(currentDay);
-    renderStopList();
-    autoSave();
-  }
+  // Walk times are now in cache for future manual edits/cascades
+  // Do NOT auto-reassign — times are set by user or sync, not auto-shifted
 }
 
 
