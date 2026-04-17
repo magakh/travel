@@ -1433,11 +1433,12 @@ function prepareBreakfasts() {
 function reassignTimesForDay(di) {
   const stops = days[di].stops;
   if (!stops || !stops.length) return;
-  // Use first stop's existing time as anchor — never hardcode a start time
   const [tp0, ap0] = (stops[0].time || '9:00 AM').split(' ');
   const [h0, m0] = tp0.split(':').map(Number);
   let totalMin = (h0 % 12 + (ap0 === 'PM' ? 12 : 0)) * 60 + (m0 || 0);
-  stops.forEach((s) => {
+  stops.forEach((s, idx) => {
+    // Add walk time from previous stop
+    if (idx > 0) totalMin += getWalkMinsBetween(stops[idx-1], s);
     // Never move a reserved/fixed stop's time
     if (s.reservation && s.reservation.time) {
       const [tp, ap] = s.time.split(' ');
@@ -2116,9 +2117,10 @@ function getConflict(i) {
   if (i === 0) return false;
   const prev = stops[i - 1];
   const curr = stops[i];
-  const prevEnd = timeToMins(prev.time) + parseDurationMins(prev.duration || '60 min');
+  const walkMins = getWalkMinsBetween(prev, curr);
+  const prevEnd = timeToMins(prev.time) + parseDurationMins(prev.duration || '60 min') + walkMins;
   const currStart = timeToMins(curr.time);
-  return currStart < prevEnd - 1; // 1 min buffer, back-to-back is fine
+  return currStart < prevEnd - 1; // conflict if curr starts before prev ends + walk
 }
 
 function checkConflicts() {
@@ -2215,6 +2217,13 @@ function applyDurationMins(i) {
   showToast('Duration set to ' + durStr);
 }
 
+function getWalkMinsBetween(fromStop, toStop) {
+  // Look up cached walk time from _travelCache
+  if (!fromStop || !toStop) return 0;
+  const key = fromStop.lat.toFixed(4)+','+fromStop.lng.toFixed(4)+'->'+toStop.lat.toFixed(4)+','+toStop.lng.toFixed(4);
+  return _travelCache[key] || 0;
+}
+
 function cascadeTimesFrom(fromIdx) {
   const stops = days[currentDay].stops;
   if (fromIdx >= stops.length - 1) return;
@@ -2224,9 +2233,11 @@ function cascadeTimesFrom(fromIdx) {
   totalMin += parseDurationMins(stops[fromIdx].duration || '60 min');
   for (let j = fromIdx + 1; j < stops.length; j++) {
     const s = stops[j];
+    // Add walk time from previous stop to this one
+    const walkMins = getWalkMinsBetween(stops[j-1], s);
+    totalMin += walkMins;
     // Skip fixed/reserved stops — they don't move
     if (s.fixed || (s.reservation && s.reservation.time)) {
-      // Sync totalMin to this stop's actual time to continue cascade after it
       const [stp, sap] = s.time.split(' ');
       const [sh, sm] = stp.split(':').map(Number);
       totalMin = (sh % 12 + (sap === 'PM' ? 12 : 0)) * 60 + (sm || 0);
