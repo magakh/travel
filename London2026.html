@@ -2015,8 +2015,16 @@ async function loadTravelTimes(stops) {
       el.classList.remove('tc-loading');
     }
   }
-  // Walk times are now in cache for future manual edits/cascades
-  // Do NOT auto-reassign — times are set by user or sync, not auto-shifted
+  // First time walk data loads: cascade from stop 0 to fix all times
+  if (anyNew && days[currentDay] && days[currentDay].stops.length > 0) {
+    if (!window._walkCascadedDays) window._walkCascadedDays = {};
+    if (!window._walkCascadedDays[currentDay]) {
+      window._walkCascadedDays[currentDay] = true;
+      cascadeTimesFrom(0);
+      renderStopList();
+      autoSave();
+    }
+  }
 }
 
 
@@ -2236,7 +2244,7 @@ function cascadeTimesFrom(fromIdx) {
               + parseDurationMins(stops[fromIdx].duration || '60 min');
   for (let j = fromIdx + 1; j < stops.length; j++) {
     const s = stops[j];
-    // Walk time shown in connector label only, not added to times
+    totalMin += getWalkMinsBetween(stops[j-1], s);
     // Skip fixed/reserved — anchor totalMin to their actual time
     if (s.fixed || (s.reservation && s.reservation.time)) {
       const [stp, sap] = s.time.split(' ');
@@ -2499,6 +2507,8 @@ function updateBottomNav() {
 // ── DAY SWITCHING ─────────────────────────────────────────────────
 function switchDay(d) {
   if (d < 0 || d >= days.length || !days[d]) return;
+  // Allow walk cascade on day switch
+  if (window._walkCascadedDays) delete window._walkCascadedDays[d];
   // Auto-open inline map on desktop
   if (window.innerWidth > 700 && !_inlineMapOpen) {
     _inlineMapOpen = true;
