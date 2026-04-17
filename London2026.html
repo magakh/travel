@@ -1433,11 +1433,11 @@ function prepareBreakfasts() {
 function reassignTimesForDay(di) {
   const stops = days[di].stops;
   if (!stops || !stops.length) return;
+  // Use first stop's existing time as anchor — never hardcode a start time
   const [tp0, ap0] = (stops[0].time || '9:00 AM').split(' ');
   const [h0, m0] = tp0.split(':').map(Number);
   let totalMin = (h0 % 12 + (ap0 === 'PM' ? 12 : 0)) * 60 + (m0 || 0);
-  stops.forEach((s, idx) => {
-    // Walk shown in connectors only — not added to times
+  stops.forEach((s) => {
     // Never move a reserved/fixed stop's time
     if (s.reservation && s.reservation.time) {
       const [tp, ap] = s.time.split(' ');
@@ -1951,127 +1951,72 @@ function searchExisting(q) {
 }
 
 
-// ── TRAVEL TIMES ──────────────────────────────────────────────
-// Simple cache: "lat1,lng1->lat2,lng2" => walk minutes
-const _walkCache = {};
+// ── TRAVEL TIMES ──────────────────────────────────────────────────
+const _travelCache = {}; // key: "lat1,lng1->lat2,lng2" => minutes
 
-async function getWalkMins(fromLat, fromLng, toLat, toLng) {
-  const key = fromLat.toFixed(4)+','+fromLng.toFixed(4)+'->'+toLat.toFixed(4)+','+toLng.toFixed(4);
-  if (_walkCache[key] !== undefined) return _walkCache[key];
+async function fetchWalkTime(fromLat, fromLng, toLat, toLng) {
+  const key = `${fromLat.toFixed(4)},${fromLng.toFixed(4)}->${toLat.toFixed(4)},${toLng.toFixed(4)}`;
+  if (_travelCache[key] !== undefined) return _travelCache[key];
   try {
-    const url = 'https://router.project-osrm.org/route/v1/foot/'+fromLng+','+fromLat+';'+toLng+','+toLat+'?overview=false';
+    const url = `https://router.project-osrm.org/route/v1/foot/${fromLng},${fromLat};${toLng},${toLat}?overview=false`;
     const res = await fetch(url);
+    if (!res.ok) return null;
     const data = await res.json();
-    const mins = Math.round((data.routes?.[0]?.duration || 0) / 60);
-    _walkCache[key] = mins;
+    const secs = data.routes?.[0]?.duration;
+    if (!secs) return null;
+    const mins = Math.round(secs / 60);
+    _travelCache[key] = mins;
     return mins;
-  } catch(e) { return 0; }
+  } catch(e) { return null; }
 }
 
-function minsToTimeStr(totalMin) {
-  const hh = Math.floor(totalMin / 60) % 24;
-  const mm = totalMin % 60;
-  const ap = hh >= 12 ? 'PM' : 'AM';
-  return (hh % 12 || 12) + ':' + String(mm).padStart(2,'0') + ' ' + ap;
+function fmtWalkMins(mins) {
+  if (!mins) return '🚶 Walking';
+  if (mins < 60) return `🚶 ${mins} min walk`;
+  return `🚶 ${Math.floor(mins/60)}h ${mins%60}min walk`;
 }
 
-function timeStrToMins(t) {
-  if (!t) return 0;
-  const [tp, ap] = t.split(' ');
+function calcEndTime(timeStr, durationStr) {
+  const [tp, ap] = timeStr.split(' ');
   const [h, m] = tp.split(':').map(Number);
-  return (h % 12 + (ap === 'PM' ? 12 : 0)) * 60 + (m || 0);
+  const start = (h % 12 + (ap === 'PM' ? 12 : 0)) * 60 + (m || 0);
+  const end = start + parseDurationMins(durationStr || '60 min');
+  const hh = Math.floor(end / 60) % 24;
+  const mm = end % 60;
+  const apm = hh >= 12 ? 'PM' : 'AM';
+  return (hh % 12 || 12) + ':' + String(mm).padStart(2,'0') + ' ' + apm;
 }
 
-// Recalculate all stop times from stop[fromIdx] forward
-// Rule: stop[i+1].start = stop[i].start + stop[i].duration + walk(stop[i]→stop[i+1])
-function recalcTimesFrom(fromIdx) {
-  const stops = days[currentDay].stops;
-  if (!stops || fromIdx >= stops.length - 1) return;
-  let cursor = timeStrToMins(stops[fromIdx].time) + parseDurationMins(stops[fromIdx].duration || '60 min');
-  for (let i = fromIdx + 1; i < stops.length; i++) {
-    const walk = _walkCache[
-      stops[i-1].lat.toFixed(4)+','+stops[i-1].lng.toFixed(4)+'->'+
-      stops[i].lat.toFixed(4)+','+stops[i].lng.toFixed(4)
-    ] || 0;
-    cursor += walk;
-    if (stops[i].fixed || (stops[i].reservation && stops[i].reservation.time)) {
-      // Locked stop — resync cursor to its actual time
-      cursor = timeStrToMins(stops[i].time) + parseDurationMins(stops[i].duration || '60 min');
-      continue;
+async function loadTravelTimes(stops) {
+  if (!stops || stops.length < 2) return;
+  const hd = window.HOTEL_DATA;
+  // Build list of segments: hotel->stop0, stop0->stop1, ..., stopN->hotel
+  const points = [];
+  if (hd) points.push({ lat: hd.lat, lng: hd.lng, name: 'Hotel' });
+  stops.forEach(s => points.push({ lat: s.lat, lng: s.lng, name: s.name }));
+  if (hd) points.push({ lat: hd.lat, lng: hd.lng, name: 'Hotel' });
+
+  // Segments: hotel->s0, s0->s1, ..., sN->hotel
+  // Connector IDs: tc-day-0 before stop0, tc-day-1 before stop1, ..., tc-day-N for return
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i], b = points[i+1];
+    const mins = await fetchWalkTime(a.lat, a.lng, b.lat, b.lng);
+    // i=0: hotel->stop0 uses connector id 0 (before stop 0)
+    // i=1: stop0->stop1 uses connector id 1 (before stop 1)
+    // i=N: stopN->hotel uses lastConnIdx
+    const stops2 = days[currentDay].stops;
+    const isLast = i === points.length - 2;
+    const elId = isLast ? `tc-${currentDay}-${stops2.length}` : `tc-${currentDay}-${i}`;
+    const el = document.getElementById(elId);
+    if (el && mins !== null) {
+      const span = el.querySelector('.tc-walk-text');
+      if (span) span.textContent = fmtWalkMins(mins);
+      else el.childNodes[0] && (el.childNodes[0].textContent = fmtWalkMins(mins));
+      el.classList.remove('tc-loading');
     }
-    stops[i].time = minsToTimeStr(cursor);
-    cursor += parseDurationMins(stops[i].duration || '60 min');
   }
 }
 
-// Track which days have had walk times loaded
-const _walkLoadedDays = new Set();
-
-async function loadWalkTimes() {
-  const day = currentDay;
-  const stops = days[day] && days[day].stops;
-  if (!stops || stops.length < 1) return;
-  if (_walkLoadedDays.has(day)) {
-    // Already loaded — just update connector labels from cache
-    updateConnectorLabels(day, stops);
-    return;
-  }
-  _walkLoadedDays.add(day);
-  const hd = window.HOTEL_DATA;
-
-  // Fetch all segments sequentially
-  if (hd && stops[0]) {
-    await getWalkMins(hd.lat, hd.lng, stops[0].lat, stops[0].lng);
-  }
-  for (let i = 0; i < stops.length - 1; i++) {
-    await getWalkMins(stops[i].lat, stops[i].lng, stops[i+1].lat, stops[i+1].lng);
-  }
-  if (hd && stops.length > 0) {
-    const last = stops[stops.length-1];
-    await getWalkMins(last.lat, last.lng, hd.lat, hd.lng);
-  }
-
-  // Update labels, recalc times, re-render
-  updateConnectorLabels(day, stops);
-  recalcTimesFrom(0);
-  renderStopList();
-  autoSave();
-}
-
-function updateConnectorLabels(day, stops) {
-  const hd = window.HOTEL_DATA;
-  // hotel→stop0
-  if (hd && stops[0]) {
-    const mins = _walkCache[hd.lat.toFixed(4)+','+hd.lng.toFixed(4)+'->'+stops[0].lat.toFixed(4)+','+stops[0].lng.toFixed(4)] || 0;
-    const el = document.getElementById('tc-'+day+'-0');
-    const sp = el && el.querySelector('.tc-walk-text');
-    if (sp) { sp.textContent = mins ? '🚶 '+mins+' min walk' : '🚶 Nearby'; el.classList.remove('tc-loading'); }
-  }
-  // stop[i]→stop[i+1]
-  for (let i = 0; i < stops.length - 1; i++) {
-    const mins = _walkCache[stops[i].lat.toFixed(4)+','+stops[i].lng.toFixed(4)+'->'+stops[i+1].lat.toFixed(4)+','+stops[i+1].lng.toFixed(4)] || 0;
-    const el = document.getElementById('tc-'+day+'-'+(i+1));
-    const sp = el && el.querySelector('.tc-walk-text');
-    if (sp) { sp.textContent = mins ? '🚶 '+mins+' min walk' : '🚶 Nearby'; el.classList.remove('tc-loading'); }
-  }
-  // last stop→hotel
-  if (hd && stops.length > 0) {
-    const last = stops[stops.length-1];
-    const mins = _walkCache[last.lat.toFixed(4)+','+last.lng.toFixed(4)+'->'+hd.lat.toFixed(4)+','+hd.lng.toFixed(4)] || 0;
-    const el = document.getElementById('tc-'+day+'-'+stops.length);
-    const sp = el && el.querySelector('.tc-walk-text');
-    if (sp) { sp.textContent = mins ? '🚶 '+mins+' min walk' : '🚶 Nearby'; el.classList.remove('tc-loading'); }
-  }
-}
-
-// Legacy aliases
-function getWalkMinsBetween(a, b) {
-  if (!a || !b) return 0;
-  return _walkCache[a.lat.toFixed(4)+','+a.lng.toFixed(4)+'->'+b.lat.toFixed(4)+','+b.lng.toFixed(4)] || 0;
-}
-function cascadeTimesFrom(fromIdx) { recalcTimesFrom(fromIdx); }
-function loadTravelTimes(stops) { return loadWalkTimes(); }
-function fmtWalkMins(m) { return m ? '🚶 '+m+' min walk' : '🚶 Nearby'; }
 
 // ── RESERVATIONS ──────────────────────────────────────────────────
 function editReservation(i) {
@@ -2173,7 +2118,7 @@ function getConflict(i) {
   const curr = stops[i];
   const prevEnd = timeToMins(prev.time) + parseDurationMins(prev.duration || '60 min');
   const currStart = timeToMins(curr.time);
-  return currStart < prevEnd - 1; // conflict if curr starts before prev ends
+  return currStart < prevEnd - 1; // 1 min buffer, back-to-back is fine
 }
 
 function checkConflicts() {
@@ -2270,38 +2215,29 @@ function applyDurationMins(i) {
   showToast('Duration set to ' + durStr);
 }
 
-function getWalkMinsBetween(fromStop, toStop) {
-  if (!fromStop || !toStop) return 0;
-  const key = fromStop.lat.toFixed(4)+','+fromStop.lng.toFixed(4)+'->'+toStop.lat.toFixed(4)+','+toStop.lng.toFixed(4);
-  // Return cached value, or 0 if not yet loaded (cascade will re-run when loaded)
-  return _travelCache[key] || 0;
-}
-
 function cascadeTimesFrom(fromIdx) {
-  // Cascades times forward from fromIdx, INCLUDING walk time to next stop.
-  // Always uses the ORIGINAL fromIdx stop time as the anchor (never changes it).
   const stops = days[currentDay].stops;
   if (fromIdx >= stops.length - 1) return;
   const [tp, ap] = stops[fromIdx].time.split(' ');
   const [h, m] = tp.split(':').map(Number);
-  // Start totalMin at END of fromIdx stop
-  let totalMin = (h % 12 + (ap === 'PM' ? 12 : 0)) * 60 + (m || 0)
-              + parseDurationMins(stops[fromIdx].duration || '60 min');
+  let totalMin = (h % 12 + (ap === 'PM' ? 12 : 0)) * 60 + (m || 0);
+  totalMin += parseDurationMins(stops[fromIdx].duration || '60 min');
   for (let j = fromIdx + 1; j < stops.length; j++) {
     const s = stops[j];
-    totalMin += getWalkMinsBetween(stops[j-1], s);
-    // Skip fixed/reserved — anchor totalMin to their actual time
+    // Skip fixed/reserved stops — they don't move
     if (s.fixed || (s.reservation && s.reservation.time)) {
+      // Sync totalMin to this stop's actual time to continue cascade after it
       const [stp, sap] = s.time.split(' ');
       const [sh, sm] = stp.split(':').map(Number);
-      totalMin = (sh % 12 + (sap === 'PM' ? 12 : 0)) * 60 + (sm || 0)
-               + parseDurationMins(s.duration || '60 min');
+      totalMin = (sh % 12 + (sap === 'PM' ? 12 : 0)) * 60 + (sm || 0);
+      totalMin += parseDurationMins(s.duration || '60 min');
       continue;
     }
     const hh = Math.floor(totalMin / 60) % 24;
     const mm = totalMin % 60;
     const apm = hh >= 12 ? 'PM' : 'AM';
-    s.time = (hh % 12 || 12) + ':' + String(mm).padStart(2,'0') + ' ' + apm;
+    const h12 = hh % 12 || 12;
+    s.time = h12 + ':' + String(mm).padStart(2,'0') + ' ' + apm;
     totalMin += parseDurationMins(s.duration || '60 min');
   }
 }
@@ -2552,7 +2488,6 @@ function updateBottomNav() {
 // ── DAY SWITCHING ─────────────────────────────────────────────────
 function switchDay(d) {
   if (d < 0 || d >= days.length || !days[d]) return;
-
   // Auto-open inline map on desktop
   if (window.innerWidth > 700 && !_inlineMapOpen) {
     _inlineMapOpen = true;
@@ -2567,7 +2502,6 @@ function switchDay(d) {
   document.getElementById('dayNote').textContent = days[d].note || '';
   renderAll();
   showView('list');
-  setTimeout(loadWalkTimes, 200);
 }
 
 // ── STOP LIST ─────────────────────────────────────────────────────
@@ -2582,8 +2516,8 @@ function renderAll() {
 
 
 function renderStopList() {
-  if (!days[currentDay]) return;
-  const stops = days[currentDay].stops || [];
+  if (!days[currentDay] || !days[currentDay].stops) return;
+  const stops = days[currentDay].stops;
   const total = stops.length;
   const done = stops.filter((_, i) => completed.includes(currentDay+'-'+i)).length;
   document.getElementById('progressFill').style.width = (done/total*100) + '%';
@@ -2670,7 +2604,7 @@ function renderStopList() {
     hotelBanner('~10:00 PM', hotelEndName);
 
   // Fetch travel times asynchronously (fills in connectors when ready)
-  loadWalkTimes();
+  loadTravelTimes(stops);
 
   // Restore scroll position after re-render
   if (area && scrollY) requestAnimationFrame(() => { area.scrollTop = scrollY; });
