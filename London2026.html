@@ -1437,8 +1437,7 @@ function reassignTimesForDay(di) {
   const [h0, m0] = tp0.split(':').map(Number);
   let totalMin = (h0 % 12 + (ap0 === 'PM' ? 12 : 0)) * 60 + (m0 || 0);
   stops.forEach((s, idx) => {
-    // Add walk time from previous stop
-    if (idx > 0) totalMin += getWalkMinsBetween(stops[idx-1], s);
+    // Walk shown in connectors only — not added to times
     // Never move a reserved/fixed stop's time
     if (s.reservation && s.reservation.time) {
       const [tp, ap] = s.time.split(' ');
@@ -2119,10 +2118,9 @@ function getConflict(i) {
   if (i === 0) return false;
   const prev = stops[i - 1];
   const curr = stops[i];
-  const walkMins = getWalkMinsBetween(prev, curr);
-  const prevEnd = timeToMins(prev.time) + parseDurationMins(prev.duration || '60 min') + walkMins;
+  const prevEnd = timeToMins(prev.time) + parseDurationMins(prev.duration || '60 min');
   const currStart = timeToMins(curr.time);
-  return currStart < prevEnd - 1; // conflict if curr starts before prev ends + walk
+  return currStart < prevEnd - 1; // conflict if curr starts before prev ends
 }
 
 function checkConflicts() {
@@ -2238,8 +2236,7 @@ function cascadeTimesFrom(fromIdx) {
               + parseDurationMins(stops[fromIdx].duration || '60 min');
   for (let j = fromIdx + 1; j < stops.length; j++) {
     const s = stops[j];
-    // Add walk from prev stop to this one
-    totalMin += getWalkMinsBetween(stops[j-1], s);
+    // Walk time shown in connector label only, not added to times
     // Skip fixed/reserved — anchor totalMin to their actual time
     if (s.fixed || (s.reservation && s.reservation.time)) {
       const [stp, sap] = s.time.split(' ');
