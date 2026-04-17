@@ -2016,9 +2016,9 @@ async function loadTravelTimes(stops) {
       el.classList.remove('tc-loading');
     }
   }
-  // Re-cascade times now that walk data is in cache
+  // Re-assign times now that walk data is in cache
   if (anyNew && days[currentDay] && days[currentDay].stops.length > 0) {
-    cascadeTimesFrom(0);
+    reassignTimesForDay(currentDay);
     renderStopList();
     autoSave();
   }
@@ -2231,30 +2231,31 @@ function getWalkMinsBetween(fromStop, toStop) {
 }
 
 function cascadeTimesFrom(fromIdx) {
+  // Cascades times forward from fromIdx, INCLUDING walk time to next stop.
+  // Always uses the ORIGINAL fromIdx stop time as the anchor (never changes it).
   const stops = days[currentDay].stops;
   if (fromIdx >= stops.length - 1) return;
   const [tp, ap] = stops[fromIdx].time.split(' ');
   const [h, m] = tp.split(':').map(Number);
-  let totalMin = (h % 12 + (ap === 'PM' ? 12 : 0)) * 60 + (m || 0);
-  totalMin += parseDurationMins(stops[fromIdx].duration || '60 min');
+  // Start totalMin at END of fromIdx stop
+  let totalMin = (h % 12 + (ap === 'PM' ? 12 : 0)) * 60 + (m || 0)
+              + parseDurationMins(stops[fromIdx].duration || '60 min');
   for (let j = fromIdx + 1; j < stops.length; j++) {
     const s = stops[j];
-    // Add walk time from previous stop to this one
-    const walkMins = getWalkMinsBetween(stops[j-1], s);
-    totalMin += walkMins;
-    // Skip fixed/reserved stops — they don't move
+    // Add walk from prev stop to this one
+    totalMin += getWalkMinsBetween(stops[j-1], s);
+    // Skip fixed/reserved — anchor totalMin to their actual time
     if (s.fixed || (s.reservation && s.reservation.time)) {
       const [stp, sap] = s.time.split(' ');
       const [sh, sm] = stp.split(':').map(Number);
-      totalMin = (sh % 12 + (sap === 'PM' ? 12 : 0)) * 60 + (sm || 0);
-      totalMin += parseDurationMins(s.duration || '60 min');
+      totalMin = (sh % 12 + (sap === 'PM' ? 12 : 0)) * 60 + (sm || 0)
+               + parseDurationMins(s.duration || '60 min');
       continue;
     }
     const hh = Math.floor(totalMin / 60) % 24;
     const mm = totalMin % 60;
     const apm = hh >= 12 ? 'PM' : 'AM';
-    const h12 = hh % 12 || 12;
-    s.time = h12 + ':' + String(mm).padStart(2,'0') + ' ' + apm;
+    s.time = (hh % 12 || 12) + ':' + String(mm).padStart(2,'0') + ' ' + apm;
     totalMin += parseDurationMins(s.duration || '60 min');
   }
 }
