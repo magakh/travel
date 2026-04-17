@@ -2118,7 +2118,7 @@ function getConflict(i) {
   const curr = stops[i];
   const prevEnd = timeToMins(prev.time) + parseDurationMins(prev.duration || '60 min');
   const currStart = timeToMins(curr.time);
-  return currStart < prevEnd;
+  return currStart < prevEnd - 1; // 1 min buffer, back-to-back is fine
 }
 
 function checkConflicts() {
@@ -2281,9 +2281,12 @@ function applyStopTime(i) {
 }
 
 function parseDurationMins(dur) {
-  const h = dur.match(/(\d+)\s*hour/i);
-  const m = dur.match(/(\d+)\s*min/i);
-  return (h ? parseInt(h[1]) * 60 : 0) + (m ? parseInt(m[1]) : 0) || 60;
+  if (!dur) return 60;
+  // Handle "1h 30min", "1h", "90 min", "1.5 hours", "2 hours", "30 min" etc.
+  const hLong = dur.match(/(\d+(?:\.\d+)?)\s*h(?:our)?s?/i);
+  const mLong = dur.match(/(\d+)\s*min/i);
+  const total = (hLong ? parseFloat(hLong[1]) * 60 : 0) + (mLong ? parseInt(mLong[1]) : 0);
+  return Math.round(total) || 60;
 }
 
 // ── MOVE STOP BETWEEN DAYS ────────────────────────────────────────
