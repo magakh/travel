@@ -2031,19 +2031,10 @@ async function loadWalkTimes() {
     await getWalkMins(last.lat, last.lng, hd.lat, hd.lng);
   }
 
-  // Update labels and recalc times ONCE after all fetches done
+  // Update labels, recalc times, re-render
   updateConnectorLabels(day, stops);
   recalcTimesFrom(0);
-  // Re-render labels only (not full list which would re-trigger loadWalkTimes)
-  const list = document.getElementById('stopList');
-  if (list) {
-    document.querySelectorAll('.stop-time-label').forEach((el, i) => {
-      if (!stops[i]) return;
-      const endT = minsToTimeStr(timeStrToMins(stops[i].time) + parseDurationMins(stops[i].duration||'60 min'));
-      const spans = el.querySelectorAll('span');
-      if (spans[0]) spans[0].textContent = '⏱ ' + stops[i].time;
-    });
-  }
+  renderStopList();
   autoSave();
 }
 
@@ -2591,8 +2582,8 @@ function renderAll() {
 
 
 function renderStopList() {
-  if (!days[currentDay] || !days[currentDay].stops) return;
-  const stops = days[currentDay].stops;
+  if (!days[currentDay]) return;
+  const stops = days[currentDay].stops || [];
   const total = stops.length;
   const done = stops.filter((_, i) => completed.includes(currentDay+'-'+i)).length;
   document.getElementById('progressFill').style.width = (done/total*100) + '%';
