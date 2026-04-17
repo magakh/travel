@@ -1999,15 +1999,32 @@ async function loadTravelTimes(stops) {
   // Segments: hotel->s0, s0->s1, ..., sN->hotel
   // Connector IDs: tc-day-0 before stop0, tc-day-1 before stop1, ..., tc-day-N for return
   let anyNew = false;
+  // stopOffset: if hotel exists, points[0]=hotel, points[1]=stop0
+  // connector tc-day-0 is BEFORE stop0 = hotel->stop0
+  // connector tc-day-i is BEFORE stop[i] = stop[i-1]->stop[i]
+  const hasHotel = hd ? 1 : 0;
   for (let i = 0; i < points.length - 1; i++) {
     const a = points[i], b = points[i+1];
+    // Skip last segment (stopN->hotel) for connector display
+    const isReturn = i === points.length - 2 && hasHotel;
     const cacheKey = a.lat.toFixed(4)+','+a.lng.toFixed(4)+'->'+b.lat.toFixed(4)+','+b.lng.toFixed(4);
     const wasCached = _travelCache[cacheKey] !== undefined;
     const mins = await fetchWalkTime(a.lat, a.lng, b.lat, b.lng);
     if (!wasCached && mins !== null) anyNew = true;
     const stops2 = days[currentDay].stops;
-    const isLast = i === points.length - 2;
-    const elId = isLast ? 'tc-'+currentDay+'-'+stops2.length : 'tc-'+currentDay+'-'+i;
+    // Map segment i to connector element:
+    // i=0 (hotel->stop0): tc-day-0 (before stop0)
+    // i=1 (stop0->stop1): tc-day-1 (before stop1)
+    // i=N (stopN->hotel): last connector
+    let elId;
+    if (isReturn) {
+      elId = 'tc-'+currentDay+'-'+stops2.length;
+    } else {
+      elId = 'tc-'+currentDay+'-'+(i - hasHotel + hasHotel);
+      // With hotel: i=0→tc-0, i=1→tc-1, i=2→tc-2
+      // Without hotel: i=0→tc-0, i=1→tc-1
+      elId = 'tc-'+currentDay+'-'+i;
+    }
     const el = document.getElementById(elId);
     if (el && mins !== null) {
       const span = el.querySelector('.tc-walk-text');
