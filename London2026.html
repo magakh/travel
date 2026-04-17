@@ -3,6 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<meta name="app-version" content="2026-04-17-fixes">
 <title id="pageTitle">London 2026</title>
 <style>
 /* required styles */
@@ -1300,6 +1304,12 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
       <label class="form-label">Sync file name in repo</label>
       <input class="form-input" id="setSyncFile" type="text" placeholder="e.g. sync_london2026.json">
 
+      <label class="form-label" style="margin-top:14px;">GitHub personal access token (editors only)</label>
+      <input class="form-input" id="setGhToken" type="password" placeholder="ghp_… (leave blank to view only)">
+      <p class="gen-hint" style="margin-bottom:12px;">Needed to <em>save</em> changes. Get one at github.com/settings/tokens (classic) with <strong>repo</strong> scope. Stored only in this device's localStorage — never committed anywhere. Leave blank to view the trip without being able to edit.</p>
+      <button class="gen-btn" onclick="saveGhToken()" style="background:#1a73e8;margin-bottom:8px;">🔑 Save GitHub Token</button>
+      <button onclick="clearGhToken()" style="width:100%;padding:10px;border-radius:8px;border:1px solid #ddd;background:#fafafa;font-size:13px;cursor:pointer;color:#666;margin-bottom:12px;">Remove token (view-only mode)</button>
+
       <button class="gen-btn" onclick="saveSettings()" style="background:#1a1a1a;margin-top:8px;">💾 Save Settings</button>
       <p class="gen-hint">Changes take effect immediately. Sync file change applies on next save/load.</p>
 
@@ -1431,28 +1441,29 @@ function prepareBreakfasts() {
 }
 
 function reassignTimesForDay(di) {
-  const stops = days[di].stops;
+  // Reassigns start times for a whole day using the rule:
+  //   stop[i+1].start = stop[i].start + stop[i].duration + walk(stop[i] → stop[i+1])
+  // Fixed/reserved stops anchor: their time is preserved, cursor resyncs to it.
+  // Walk minutes read from _walkCache; missing segments contribute 0 until loaded.
+  const stops = days[di] && days[di].stops;
   if (!stops || !stops.length) return;
-  const [tp0, ap0] = (stops[0].time || '9:00 AM').split(' ');
-  const [h0, m0] = tp0.split(':').map(Number);
-  let totalMin = (h0 % 12 + (ap0 === 'PM' ? 12 : 0)) * 60 + (m0 || 0);
-  stops.forEach((s, idx) => {
-    // Walk shown in connectors only — not added to times
-    // Never move a reserved/fixed stop's time
-    if (s.reservation && s.reservation.time) {
-      const [tp, ap] = s.time.split(' ');
-      const [h, m] = tp.split(':').map(Number);
-      totalMin = (h % 12 + (ap === 'PM' ? 12 : 0)) * 60 + (m || 0);
-      totalMin += parseDurationMins(s.duration || '60 min');
-      return;
+  let cursor = timeStrToMins(stops[0].time || '9:00 AM');
+  for (let i = 0; i < stops.length; i++) {
+    const s = stops[i];
+    if (i > 0) {
+      const walk = _walkCache[
+        stops[i-1].lat.toFixed(4)+','+stops[i-1].lng.toFixed(4)+'->'+
+        stops[i].lat.toFixed(4)+','+stops[i].lng.toFixed(4)
+      ] || 0;
+      cursor += walk;
+      if (s.fixed || (s.reservation && s.reservation.time)) {
+        cursor = timeStrToMins(s.time);
+      } else {
+        s.time = minsToTimeStr(cursor);
+      }
     }
-    const hh = Math.floor(totalMin / 60) % 24;
-    const mm = totalMin % 60;
-    const apm = hh >= 12 ? 'PM' : 'AM';
-    const h12 = hh % 12 || 12;
-    s.time = h12 + ':' + String(mm).padStart(2,'0') + ' ' + apm;
-    totalMin += parseDurationMins(s.duration || '60 min');
-  });
+    cursor += parseDurationMins(s.duration || '60 min');
+  }
 }
 
 let currentDay = 0;
@@ -1532,8 +1543,18 @@ try {
 } catch(e) {}
 
 let SYNC_API = 'https://api.github.com/repos/' + APP_CONFIG.ghRepo + '/contents/' + APP_CONFIG.syncFile;
-// Token stored once in localStorage (survives sessions, only on this device)
-const GH_TOKEN = ['ghp_TynMbg3orl8OjQ', 'e70IoVrrXQEEVmSC3YJLIs'].join('');
+
+// GitHub token — stored in localStorage per device, entered via Settings.
+// NEVER hardcode in this file (public HTML on GitHub Pages = anyone can read it).
+function getGhToken() {
+  try { return localStorage.getItem('gh_token') || ''; } catch(e) { return ''; }
+}
+function setGhToken(t) {
+  try {
+    if (t) localStorage.setItem('gh_token', t);
+    else localStorage.removeItem('gh_token');
+  } catch(e) {}
+}
 
 function b64EncodeUnicode(str) {
   return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g,
@@ -1541,9 +1562,14 @@ function b64EncodeUnicode(str) {
 }
 
 async function ghFetch(payload) {
+  const token = getGhToken();
+  if (!token) {
+    showToast('No GitHub token set — open Settings to add one', true);
+    return { ok: false, status: 0 };
+  }
   // Read current SHA first (required for update)
   const getRes = await fetch(SYNC_API, {
-    headers: { 'Authorization': 'token ' + GH_TOKEN, 'Accept': 'application/vnd.github.v3+json' }
+    headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json' }
   });
   const meta = getRes.ok ? await getRes.json() : {};
   const body = {
@@ -1554,7 +1580,7 @@ async function ghFetch(payload) {
   if (meta.sha) body.sha = meta.sha;
   return fetch(SYNC_API, {
     method: 'PUT',
-    headers: { 'Authorization': 'token ' + GH_TOKEN, 'Content-Type': 'application/json' },
+    headers: { 'Authorization': 'token ' + token, 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   });
 }
@@ -1562,20 +1588,33 @@ async function ghFetch(payload) {
 const SYNC_RAW = 'https://raw.githubusercontent.com/magakh/travel/main/sync_london2026.json';
 
 async function ghRead() {
-  // GitHub API with cache:no-store always returns fresh data
+  const token = getGhToken();
+  // If a token is set, use the authenticated API (guaranteed fresh — no CDN cache).
+  if (token) {
+    try {
+      const res = await fetch(SYNC_API, {
+        headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json' },
+        cache: 'no-store'
+      });
+      if (res.ok) {
+        const meta = await res.json();
+        if (meta.content) {
+          const json = decodeURIComponent(
+            atob(meta.content.replace(/\n/g, ''))
+              .split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
+          );
+          return JSON.parse(json);
+        }
+      }
+    } catch(e) { /* fall through to raw */ }
+  }
+  // No token (viewer mode) — read public raw URL with cache busting.
+  // Viewers always get at least a near-recent copy this way.
   try {
-    const res = await fetch(SYNC_API, {
-      headers: { 'Authorization': 'token ' + GH_TOKEN, 'Accept': 'application/vnd.github.v3+json' },
-      cache: 'no-store'
-    });
+    const rawUrl = 'https://raw.githubusercontent.com/' + APP_CONFIG.ghRepo + '/main/' + APP_CONFIG.syncFile + '?t=' + Date.now();
+    const res = await fetch(rawUrl, { cache: 'no-store' });
     if (!res.ok) return null;
-    const meta = await res.json();
-    if (!meta.content) return null;
-    const json = decodeURIComponent(
-      atob(meta.content.replace(/\n/g, ''))
-        .split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
-    );
-    return JSON.parse(json);
+    return await res.json();
   } catch(e) { return null; }
 }
 
@@ -2031,20 +2070,9 @@ async function loadWalkTimes() {
     await getWalkMins(last.lat, last.lng, hd.lat, hd.lng);
   }
 
-  // Update labels and recalc times ONCE after all fetches done
+  // Update connector labels only — DO NOT silently recalc stop times.
+  // Times only change when the user explicitly edits a time/duration or adds/moves a stop.
   updateConnectorLabels(day, stops);
-  recalcTimesFrom(0);
-  // Re-render labels only (not full list which would re-trigger loadWalkTimes)
-  const list = document.getElementById('stopList');
-  if (list) {
-    document.querySelectorAll('.stop-time-label').forEach((el, i) => {
-      if (!stops[i]) return;
-      const endT = minsToTimeStr(timeStrToMins(stops[i].time) + parseDurationMins(stops[i].duration||'60 min'));
-      const spans = el.querySelectorAll('span');
-      if (spans[0]) spans[0].textContent = '⏱ ' + stops[i].time;
-    });
-  }
-  autoSave();
 }
 
 function updateConnectorLabels(day, stops) {
@@ -2277,42 +2305,6 @@ function applyDurationMins(i) {
   renderStopList();
   if (currentView === 'detail') renderDetail();
   showToast('Duration set to ' + durStr);
-}
-
-function getWalkMinsBetween(fromStop, toStop) {
-  if (!fromStop || !toStop) return 0;
-  const key = fromStop.lat.toFixed(4)+','+fromStop.lng.toFixed(4)+'->'+toStop.lat.toFixed(4)+','+toStop.lng.toFixed(4);
-  // Return cached value, or 0 if not yet loaded (cascade will re-run when loaded)
-  return _travelCache[key] || 0;
-}
-
-function cascadeTimesFrom(fromIdx) {
-  // Cascades times forward from fromIdx, INCLUDING walk time to next stop.
-  // Always uses the ORIGINAL fromIdx stop time as the anchor (never changes it).
-  const stops = days[currentDay].stops;
-  if (fromIdx >= stops.length - 1) return;
-  const [tp, ap] = stops[fromIdx].time.split(' ');
-  const [h, m] = tp.split(':').map(Number);
-  // Start totalMin at END of fromIdx stop
-  let totalMin = (h % 12 + (ap === 'PM' ? 12 : 0)) * 60 + (m || 0)
-              + parseDurationMins(stops[fromIdx].duration || '60 min');
-  for (let j = fromIdx + 1; j < stops.length; j++) {
-    const s = stops[j];
-    totalMin += getWalkMinsBetween(stops[j-1], s);
-    // Skip fixed/reserved — anchor totalMin to their actual time
-    if (s.fixed || (s.reservation && s.reservation.time)) {
-      const [stp, sap] = s.time.split(' ');
-      const [sh, sm] = stp.split(':').map(Number);
-      totalMin = (sh % 12 + (sap === 'PM' ? 12 : 0)) * 60 + (sm || 0)
-               + parseDurationMins(s.duration || '60 min');
-      continue;
-    }
-    const hh = Math.floor(totalMin / 60) % 24;
-    const mm = totalMin % 60;
-    const apm = hh >= 12 ? 'PM' : 'AM';
-    s.time = (hh % 12 || 12) + ':' + String(mm).padStart(2,'0') + ' ' + apm;
-    totalMin += parseDurationMins(s.duration || '60 min');
-  }
 }
 
 function setNowTime(i) {
@@ -3051,6 +3043,9 @@ function loadSettingsUI() {
   const savedKey = sessionStorage.getItem('anthropic_key');
   const keyEl = document.getElementById('setApiKey');
   if (keyEl) keyEl.placeholder = savedKey ? '••••• key saved (enter to replace)' : 'sk-ant-…';
+  const savedTok = getGhToken();
+  const tokEl = document.getElementById('setGhToken');
+  if (tokEl) tokEl.placeholder = savedTok ? '••••• token saved (enter to replace)' : 'ghp_… (leave blank to view only)';
   document.getElementById('setTitle').value = c.title || '';
   document.getElementById('setSubtitle').value = c.subtitle || '';
   document.getElementById('setNumDays').value = c.numDays || 4;
@@ -3775,6 +3770,26 @@ function saveApiKey() {
   sessionStorage.setItem('anthropic_key', key);
   document.getElementById('setApiKey').value = '';
   showToast('API key saved ✓');
+}
+
+function saveGhToken() {
+  const t = (document.getElementById('setGhToken')?.value || '').trim();
+  if (!t) { showToast('Paste a token first', true); return; }
+  if (!t.startsWith('ghp_') && !t.startsWith('github_pat_')) {
+    showToast('Doesn\'t look like a GitHub token (should start with ghp_ or github_pat_)', true);
+    return;
+  }
+  setGhToken(t);
+  document.getElementById('setGhToken').value = '';
+  document.getElementById('setGhToken').placeholder = '••••• token saved (enter to replace)';
+  showToast('GitHub token saved ✓ You can now save changes');
+}
+
+function clearGhToken() {
+  setGhToken('');
+  const el = document.getElementById('setGhToken');
+  if (el) { el.value = ''; el.placeholder = 'ghp_… (leave blank to view only)'; }
+  showToast('Token removed — view-only mode');
 }
 
 
