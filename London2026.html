@@ -1999,22 +1999,28 @@ async function loadTravelTimes(stops) {
 
   // Segments: hotel->s0, s0->s1, ..., sN->hotel
   // Connector IDs: tc-day-0 before stop0, tc-day-1 before stop1, ..., tc-day-N for return
+  let anyNew = false;
   for (let i = 0; i < points.length - 1; i++) {
     const a = points[i], b = points[i+1];
+    const cacheKey = a.lat.toFixed(4)+','+a.lng.toFixed(4)+'->'+b.lat.toFixed(4)+','+b.lng.toFixed(4);
+    const wasCached = _travelCache[cacheKey] !== undefined;
     const mins = await fetchWalkTime(a.lat, a.lng, b.lat, b.lng);
-    // i=0: hotel->stop0 uses connector id 0 (before stop 0)
-    // i=1: stop0->stop1 uses connector id 1 (before stop 1)
-    // i=N: stopN->hotel uses lastConnIdx
+    if (!wasCached && mins !== null) anyNew = true;
     const stops2 = days[currentDay].stops;
     const isLast = i === points.length - 2;
-    const elId = isLast ? `tc-${currentDay}-${stops2.length}` : `tc-${currentDay}-${i}`;
+    const elId = isLast ? 'tc-'+currentDay+'-'+stops2.length : 'tc-'+currentDay+'-'+i;
     const el = document.getElementById(elId);
     if (el && mins !== null) {
       const span = el.querySelector('.tc-walk-text');
       if (span) span.textContent = fmtWalkMins(mins);
-      else el.childNodes[0] && (el.childNodes[0].textContent = fmtWalkMins(mins));
       el.classList.remove('tc-loading');
     }
+  }
+  // Re-cascade times now that walk data is in cache
+  if (anyNew && days[currentDay] && days[currentDay].stops.length > 0) {
+    cascadeTimesFrom(0);
+    renderStopList();
+    autoSave();
   }
 }
 
