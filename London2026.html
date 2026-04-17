@@ -2354,6 +2354,17 @@ function parseDurationMins(dur) {
   return Math.round(total) || 60;
 }
 
+// Compute the end-time of a stop given start time ('3:00 PM') and duration ('1 hour').
+// Returns a formatted time string, or empty string on bad input.
+function calcEndTime(timeStr, durStr) {
+  try {
+    if (!timeStr) return '';
+    const startMin = timeStrToMins(timeStr);
+    const addMin = parseDurationMins(durStr || '60 min');
+    return minsToTimeStr(startMin + addMin);
+  } catch(e) { return ''; }
+}
+
 // ── MOVE STOP BETWEEN DAYS ────────────────────────────────────────
 function moveStopToDay(targetDay, stopIdx) {
   if (targetDay === undefined || targetDay === '' || targetDay === currentDay) return;
