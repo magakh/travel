@@ -2004,47 +2004,73 @@ function recalcTimesFrom(fromIdx) {
   }
 }
 
-// Fetch walk times for all segments in current day, update connector labels, then recalc times
+// Track which days have had walk times loaded
+const _walkLoadedDays = new Set();
+
 async function loadWalkTimes() {
-  const stops = days[currentDay].stops;
+  const day = currentDay;
+  const stops = days[day] && days[day].stops;
   if (!stops || stops.length < 1) return;
+  if (_walkLoadedDays.has(day)) {
+    // Already loaded — just update connector labels from cache
+    updateConnectorLabels(day, stops);
+    return;
+  }
+  _walkLoadedDays.add(day);
   const hd = window.HOTEL_DATA;
 
-  // Clear old labels
-  document.querySelectorAll('.tc-walk-text').forEach(el => el.textContent = '🚶 …');
-
-  // Fetch hotel→stop0
+  // Fetch all segments sequentially
   if (hd && stops[0]) {
-    const mins = await getWalkMins(hd.lat, hd.lng, stops[0].lat, stops[0].lng);
-    const el = document.getElementById('tc-'+currentDay+'-0');
-    const sp = el && el.querySelector('.tc-walk-text');
-    if (sp) sp.textContent = mins ? '🚶 '+mins+' min walk' : '🚶 Nearby';
-    if (el) el.classList.remove('tc-loading');
+    await getWalkMins(hd.lat, hd.lng, stops[0].lat, stops[0].lng);
   }
-
-  // Fetch stop[i]→stop[i+1]
   for (let i = 0; i < stops.length - 1; i++) {
-    const mins = await getWalkMins(stops[i].lat, stops[i].lng, stops[i+1].lat, stops[i+1].lng);
-    const el = document.getElementById('tc-'+currentDay+'-'+(i+1));
-    const sp = el && el.querySelector('.tc-walk-text');
-    if (sp) sp.textContent = mins ? '🚶 '+mins+' min walk' : '🚶 Nearby';
-    if (el) el.classList.remove('tc-loading');
+    await getWalkMins(stops[i].lat, stops[i].lng, stops[i+1].lat, stops[i+1].lng);
   }
-
-  // Fetch last stop→hotel
   if (hd && stops.length > 0) {
     const last = stops[stops.length-1];
-    const mins = await getWalkMins(last.lat, last.lng, hd.lat, hd.lng);
-    const el = document.getElementById('tc-'+currentDay+'-'+stops.length);
-    const sp = el && el.querySelector('.tc-walk-text');
-    if (sp) sp.textContent = mins ? '🚶 '+mins+' min walk' : '🚶 Nearby';
-    if (el) el.classList.remove('tc-loading');
+    await getWalkMins(last.lat, last.lng, hd.lat, hd.lng);
   }
 
-  // Now recalculate all times from stop 0 with fresh walk data
+  // Update labels and recalc times ONCE after all fetches done
+  updateConnectorLabels(day, stops);
   recalcTimesFrom(0);
-  renderStopList();
+  // Re-render labels only (not full list which would re-trigger loadWalkTimes)
+  const list = document.getElementById('stopList');
+  if (list) {
+    document.querySelectorAll('.stop-time-label').forEach((el, i) => {
+      if (!stops[i]) return;
+      const endT = minsToTimeStr(timeStrToMins(stops[i].time) + parseDurationMins(stops[i].duration||'60 min'));
+      const spans = el.querySelectorAll('span');
+      if (spans[0]) spans[0].textContent = '⏱ ' + stops[i].time;
+    });
+  }
   autoSave();
+}
+
+function updateConnectorLabels(day, stops) {
+  const hd = window.HOTEL_DATA;
+  // hotel→stop0
+  if (hd && stops[0]) {
+    const mins = _walkCache[hd.lat.toFixed(4)+','+hd.lng.toFixed(4)+'->'+stops[0].lat.toFixed(4)+','+stops[0].lng.toFixed(4)] || 0;
+    const el = document.getElementById('tc-'+day+'-0');
+    const sp = el && el.querySelector('.tc-walk-text');
+    if (sp) { sp.textContent = mins ? '🚶 '+mins+' min walk' : '🚶 Nearby'; el.classList.remove('tc-loading'); }
+  }
+  // stop[i]→stop[i+1]
+  for (let i = 0; i < stops.length - 1; i++) {
+    const mins = _walkCache[stops[i].lat.toFixed(4)+','+stops[i].lng.toFixed(4)+'->'+stops[i+1].lat.toFixed(4)+','+stops[i+1].lng.toFixed(4)] || 0;
+    const el = document.getElementById('tc-'+day+'-'+(i+1));
+    const sp = el && el.querySelector('.tc-walk-text');
+    if (sp) { sp.textContent = mins ? '🚶 '+mins+' min walk' : '🚶 Nearby'; el.classList.remove('tc-loading'); }
+  }
+  // last stop→hotel
+  if (hd && stops.length > 0) {
+    const last = stops[stops.length-1];
+    const mins = _walkCache[last.lat.toFixed(4)+','+last.lng.toFixed(4)+'->'+hd.lat.toFixed(4)+','+hd.lng.toFixed(4)] || 0;
+    const el = document.getElementById('tc-'+day+'-'+stops.length);
+    const sp = el && el.querySelector('.tc-walk-text');
+    if (sp) { sp.textContent = mins ? '🚶 '+mins+' min walk' : '🚶 Nearby'; el.classList.remove('tc-loading'); }
+  }
 }
 
 // Legacy aliases
@@ -2550,6 +2576,7 @@ function switchDay(d) {
   document.getElementById('dayNote').textContent = days[d].note || '';
   renderAll();
   showView('list');
+  setTimeout(loadWalkTimes, 200);
 }
 
 // ── STOP LIST ─────────────────────────────────────────────────────
