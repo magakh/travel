@@ -2870,8 +2870,9 @@ function saveHotel() {
 
 function initHotel() {
   try {
-    // Prefer per-trip storage, fall back to legacy generic key
-    const raw = localStorage.getItem('hotel_data_' + TRIP_ID) || localStorage.getItem('hotel_data');
+    // Per-trip storage only — don't fall back to generic key (would leak
+    // previous trip's hotel into a new trip)
+    const raw = localStorage.getItem('hotel_data_' + TRIP_ID);
     if (raw) {
       const h = JSON.parse(raw);
       window.HOTEL_DATA = h;
