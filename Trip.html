@@ -1117,7 +1117,7 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
       <div class="header-sub" id="appSubtitleEl">May 7–10 · hidden gems · rooftop dining</div>
     </div>
     <div style="display:flex;gap:6px;flex-shrink:0;">
-      <button class="prebook-pill" id="lockBtn" onclick="showLockDialog()" title="Edit access" style="border-color:#aaa;color:#555;">🔒</button>
+      <button class="prebook-pill" id="lockBtn" onclick="showLockDialog()" title="Edit access" style="border-color:#aaa;color:#555;">🔒 View</button>
       <button class="prebook-pill" id="saveBtn" onclick="saveToStorage()" title="Save & sync" style="border-color:#88d8a0;color:#88d8a0;">💾</button>
       <button class="prebook-pill" id="refreshBtn" onclick="manualRefresh()" title="Refresh from sync" style="border-color:#88d8a0;color:#88d8a0;">🔄</button>
       <button class="prebook-pill" onclick="showSaveMenu()" title="More options">⋮</button>
@@ -1757,15 +1757,15 @@ function lockEditor() {
 function updateLockUI() {
   const lock = document.getElementById('lockBtn');
   if (lock) {
-    lock.textContent = EDITOR_MODE ? '🔓' : '🔒';
+    lock.textContent = EDITOR_MODE ? '🔓 Edit' : '🔒 View';
     lock.title = EDITOR_MODE ? 'Lock (view-only)' : 'Unlock to edit';
-    // Change border color as a visual cue that persists even if the emoji
-    // doesn't change visually on the user's OS
+    // Strong visual state: background + border + color change together
     lock.style.borderColor = EDITOR_MODE ? '#28a745' : '#aaa';
     lock.style.color = EDITOR_MODE ? '#28a745' : '#555';
+    lock.style.background = EDITOR_MODE ? '#e8f5ee' : '#fff';
+    lock.style.fontWeight = EDITOR_MODE ? '700' : '400';
   }
   document.body.classList.toggle('viewer-mode', !EDITOR_MODE);
-  // Re-render so the viewer-mode CSS states refresh on all stops
   try { renderStopList(); } catch(e) {}
 }
 
