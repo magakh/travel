@@ -1547,20 +1547,21 @@ function getTripConfig() {
 function getTripCity() {
   if (window.HOTEL_DATA && window.HOTEL_DATA.address) {
     const addr = window.HOTEL_DATA.address;
-    // Try to pull a city-looking token from the address (last word or second-to-last)
     const parts = addr.split(/[,;]/).map(p => p.trim()).filter(Boolean);
-    // Last non-postcode-looking part
     for (let i = parts.length - 1; i >= 0; i--) {
       const p = parts[i];
-      // Skip parts that are mostly digits/postcode-like
       if (/^[a-z\u00c0-\u017f][a-z\u00c0-\u017f\s'-]+$/i.test(p) && p.length >= 3) return p;
     }
   }
   const title = (APP_CONFIG.title || '').trim();
   if (title) {
-    // Take the first word that's a proper noun (capitalized, length >= 3)
-    const tokens = title.split(/[\s,]+/).filter(t => t && t.length >= 3 && /^[A-Z]/.test(t));
-    if (tokens.length) return tokens[0];
+    // Split camelCase: "NewYork2026" → "New York 2026"
+    let expanded = title.replace(/([a-z])([A-Z])/g, '$1 $2');
+    // Strip trailing 4-digit years: "New York 2026" → "New York"
+    expanded = expanded.replace(/\b(19|20)\d{2}\b/g, '').replace(/\s+/g, ' ').trim();
+    // Strip leading non-letters
+    expanded = expanded.replace(/^[^a-zA-Z]+/, '').trim();
+    if (expanded) return expanded;
   }
   return 'your destination';
 }
@@ -2085,7 +2086,7 @@ The array must contain exactly 3 objects with this shape:
     "prebook": false,
     "description": "2 sentences why this is a good match",
     "history": "2 rich paragraphs about the history in HTML with <strong> tags, separate paragraphs with \\n\\n",
-    "travel": "🚶 or 🚇 Practical travel directions from the hotel area",
+    "travel": "🚶 or 🚇 Practical travel directions WITHIN ${city} only (local walk/transit from elsewhere in ${city}). Do NOT include flights or long-distance travel.",
     "todo": "<p><span class=\\"tip-icon\\">🏛️</span><strong>What to do:</strong> 3-4 specific practical sentences.</p>"
   }
 ]
@@ -4419,7 +4420,9 @@ async function generateLocation() {
 
 CRITICAL: Respond with ONLY a JSON object. Your entire response must start with { and end with }. No introduction, no explanation, no markdown.
 
-{"history":"2-3 paragraphs in HTML with <strong> tags, \\n\\n between paragraphs","todo":"<p><span class=\\"tip-icon\\">🏛️</span><strong>What to do:</strong> 3-4 practical sentences</p>","travel":"🚶 or 🚇 practical directions ${fromHint}","type_label":"short description like Museum · Free","prebook":false,"free":true,"color":"#5c4db1"}`;
+The "travel" field must give LOCAL directions WITHIN ${city} (walking/transit from elsewhere in ${city}). DO NOT include flights, airports, or long-distance travel.
+
+{"history":"2-3 paragraphs in HTML with <strong> tags, \\n\\n between paragraphs","todo":"<p><span class=\\"tip-icon\\">🏛️</span><strong>What to do:</strong> 3-4 practical sentences</p>","travel":"🚶 or 🚇 local directions within ${city} ${fromHint}","type_label":"short description like Museum · Free","prebook":false,"free":true,"color":"#5c4db1"}`;
   try {
     const text = await callAnthropic({ prompt, maxTokens: 1000 });
     // Extract first { ... } block even if AI adds preamble
