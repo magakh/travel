@@ -6,8 +6,9 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="app-version" content="2026-04-17-fixes">
-<title id="pageTitle">London 2026</title>
+<meta name="app-version" content="2026-04-17-supabase">
+<title id="pageTitle">Trip</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/dist/umd/supabase.min.js"></script>
 <style>
 /* required styles */
 
@@ -1076,6 +1077,13 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
 .stop-row.has-conflict { border-left:3px solid var(--red) !important; }
 .stop-row.has-reservation { border-left:3px solid #ffc107; }
 .stop-row.has-reservation.confirmed { border-left:3px solid #28a745; }
+
+/* Viewer mode: soften edit affordances (but don't hide them — user can still read) */
+body.viewer-mode .stop-check { opacity: 0.4; pointer-events: none; }
+body.viewer-mode .drag-h { opacity: 0.3; }
+body.viewer-mode .tc-suggest-btn { display: none !important; }
+body.viewer-mode #saveBtn { opacity: 0.4; pointer-events: none; }
+body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
 .travel-connector {
   display: flex; align-items: center; gap: 8px;
   padding: 4px 10px 4px 48px;
@@ -1109,7 +1117,8 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
       <div class="header-sub" id="appSubtitleEl">May 7–10 · hidden gems · rooftop dining</div>
     </div>
     <div style="display:flex;gap:6px;flex-shrink:0;">
-      <button class="prebook-pill" onclick="saveToStorage()" title="Save & sync" style="border-color:#88d8a0;color:#88d8a0;">💾</button>
+      <button class="prebook-pill" id="lockBtn" onclick="showLockDialog()" title="Edit access" style="border-color:#aaa;color:#555;">🔒</button>
+      <button class="prebook-pill" id="saveBtn" onclick="saveToStorage()" title="Save & sync" style="border-color:#88d8a0;color:#88d8a0;">💾</button>
       <button class="prebook-pill" id="refreshBtn" onclick="manualRefresh()" title="Refresh from sync" style="border-color:#88d8a0;color:#88d8a0;">🔄</button>
       <button class="prebook-pill" onclick="showSaveMenu()" title="More options">⋮</button>
       <button class="prebook-pill" onclick="showView('prebook')">Book list</button>
@@ -1298,27 +1307,34 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
 
       <div id="setDayLabelsWrap"></div>
 
-      <label class="form-label" style="margin-top:14px;">GitHub repository (user/repo)</label>
-      <input class="form-input" id="setGhRepo" type="text" placeholder="e.g. magakh/travel">
-
-      <label class="form-label">Sync file name in repo</label>
-      <input class="form-input" id="setSyncFile" type="text" placeholder="e.g. sync_london2026.json">
-
-      <label class="form-label" style="margin-top:14px;">GitHub personal access token (editors only)</label>
-      <input class="form-input" id="setGhToken" type="password" placeholder="ghp_… (leave blank to view only)">
-      <p class="gen-hint" style="margin-bottom:12px;">Needed to <em>save</em> changes. Get one at github.com/settings/tokens (classic) with <strong>repo</strong> scope. Stored only in this device's localStorage — never committed anywhere. Leave blank to view the trip without being able to edit.</p>
-      <button class="gen-btn" onclick="saveGhToken()" style="background:#1a73e8;margin-bottom:8px;">🔑 Save GitHub Token</button>
-      <button onclick="clearGhToken()" style="width:100%;padding:10px;border-radius:8px;border:1px solid #ddd;background:#fafafa;font-size:13px;cursor:pointer;color:#666;margin-bottom:12px;">Remove token (view-only mode)</button>
-
       <button class="gen-btn" onclick="saveSettings()" style="background:#1a1a1a;margin-top:8px;">💾 Save Settings</button>
-      <p class="gen-hint">Changes take effect immediately. Sync file change applies on next save/load.</p>
+      <p class="gen-hint">Trip settings sync to all devices via Supabase.</p>
 
-      <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:8px;">
-        <label class="form-label">Anthropic API Key (for AI features)</label>
+      <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:16px;">
+        <h3 style="margin:0 0 8px 0;font-size:14px;">🗂 Trips</h3>
+        <p class="gen-hint" style="margin-bottom:10px;">Current trip: <strong id="setCurrentTrip">london2026</strong></p>
+        <button class="gen-btn" onclick="showNewTripDialog()" style="background:#1a73e8;margin-bottom:8px;">+ New trip</button>
+        <p class="gen-hint">Creates a new trip in Supabase. You'll get a shareable URL.</p>
+      </div>
+
+      <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:16px;">
+        <h3 style="margin:0 0 8px 0;font-size:14px;">☁️ Supabase (cloud backend)</h3>
+        <label class="form-label">Supabase URL</label>
+        <input class="form-input" id="setSupabaseUrl" type="text" placeholder="https://xxxxx.supabase.co">
+
+        <label class="form-label">Supabase anon key</label>
+        <input class="form-input" id="setSupabaseKey" type="password" placeholder="eyJ…">
+        <p class="gen-hint" style="margin-bottom:12px;">Get these from your Supabase project → Settings → API. Stored on this device only.</p>
+        <button class="gen-btn" onclick="saveSupabase()" style="background:#2e8454;margin-bottom:8px;">☁️ Save Supabase config</button>
+      </div>
+
+      <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:16px;">
+        <label class="form-label">Anthropic API Key (fallback for AI features)</label>
         <input class="form-input" id="setApiKey" type="password" placeholder="sk-ant-…">
-        <p class="gen-hint" style="margin-bottom:12px;">Get a key at console.anthropic.com — stored in session only</p>
+        <p class="gen-hint" style="margin-bottom:12px;">Only needed if you didn't deploy the Supabase Edge Function. Stored in session only.</p>
         <button class="gen-btn" onclick="saveApiKey()" style="background:#5c4db1;margin-bottom:16px;">🔑 Save API Key</button>
       </div>
+
       <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:8px;">
         <p style="font-size:12px;color:#888;margin-bottom:8px;">Danger zone</p>
         <button onclick="confirmResetAll()" style="width:100%;padding:12px;border-radius:10px;border:1px solid #c0392b;background:#fde8e8;color:#c0392b;font-size:13px;font-weight:700;cursor:pointer;">🗑 Reset all data</button>
@@ -1516,33 +1532,17 @@ function moveStop(i, dir) {
   if (currentView === 'routemap') renderRouteMap();
 }
 
-// ── SAVE / LOAD ───────────────────────────────────────────────────
-function getSaveData() {
-  // Include trip-level settings (title, subtitle, day labels/titles) so they
-  // sync across devices. Device-specific things (ghRepo, syncFile, ghToken,
-  // apiKey) remain local to each device.
-  return JSON.stringify({
-    days: days,
-    completed: completed,
-    hotel: window.HOTEL_DATA || null,
-    config: {
-      title: APP_CONFIG.title,
-      subtitle: APP_CONFIG.subtitle,
-      numDays: APP_CONFIG.numDays,
-      dayLabels: APP_CONFIG.dayLabels,
-      dayTitles: APP_CONFIG.dayTitles
-    },
-    savedAt: new Date().toISOString()
-  });
-}
-
-// ── REAL-TIME SYNC via GitHub API (no CDN cache) ─────────────────
-// App config — loaded from localStorage, can be changed in Settings
+// ── APP CONFIG ────────────────────────────────────────────────────
+// Device-local: supabase URL/key, GitHub repo (for migration import only).
+// Trip-local (stored in Supabase, shared across devices): title, dayLabels, etc.
 const DEFAULT_CONFIG = {
+  supabaseUrl: '',
+  supabaseKey: '',
+  ghRepo: 'magakh/travel'  // only used for one-time import of legacy JSON
+};
+const DEFAULT_TRIP_CONFIG = {
   title: 'London 2026',
   subtitle: 'May 7–10 · hidden gems · rooftop dining',
-  syncFile: 'sync_london2026.json',
-  ghRepo: 'magakh/travel',
   numDays: 4,
   dayLabels: ['May 7', 'May 8', 'May 9', 'May 10'],
   dayTitles: [
@@ -1554,264 +1554,271 @@ const DEFAULT_CONFIG = {
 };
 let APP_CONFIG = Object.assign({}, DEFAULT_CONFIG);
 try {
-  const saved = localStorage.getItem('app_config');
+  const saved = localStorage.getItem('app_config_v2');
   if (saved) APP_CONFIG = Object.assign({}, DEFAULT_CONFIG, JSON.parse(saved));
 } catch(e) {}
 
-let SYNC_API = 'https://api.github.com/repos/' + APP_CONFIG.ghRepo + '/contents/' + APP_CONFIG.syncFile;
+// Trip slug from ?trip=xxx, default 'london2026'
+const TRIP_ID = (new URLSearchParams(location.search).get('trip') || 'london2026')
+  .replace(/[^a-z0-9_-]/gi, '').toLowerCase() || 'london2026';
 
-// GitHub token — stored in localStorage per device, entered via Settings.
-// NEVER hardcode in this file (public HTML on GitHub Pages = anyone can read it).
-function getGhToken() {
-  try { return localStorage.getItem('gh_token') || ''; } catch(e) { return ''; }
-}
-function setGhToken(t) {
-  try {
-    if (t) localStorage.setItem('gh_token', t);
-    else localStorage.removeItem('gh_token');
-  } catch(e) {}
+// Merge default trip config with anything we've got locally for this trip
+APP_CONFIG = Object.assign({}, DEFAULT_TRIP_CONFIG, APP_CONFIG);
+
+// ── SUPABASE CLIENT ──────────────────────────────────────────────
+let supa = null;
+let _realtimeChannel = null;
+let _suppressNextRealtime = false;  // set true before our own writes so we don't echo
+let TRIP_PW_HASH = null;            // loaded from trip row
+let EDITOR_MODE = false;
+try { EDITOR_MODE = localStorage.getItem('trip_' + TRIP_ID + '_editor') === '1'; } catch(e) {}
+
+function supabaseReady() {
+  return !!(supa && APP_CONFIG.supabaseUrl && APP_CONFIG.supabaseKey);
 }
 
-function b64EncodeUnicode(str) {
-  return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g,
-    (_, p1) => String.fromCharCode('0x' + p1)));
+async function sha256Hex(str) {
+  const buf = new TextEncoder().encode(str);
+  const hash = await crypto.subtle.digest('SHA-256', buf);
+  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2,'0')).join('');
 }
 
-async function ghFetch(payload) {
-  const token = getGhToken();
-  if (!token) {
-    showToast('No GitHub token set — open Settings to add one', true);
-    return { ok: false, status: 0 };
+function initSupabase() {
+  if (!APP_CONFIG.supabaseUrl || !APP_CONFIG.supabaseKey) return false;
+  if (!window.supabase || !window.supabase.createClient) {
+    console.warn('Supabase JS client not loaded yet');
+    return false;
   }
-  // Read current SHA first (required for update)
-  const getRes = await fetch(SYNC_API, {
-    headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json' }
-  });
-  const meta = getRes.ok ? await getRes.json() : {};
-  const body = {
-    message: 'tour-sync',
-    content: b64EncodeUnicode(payload),
-    committer: { name: 'Tour App', email: 'tour@app.com' }
+  try {
+    supa = window.supabase.createClient(APP_CONFIG.supabaseUrl, APP_CONFIG.supabaseKey);
+    return true;
+  } catch(e) { console.error('Supabase init failed', e); return false; }
+}
+
+// ── SAVE / LOAD ───────────────────────────────────────────────────
+function getSaveData() {
+  return {
+    days: days,
+    completed: completed,
+    hotel: window.HOTEL_DATA || null,
+    savedAt: new Date().toISOString()
   };
-  if (meta.sha) body.sha = meta.sha;
-  return fetch(SYNC_API, {
-    method: 'PUT',
-    headers: { 'Authorization': 'token ' + token, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body)
-  });
 }
 
-const SYNC_RAW = 'https://raw.githubusercontent.com/magakh/travel/main/sync_london2026.json';
+function getTripConfig() {
+  return {
+    title: APP_CONFIG.title,
+    subtitle: APP_CONFIG.subtitle,
+    numDays: APP_CONFIG.numDays,
+    dayLabels: APP_CONFIG.dayLabels,
+    dayTitles: APP_CONFIG.dayTitles
+  };
+}
 
-async function ghRead() {
-  const token = getGhToken();
-  // If a token is set, use the authenticated API (guaranteed fresh — no CDN cache).
-  if (token) {
-    try {
-      const res = await fetch(SYNC_API, {
-        headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json' },
-        cache: 'no-store'
-      });
-      if (res.ok) {
-        const meta = await res.json();
-        if (meta.content) {
-          const json = decodeURIComponent(
-            atob(meta.content.replace(/\n/g, ''))
-              .split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join('')
-          );
-          return JSON.parse(json);
-        }
+// Apply remote data to local state (from cloudLoad or realtime event)
+function applyRemoteData(row) {
+  if (!row) return;
+  TRIP_PW_HASH = row.edit_password_hash || null;
+  const cfg = row.config || {};
+  APP_CONFIG = Object.assign({}, APP_CONFIG, cfg);
+  try { localStorage.setItem('app_config_v2', JSON.stringify(APP_CONFIG)); } catch(e) {}
+  try { applyConfig(); } catch(e) {}
+  const d = row.data || {};
+  if (d.days && d.days.length) {
+    d.days.forEach((dd, i) => {
+      if (days[i]) {
+        days[i].stops = dd.stops || [];
+        if (dd.title) days[i].title = dd.title;
+        if (dd.note) days[i].note = dd.note;
       }
-    } catch(e) { /* fall through to raw */ }
+    });
   }
-  // No token (viewer mode) — read public raw URL with cache busting.
-  // Viewers always get at least a near-recent copy this way.
-  try {
-    const rawUrl = 'https://raw.githubusercontent.com/' + APP_CONFIG.ghRepo + '/main/' + APP_CONFIG.syncFile + '?t=' + Date.now();
-    const res = await fetch(rawUrl, { cache: 'no-store' });
-    if (!res.ok) return null;
-    return await res.json();
-  } catch(e) { return null; }
-}
-
-// Helper: apply a freshly-fetched remote payload to local state.
-// Handles stops/completed/hotel AND trip-level config (title, day labels, etc.)
-// so that settings changes sync across devices.
-function applyRemoteData(data) {
-  if (!data) return;
-  if (data.days && data.days.length) {
-    data.days.forEach((d, i) => { if (days[i]) { days[i].stops = d.stops; if (d.title) days[i].title = d.title; if (d.note) days[i].note = d.note; } });
-  }
-  if (Array.isArray(data.completed)) completed = data.completed;
-  if (data.hotel) {
-    window.HOTEL_DATA = data.hotel;
-    HOTEL.name = data.hotel.name; HOTEL.address = data.hotel.address;
-    HOTEL.lat = data.hotel.lat; HOTEL.lng = data.hotel.lng;
-  }
-  // Apply trip-level config from remote (title, dayLabels, etc.) — but keep
-  // device-local settings (ghRepo, syncFile, supabase keys, tokens) untouched.
-  if (data.config) {
-    const keep = { ghRepo: APP_CONFIG.ghRepo, syncFile: APP_CONFIG.syncFile };
-    APP_CONFIG = Object.assign({}, APP_CONFIG, data.config, keep);
-    try { localStorage.setItem('app_config', JSON.stringify(APP_CONFIG)); } catch(e) {}
-    try { applyConfig(); } catch(e) {}
+  if (Array.isArray(d.completed)) completed = d.completed;
+  if (d.hotel) {
+    window.HOTEL_DATA = d.hotel;
+    HOTEL.name = d.hotel.name; HOTEL.address = d.hotel.address;
+    HOTEL.lat = d.hotel.lat; HOTEL.lng = d.hotel.lng;
   }
 }
 
-async function syncSave() {
-  const payload = getSaveData();
-  try { localStorage.setItem('london2026_v1', payload); } catch(e) {}
+// Load this trip from Supabase; return true on success
+async function cloudLoad() {
+  if (!supabaseReady()) return false;
   try {
-    const res = await ghFetch(payload);
-    if (res && res.ok) {
-      window._lastSyncTime = Date.now();
-      _lastSyncedPayload = payload;
-      showToast('Saved & synced ✓');
-    } else {
-      showToast('Saved locally ✓');
-    }
-  } catch(e) { showToast('Saved locally ✓'); }
+    const { data, error } = await supa.from('trips').select('*').eq('id', TRIP_ID).maybeSingle();
+    if (error) { console.warn('cloudLoad', error); return false; }
+    if (!data) return false; // trip doesn't exist yet
+    applyRemoteData(data);
+    return true;
+  } catch(e) { console.warn('cloudLoad', e); return false; }
 }
 
-async function manualRefresh() {
-  const btn = document.getElementById('refreshBtn');
-  if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+// Push current state to Supabase (upsert)
+async function cloudSave(summary) {
+  if (!supabaseReady() || !EDITOR_MODE) return false;
   try {
-    const data = await ghRead();
-    if (data && data.days && data.days.length >= 3) {
-      applyRemoteData(data);
-      _lastSyncedPayload = getSaveData();
-      _walkLoadedDays.clear();
-      switchDay(currentDay);
-      renderPrebook();
-      showToast('✨ Refreshed');
-    } else {
-      showToast('No sync data found');
-    }
-  } catch(e) { showToast('Refresh failed', true); }
-  if (btn) { btn.textContent = '🔄'; btn.disabled = false; }
+    _suppressNextRealtime = true;
+    const payload = {
+      id: TRIP_ID,
+      title: APP_CONFIG.title,
+      subtitle: APP_CONFIG.subtitle,
+      config: getTripConfig(),
+      data: getSaveData()
+    };
+    const { error } = await supa.from('trips').upsert(payload, { onConflict: 'id' });
+    if (error) { console.warn('cloudSave', error); showToast('Sync failed — saved locally', true); return false; }
+    return true;
+  } catch(e) { console.warn('cloudSave', e); return false; }
 }
 
-async function syncLoad() {
-  try {
-    const data = await ghRead();
-    if (data && data.days && data.days.length >= 3) {
-      applyRemoteData(data);
-      _lastSyncedPayload = getSaveData();
-      return true;
-    }
-  } catch(e) {}
-  return false;
-}
-
-// ── AUTO-PUSH (debounced) AND AUTO-POLL ──────────────────────────
-// Remember last-synced payload so we can detect when remote has changed
-// (compared to what WE last pushed/loaded, not compared to current state).
-let _lastSyncedPayload = '';
-let _autoPushTimer = null;
-let _autoPushInFlight = false;
-
-// Debounce cloud save: wait 2s of inactivity before pushing, so rapid edits
-// (e.g. ticking 5 stops done) coalesce into one commit.
-function schedulePush() {
-  if (!getGhToken()) return; // viewers can't push
-  if (_autoPushTimer) clearTimeout(_autoPushTimer);
-  _autoPushTimer = setTimeout(doAutoPush, 2000);
-}
-
-async function doAutoPush() {
-  _autoPushTimer = null;
-  if (_autoPushInFlight) { schedulePush(); return; } // queue another if already pushing
-  const payload = getSaveData();
-  if (payload === _lastSyncedPayload) return; // nothing to push
-  _autoPushInFlight = true;
-  try {
-    const res = await ghFetch(payload);
-    if (res && res.ok) {
-      _lastSyncedPayload = payload;
-      window._lastSyncTime = Date.now();
-      // Quiet UI — a pill on the save button is nicer than a toast for every edit
-      const btn = document.getElementById('saveBtn');
-      if (btn) {
-        btn.textContent = '✓';
-        setTimeout(() => { if (btn) btn.textContent = '💾'; }, 1500);
-      }
-    }
-  } catch(e) { /* silent — user will see the save button indicator */ }
-  finally { _autoPushInFlight = false; }
-}
-
-// Poll remote every 30s to pick up changes from other devices.
-// Skip when the user is actively editing (any open overlay or focused input).
-let _pollTimer = null;
-function startSyncPolling() {
-  if (_pollTimer) clearInterval(_pollTimer);
-  _pollTimer = setInterval(autoPollRemote, 30000);
-}
-function stopSyncPolling() {
-  if (_pollTimer) clearInterval(_pollTimer);
-  _pollTimer = null;
+// ── REALTIME SUBSCRIPTION ────────────────────────────────────────
+function startRealtime() {
+  if (!supabaseReady()) return;
+  if (_realtimeChannel) { try { supa.removeChannel(_realtimeChannel); } catch(e) {} }
+  _realtimeChannel = supa.channel('trip_' + TRIP_ID)
+    .on('postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'trips', filter: 'id=eq.' + TRIP_ID },
+      (payload) => {
+        if (_suppressNextRealtime) { _suppressNextRealtime = false; return; }
+        if (isUserBusy()) return; // don't disrupt mid-edit
+        const row = payload.new;
+        if (!row) return;
+        applyRemoteData(row);
+        _walkLoadedDays.clear();
+        try { renderAll(); } catch(e) {}
+        showToast('↻ Updated by someone else');
+      })
+    .subscribe();
 }
 
 function isUserBusy() {
-  // Any modal overlay open?
-  const overlays = ['time-overlay','dur-overlay','res-overlay','hotel-overlay','suggest-overlay','lock-overlay'];
+  const overlays = ['time-overlay','dur-overlay','res-overlay','hotel-overlay','suggest-overlay','lock-overlay','newtrip-overlay'];
   for (const id of overlays) if (document.getElementById(id)) return true;
-  // Focused text input / textarea?
   const a = document.activeElement;
   if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.isContentEditable)) return true;
-  // Mid-push?
-  if (_autoPushInFlight || _autoPushTimer) return true;
   return false;
 }
 
-async function autoPollRemote() {
-  if (document.hidden) return;       // tab not visible — skip
-  if (isUserBusy()) return;          // user editing — skip
-  try {
-    const data = await ghRead();
-    if (!data || !data.days || data.days.length < 3) return;
-    const incoming = JSON.stringify({
-      days: data.days.map(d => ({ title: d.title, note: d.note, stops: d.stops })),
-      completed: data.completed || [],
-      hotel: data.hotel || null,
-      config: data.config || null
-    });
-    const current = JSON.stringify({
-      days: days.map(d => ({ title: d.title, note: d.note, stops: d.stops })),
-      completed: completed,
-      hotel: window.HOTEL_DATA || null,
-      config: {
-        title: APP_CONFIG.title, subtitle: APP_CONFIG.subtitle,
-        numDays: APP_CONFIG.numDays, dayLabels: APP_CONFIG.dayLabels,
-        dayTitles: APP_CONFIG.dayTitles
-      }
-    });
-    if (incoming === current) return; // no change
-    applyRemoteData(data);
-    _lastSyncedPayload = getSaveData();
-    _walkLoadedDays.clear();
-    renderAll();
-    showToast('↻ Updated by someone else');
-  } catch(e) { /* silent — next poll will try again */ }
+// ── PASSWORD GATE ────────────────────────────────────────────────
+async function unlockEditor(pw) {
+  if (!pw) return false;
+  if (!supabaseReady()) { showToast('Configure Supabase in Settings first', true); return false; }
+  const hash = await sha256Hex(pw);
+  if (!TRIP_PW_HASH) {
+    // First-time: claim this password as the trip's edit password
+    const { error } = await supa.from('trips').update({ edit_password_hash: hash }).eq('id', TRIP_ID);
+    if (error) { showToast('Could not set password', true); return false; }
+    TRIP_PW_HASH = hash;
+  } else if (hash !== TRIP_PW_HASH) {
+    return false;
+  }
+  EDITOR_MODE = true;
+  try { localStorage.setItem('trip_' + TRIP_ID + '_editor', '1'); } catch(e) {}
+  updateLockUI();
+  return true;
 }
 
-function saveToStorage() { syncSave(); }
+function lockEditor() {
+  EDITOR_MODE = false;
+  try { localStorage.removeItem('trip_' + TRIP_ID + '_editor'); } catch(e) {}
+  updateLockUI();
+}
 
+function updateLockUI() {
+  const lock = document.getElementById('lockBtn');
+  if (lock) lock.textContent = EDITOR_MODE ? '🔓' : '🔒';
+  document.body.classList.toggle('viewer-mode', !EDITOR_MODE);
+}
+
+function showLockDialog() {
+  if (EDITOR_MODE) {
+    showConfirm('Lock editing? You will need the password to edit again.', () => {
+      lockEditor();
+      showToast('Locked — view only');
+    });
+    return;
+  }
+  const overlay = document.createElement('div');
+  overlay.id = 'lock-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;';
+  overlay.innerHTML =
+    '<div style="background:#fff;border-radius:16px;padding:20px;max-width:360px;width:100%;">' +
+      '<h3 style="margin:0 0 8px 0;font-size:17px;">' + (TRIP_PW_HASH ? '🔓 Unlock editing' : '🔓 Set trip password') + '</h3>' +
+      '<p style="margin:0 0 14px 0;font-size:13px;color:#666;">' +
+        (TRIP_PW_HASH
+          ? 'Enter the password shared with your group.'
+          : 'No password set yet for this trip. Set one now — share it with your group.') +
+      '</p>' +
+      '<input id="lockPw" type="password" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid #ddd;border-radius:8px;font-size:14px;margin-bottom:14px;" placeholder="Password" autofocus>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">' +
+        '<button onclick="document.getElementById(&quot;lock-overlay&quot;).remove()" style="padding:12px;border-radius:10px;border:1px solid #ddd;background:#fff;font-weight:700;font-size:14px;cursor:pointer;">Cancel</button>' +
+        '<button onclick="submitLockDialog()" style="padding:12px;border-radius:10px;border:none;background:#1a1a1a;color:#fff;font-weight:700;font-size:14px;cursor:pointer;">' + (TRIP_PW_HASH ? 'Unlock' : 'Set & unlock') + '</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(overlay);
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  setTimeout(() => document.getElementById('lockPw')?.focus(), 60);
+  const inp = document.getElementById('lockPw');
+  if (inp) inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitLockDialog(); });
+}
+
+async function submitLockDialog() {
+  const pw = document.getElementById('lockPw')?.value || '';
+  const ok = await unlockEditor(pw);
+  if (ok) {
+    const ov = document.getElementById('lock-overlay');
+    if (ov) ov.remove();
+    showToast('Unlocked — you can edit ✓');
+  } else {
+    showToast('Wrong password', true);
+  }
+}
+
+// ── IMPORT FROM LEGACY JSON ──────────────────────────────────────
+// On first-ever load of a trip slug that doesn't exist in Supabase, try
+// importing from the old sync_<slug>.json in the GitHub repo.
+async function importLegacyJson() {
+  if (!supabaseReady() || !APP_CONFIG.ghRepo) return false;
+  try {
+    const url = 'https://raw.githubusercontent.com/' + APP_CONFIG.ghRepo +
+                '/main/sync_' + TRIP_ID + '.json?t=' + Date.now();
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) return false;
+    const data = await res.json();
+    if (!data || !data.days || !data.days.length) return false;
+    // Build the trip row
+    const payload = {
+      id: TRIP_ID,
+      title: (data.config && data.config.title) || APP_CONFIG.title || 'Imported trip',
+      subtitle: (data.config && data.config.subtitle) || APP_CONFIG.subtitle || '',
+      config: data.config || getTripConfig(),
+      data: {
+        days: data.days,
+        completed: data.completed || [],
+        hotel: data.hotel || null,
+        savedAt: new Date().toISOString()
+      }
+    };
+    const { error } = await supa.from('trips').insert(payload);
+    if (error) { console.warn('import insert', error); return false; }
+    showToast('✨ Imported from legacy JSON');
+    return true;
+  } catch(e) { console.warn('importLegacyJson', e); return false; }
+}
+
+// ── LOCAL FALLBACK ───────────────────────────────────────────────
 function autoSave() {
-  // Save locally immediately on every change
-  try { localStorage.setItem('london2026_v1', getSaveData()); } catch(e) {}
-  if (window.HOTEL_DATA) try { localStorage.setItem('hotel_data', JSON.stringify(window.HOTEL_DATA)); } catch(e) {}
-  // Schedule a debounced cloud push
+  try { localStorage.setItem('trip_' + TRIP_ID + '_v1', JSON.stringify(getSaveData())); } catch(e) {}
+  if (window.HOTEL_DATA) try { localStorage.setItem('hotel_data_' + TRIP_ID, JSON.stringify(window.HOTEL_DATA)); } catch(e) {}
   schedulePush();
 }
 
-function tryLoadSaved() {
+function tryLoadLocal() {
   try {
-    const raw = localStorage.getItem('london2026_v1');
+    const raw = localStorage.getItem('trip_' + TRIP_ID + '_v1');
     if (!raw) return false;
     const data = JSON.parse(raw);
-    if (data.days && Array.isArray(data.days) && data.days.length >= 3) {
+    if (data.days && Array.isArray(data.days) && data.days.length >= 1) {
       data.days.forEach((d, i) => { if (days[i] && d.stops && d.stops.length) days[i].stops = d.stops; });
       completed = data.completed || [];
       if (data.hotel) { window.HOTEL_DATA = data.hotel; HOTEL.name = data.hotel.name; HOTEL.address = data.hotel.address; HOTEL.lat = data.hotel.lat; HOTEL.lng = data.hotel.lng; }
@@ -1821,15 +1828,65 @@ function tryLoadSaved() {
   return false;
 }
 
+// ── DEBOUNCED AUTO-PUSH ──────────────────────────────────────────
+let _autoPushTimer = null;
+let _autoPushInFlight = false;
+
+function schedulePush() {
+  if (!EDITOR_MODE) return;
+  if (!supabaseReady()) return;
+  if (_autoPushTimer) clearTimeout(_autoPushTimer);
+  _autoPushTimer = setTimeout(doAutoPush, 2000);
+}
+
+async function doAutoPush() {
+  _autoPushTimer = null;
+  if (_autoPushInFlight) { schedulePush(); return; }
+  _autoPushInFlight = true;
+  try {
+    const ok = await cloudSave();
+    if (ok) {
+      const btn = document.getElementById('saveBtn');
+      if (btn) {
+        btn.textContent = '✓';
+        setTimeout(() => { if (btn) btn.textContent = '💾'; }, 1500);
+      }
+    }
+  } catch(e) { /* silent */ }
+  finally { _autoPushInFlight = false; }
+}
+
+// Legacy names still used elsewhere in the file
+function saveToStorage() { doAutoPush(); showToast('Saved ✓'); }
+async function syncSave() { await doAutoPush(); }
+async function syncLoad() { return await cloudLoad(); }
+function tryLoadSaved() { return tryLoadLocal(); }
+function startSyncPolling() { /* realtime handles this now */ }
+
+async function manualRefresh() {
+  const btn = document.getElementById('refreshBtn');
+  if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+  const ok = await cloudLoad();
+  if (ok) {
+    _walkLoadedDays.clear();
+    switchDay(currentDay);
+    renderPrebook();
+    showToast('✨ Refreshed');
+  } else {
+    showToast('Refresh failed', true);
+  }
+  if (btn) { btn.textContent = '🔄'; btn.disabled = false; }
+}
+
 function exportFile() {
-  const blob = new Blob([getSaveData()], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify(getSaveData(), null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'london-tour-' + new Date().toISOString().slice(0,10) + '.json';
+  a.download = TRIP_ID + '-' + new Date().toISOString().slice(0,10) + '.json';
   a.click();
   URL.revokeObjectURL(url);
-  showToast('Exported as JSON file ✓');
+  showToast('Exported as JSON ✓');
 }
 
 function importFile(input) {
@@ -1839,23 +1896,22 @@ function importFile(input) {
   reader.onload = (e) => {
     try {
       const data = JSON.parse(e.target.result);
-      if (!data.days || data.days.length < 3) throw new Error('Invalid format');
-      data.days.forEach((d, i) => { days[i].stops = d.stops; });
+      if (!data.days || data.days.length < 1) throw new Error('Invalid format');
+      data.days.forEach((d, i) => { if (days[i]) days[i].stops = d.stops; });
       completed = data.completed || [];
-      try { localStorage.setItem('london2026_v1', JSON.stringify(data)); } catch(e) {}
+      if (data.hotel) { window.HOTEL_DATA = data.hotel; HOTEL.name = data.hotel.name; HOTEL.address = data.hotel.address; HOTEL.lat = data.hotel.lat; HOTEL.lng = data.hotel.lng; }
+      autoSave();
       switchDay(currentDay);
       renderPrebook();
-      showToast('Plan imported successfully ✓');
-    } catch(err) {
-      showToast('Could not read file — check format', true);
-    }
+      showToast('Plan imported ✓');
+    } catch(err) { showToast('Could not read file — check format', true); }
   };
   reader.readAsText(file);
 }
 
 function clearSaved() {
-  showConfirm('Reset all days to original itinerary?', () => {
-    try { localStorage.removeItem('london2026_v1'); } catch(e) {}
+  showConfirm('Reset local copy? (Cloud copy untouched.)', () => {
+    try { localStorage.removeItem('trip_' + TRIP_ID + '_v1'); } catch(e) {}
     completed = [];
     location.reload();
   });
@@ -2007,28 +2063,13 @@ Find 3 real, specific London places that match this search. For each place retur
 Only include real places. Use accurate coordinates. Return raw JSON only.`;
 
   try {
-    const apiKey = getApiKey(); if (!apiKey) { btn.textContent = 'Search with AI →'; btn.disabled = false; return; }
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 2000,
-        messages: [{ role: 'user', content: prompt }]
-      })
-    });
-    const data = await res.json();
-    const raw = (data.content?.[0]?.text || '[]').replace(/```json|```/g, '').trim();
+    const text = await callAnthropic({ prompt, maxTokens: 2000 });
+    const raw = (text || '[]').replace(/```json|```/g, '').trim();
     const results = JSON.parse(raw);
     renderSearchResults(results, dayIdx);
   } catch(e) {
     document.getElementById('searchResults').innerHTML =
-      '<p style="color:#c0392b;font-size:13px;text-align:center;padding:20px;">Search unavailable — try the + Add place button instead.</p>';
+      '<p style="color:#c0392b;font-size:13px;text-align:center;padding:20px;">' + (e.message || 'Search unavailable') + '</p>';
     showToast('AI search unavailable', true);
   }
   btn.textContent = 'Search with AI →'; btn.disabled = false;
@@ -2759,18 +2800,54 @@ async function init() {
   updateHeaderHeight();
   applyConfig();
   initHotel();
+  updateLockUI();
   document.getElementById('stopList').innerHTML = '<div style="text-align:center;padding:40px;color:#888;">⏳ Loading…</div>';
-  const cloudLoaded = await syncLoad();
-  if (!cloudLoaded) {
-    const saved = tryLoadSaved();
-    if (!saved) {
-      document.getElementById('stopList').innerHTML = '<div style="text-align:center;padding:40px;color:#c0392b;">Could not load — tap 🔄 to retry</div>';
+
+  // If Supabase not configured yet, prompt the user to set it up
+  if (!APP_CONFIG.supabaseUrl || !APP_CONFIG.supabaseKey) {
+    document.getElementById('stopList').innerHTML =
+      '<div style="text-align:center;padding:40px;color:#333;">' +
+      '<p style="margin:0 0 14px 0;">⚙️ Supabase is not configured yet.</p>' +
+      '<p style="font-size:13px;color:#666;margin:0 0 18px 0;">Open <strong>Settings</strong> and paste your Supabase URL + anon key to get started.</p>' +
+      '<button onclick="showView(&quot;settings&quot;)" style="padding:10px 18px;background:#1a1a1a;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer;">Open Settings</button>' +
+      '</div>';
+    // Still load local fallback if we have one
+    tryLoadLocal();
+    window.addEventListener('resize', updateHeaderHeight);
+    return;
+  }
+
+  if (!initSupabase()) {
+    document.getElementById('stopList').innerHTML =
+      '<div style="text-align:center;padding:40px;color:#c0392b;">Could not initialise Supabase — check URL and key in Settings</div>';
+    return;
+  }
+
+  // Try to load the trip from Supabase
+  let loaded = await cloudLoad();
+
+  // If not in Supabase, attempt to import from legacy JSON in the GitHub repo
+  if (!loaded) {
+    const imported = await importLegacyJson();
+    if (imported) loaded = await cloudLoad();
+  }
+
+  // If still nothing, fall back to local copy
+  if (!loaded) {
+    const localOk = tryLoadLocal();
+    if (!localOk) {
+      document.getElementById('stopList').innerHTML =
+        '<div style="text-align:center;padding:40px;color:#333;">' +
+        '<p>No data found for trip <strong>' + TRIP_ID + '</strong>.</p>' +
+        '<p style="font-size:13px;color:#666;margin-top:12px;">Unlock with 🔒 and add stops, or create a new trip in ⚙ Settings.</p>' +
+        '</div>';
     }
   }
+
   switchDay(0);
   renderPrebook();
   window.addEventListener('resize', updateHeaderHeight);
-  startSyncPolling(); // live updates from other devices
+  startRealtime();
 }
 
 function updateHeaderHeight() {
@@ -3216,30 +3293,13 @@ async function runSuggest(midLat, midLng, afterIdx, dayIdx) {
       ? 'You are a London walking tour expert. Suggest 4 excellent short walking experiences or scenic routes between lat ' + midLat.toFixed(3) + ', lng ' + midLng.toFixed(3) + ' matching: "' + query + '". Each should be a specific street, lane, square or area worth strolling through. Return ONLY a JSON array (no markdown): [{"name":"...","type":"Walking route · neighbourhood","address":"...","lat":0.0,"lng":0.0,"why":"1 sentence why this walk is special","duration":"20 min"}]. Use real London locations with accurate coordinates.'
       : 'You are a London travel expert. Suggest 4 excellent real places matching: "' + query + '" near lat ' + midLat.toFixed(3) + ', lng ' + midLng.toFixed(3) + ' in London. Return ONLY a JSON array (no markdown): [{"name":"...","type":"...","address":"...","lat":0.0,"lng":0.0,"why":"1 sentence why it fits here","duration":"45 min"}]. Use real places with accurate coordinates.';
 
-    const apiKey = getApiKey();
-    if (!apiKey) {
-      listEl.innerHTML = '<p style="color:#c0392b;font-size:13px;text-align:center;padding:20px;">API key required — set it in the Search tab first</p>';
-      return;
-    }
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1000, messages: [{ role: 'user', content: prompt }] })
-    });
-    if (!res.ok) throw new Error('API error ' + res.status);
-    const data = await res.json();
-    const text = data.content?.[0]?.text || '[]';
-    const clean = text.replace(/```json|```/g, '').trim();
+    const text = await callAnthropic({ prompt, maxTokens: 1000 });
+    const clean = (text || '[]').replace(/```json|```/g, '').trim();
     _suggestResults = JSON.parse(clean);
     renderSuggestResults(_suggestResults, afterIdx, dayIdx);
   } catch(e) {
     console.error('Suggest error:', e);
-    listEl.innerHTML = '<p style="color:#c0392b;font-size:13px;text-align:center;padding:20px;">Could not get suggestions — check API key or try again</p>';
+    listEl.innerHTML = '<p style="color:#c0392b;font-size:13px;text-align:center;padding:20px;">' + (e.message || 'Could not get suggestions — try again') + '</p>';
   }
 }
 
@@ -3346,14 +3406,18 @@ function loadSettingsUI() {
   const savedKey = sessionStorage.getItem('anthropic_key');
   const keyEl = document.getElementById('setApiKey');
   if (keyEl) keyEl.placeholder = savedKey ? '••••• key saved (enter to replace)' : 'sk-ant-…';
-  const savedTok = getGhToken();
-  const tokEl = document.getElementById('setGhToken');
-  if (tokEl) tokEl.placeholder = savedTok ? '••••• token saved (enter to replace)' : 'ghp_… (leave blank to view only)';
   document.getElementById('setTitle').value = c.title || '';
   document.getElementById('setSubtitle').value = c.subtitle || '';
   document.getElementById('setNumDays').value = c.numDays || 4;
-  document.getElementById('setGhRepo').value = c.ghRepo || '';
-  document.getElementById('setSyncFile').value = c.syncFile || '';
+  const curEl = document.getElementById('setCurrentTrip');
+  if (curEl) curEl.textContent = TRIP_ID;
+  const urlEl = document.getElementById('setSupabaseUrl');
+  if (urlEl) urlEl.value = c.supabaseUrl || '';
+  const kEl = document.getElementById('setSupabaseKey');
+  if (kEl) {
+    kEl.value = '';
+    kEl.placeholder = c.supabaseKey ? '••••• key saved (enter to replace)' : 'eyJ…';
+  }
   renderDayLabelInputs();
 }
 
@@ -3374,7 +3438,7 @@ function renderDayLabelInputs() {
   wrap.innerHTML = html;
 }
 
-function saveSettings() {
+async function saveSettings() {
   const n = parseInt(document.getElementById('setNumDays').value) || 4;
   const dayLabels = [], dayTitles = [];
   for (let i = 0; i < n; i++) {
@@ -3387,26 +3451,98 @@ function saveSettings() {
   APP_CONFIG.numDays  = n;
   APP_CONFIG.dayLabels = dayLabels;
   APP_CONFIG.dayTitles = dayTitles;
-  APP_CONFIG.ghRepo   = document.getElementById('setGhRepo').value.trim() || APP_CONFIG.ghRepo;
-  APP_CONFIG.syncFile = document.getElementById('setSyncFile').value.trim() || APP_CONFIG.syncFile;
 
-  // Update SYNC_API
-  SYNC_API = 'https://api.github.com/repos/' + APP_CONFIG.ghRepo + '/contents/' + APP_CONFIG.syncFile;
-
-  // Update days array to match new count/titles
+  // Update days array
   while (days.length < n) days.push({ title: dayLabels[days.length] + ' — New Day', note: '', stops: [] });
   days.length = n;
-  days.forEach((d, i) => {
-    if (dayTitles[i]) d.title = dayTitles[i];
-  });
+  days.forEach((d, i) => { if (dayTitles[i]) d.title = dayTitles[i]; });
 
-  // Save to localStorage
-  try { localStorage.setItem('app_config', JSON.stringify(APP_CONFIG)); } catch(e) {}
-
-  // Update UI
+  try { localStorage.setItem('app_config_v2', JSON.stringify(APP_CONFIG)); } catch(e) {}
   applyConfig();
+
+  // Push changed trip config to Supabase so other devices pick it up
+  if (EDITOR_MODE) await cloudSave('updated trip settings');
+
   showToast('Settings saved ✓');
   showView('list');
+}
+
+function saveSupabase() {
+  const url = document.getElementById('setSupabaseUrl').value.trim();
+  const key = document.getElementById('setSupabaseKey').value.trim();
+  if (!url && !key) { showToast('Enter URL and key', true); return; }
+  if (url) {
+    if (!/^https:\/\/.+\.supabase\.co\/?$/i.test(url)) {
+      showToast('URL must look like https://xxxxx.supabase.co', true); return;
+    }
+    APP_CONFIG.supabaseUrl = url.replace(/\/$/, '');
+  }
+  if (key) {
+    if (!key.startsWith('eyJ')) { showToast('Anon key should start with eyJ…', true); return; }
+    APP_CONFIG.supabaseKey = key;
+  }
+  try { localStorage.setItem('app_config_v2', JSON.stringify(APP_CONFIG)); } catch(e) {}
+  showToast('Supabase saved ✓ Reloading…');
+  setTimeout(() => location.reload(), 700);
+}
+
+// ── NEW TRIP ─────────────────────────────────────────────────────
+function showNewTripDialog() {
+  if (!supabaseReady()) { showToast('Configure Supabase first', true); return; }
+  const overlay = document.createElement('div');
+  overlay.id = 'newtrip-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;';
+  overlay.innerHTML =
+    '<div style="background:#fff;border-radius:16px;padding:20px;max-width:400px;width:100%;">' +
+      '<h3 style="margin:0 0 10px 0;">+ New trip</h3>' +
+      '<label class="form-label">Slug (for URL, lowercase letters/numbers)</label>' +
+      '<input id="ntSlug" class="form-input" placeholder="e.g. tokyo2027" autofocus>' +
+      '<label class="form-label">Title</label>' +
+      '<input id="ntTitle" class="form-input" placeholder="e.g. Tokyo 2027">' +
+      '<label class="form-label">Subtitle (optional)</label>' +
+      '<input id="ntSubtitle" class="form-input" placeholder="e.g. spring cherry blossoms">' +
+      '<label class="form-label">Number of days (1–7)</label>' +
+      '<input id="ntDays" class="form-input" type="number" min="1" max="7" value="4">' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;">' +
+        '<button onclick="document.getElementById(&quot;newtrip-overlay&quot;).remove()" style="padding:12px;border-radius:10px;border:1px solid #ddd;background:#fff;font-weight:700;cursor:pointer;">Cancel</button>' +
+        '<button onclick="createNewTrip()" style="padding:12px;border-radius:10px;border:none;background:#1a73e8;color:#fff;font-weight:700;cursor:pointer;">Create</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(overlay);
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  setTimeout(() => document.getElementById('ntSlug')?.focus(), 60);
+}
+
+async function createNewTrip() {
+  const slug = (document.getElementById('ntSlug').value || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+  const title = (document.getElementById('ntTitle').value || '').trim();
+  const subtitle = (document.getElementById('ntSubtitle').value || '').trim();
+  const nd = Math.max(1, Math.min(7, parseInt(document.getElementById('ntDays').value) || 4));
+  if (!slug || !title) { showToast('Slug and title required', true); return; }
+
+  // Check if slug already exists
+  const { data: existing } = await supa.from('trips').select('id').eq('id', slug).maybeSingle();
+  if (existing) { showToast('A trip with that slug already exists', true); return; }
+
+  const dayLabels = [], dayTitles = [], emptyDays = [];
+  for (let i = 0; i < nd; i++) {
+    dayLabels.push('Day ' + (i+1));
+    dayTitles.push('Day ' + (i+1));
+    emptyDays.push({ title: 'Day ' + (i+1), note: '', stops: [] });
+  }
+  const payload = {
+    id: slug, title: title, subtitle: subtitle,
+    config: { title, subtitle, numDays: nd, dayLabels, dayTitles },
+    data: { days: emptyDays, completed: [], hotel: null, savedAt: new Date().toISOString() }
+  };
+  const { error } = await supa.from('trips').insert(payload);
+  if (error) { showToast('Could not create trip: ' + error.message, true); return; }
+
+  const ov = document.getElementById('newtrip-overlay');
+  if (ov) ov.remove();
+  const url = location.origin + location.pathname + '?trip=' + slug;
+  showToast('Trip created ✓ Opening…');
+  setTimeout(() => { location.href = url; }, 800);
 }
 
 function applyConfig() {
@@ -3935,10 +4071,8 @@ async function generateLocation() {
   btn.textContent = 'Generating…'; btn.disabled = true;
   const prompt = `You are a London tour guide. Write a JSON object (no markdown) for "${name}" at "${address}" (type: ${type}):\n{"history":"2-3 paragraphs in HTML with <strong> tags, \\n\\n between paragraphs","todo":"<p><span class=\\"tip-icon\\">🏛️</span><strong>What to do:</strong> 3-4 practical sentences</p>","travel":"🚶 or 🚇 practical directions from Piccadilly","type_label":"short description like Museum · Free","prebook":false,"free":true,"color":"#5c4db1"}`;
   try {
-    const apiKey = getApiKey(); if (!apiKey) { btn.textContent = 'Generate with AI →'; btn.disabled = false; return; }
-    const res = await fetch('https://api.anthropic.com/v1/messages', {method:'POST',headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-4-6',max_tokens:1000,messages:[{role:'user',content:prompt}]})});
-    const data = await res.json();
-    const raw = (data.content?.[0]?.text||'{}').replace(/```json|```/g,'').trim();
+    const text = await callAnthropic({ prompt, maxTokens: 1000 });
+    const raw = (text || '{}').replace(/```json|```/g,'').trim();
     const info = JSON.parse(raw);
     addStop(dayIdx, {name, address, lat, lng, type, duration, ...info});
   } catch(e) {
@@ -4065,13 +4199,9 @@ function showToast(msg, isError=false) {
   setTimeout(() => t.remove(), 3000);
 }
 
-// ── API KEY MANAGEMENT ────────────────────────────────────────────
+// ── API KEY / ANTHROPIC HELPER ────────────────────────────────────
 function getApiKey() {
-  const key = sessionStorage.getItem('anthropic_key');
-  if (key) return key;
-  showToast('Set your API key in ⚙ Settings first', true);
-  showView('settings');
-  return null;
+  return sessionStorage.getItem('anthropic_key') || '';
 }
 
 function saveApiKey() {
@@ -4085,24 +4215,62 @@ function saveApiKey() {
   showToast('API key saved ✓');
 }
 
-function saveGhToken() {
-  const t = (document.getElementById('setGhToken')?.value || '').trim();
-  if (!t) { showToast('Paste a token first', true); return; }
-  if (!t.startsWith('ghp_') && !t.startsWith('github_pat_')) {
-    showToast('Doesn\'t look like a GitHub token (should start with ghp_ or github_pat_)', true);
-    return;
-  }
-  setGhToken(t);
-  document.getElementById('setGhToken').value = '';
-  document.getElementById('setGhToken').placeholder = '••••• token saved (enter to replace)';
-  showToast('GitHub token saved ✓ You can now save changes');
-}
+// Single path for all AI calls. Prefers the Supabase Edge Function (so the
+// Anthropic key lives server-side); falls back to direct Anthropic API if the
+// user has set a personal key in Settings. Throws on any failure.
+async function callAnthropic({ prompt, maxTokens, model }) {
+  model = model || 'claude-sonnet-4-5';
+  maxTokens = maxTokens || 1500;
+  const messages = [{ role: 'user', content: prompt }];
 
-function clearGhToken() {
-  setGhToken('');
-  const el = document.getElementById('setGhToken');
-  if (el) { el.value = ''; el.placeholder = 'ghp_… (leave blank to view only)'; }
-  showToast('Token removed — view-only mode');
+  // Prefer Edge Function when Supabase is configured
+  if (APP_CONFIG.supabaseUrl && APP_CONFIG.supabaseKey) {
+    const url = APP_CONFIG.supabaseUrl.replace(/\/$/, '') + '/functions/v1/ai-proxy';
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + APP_CONFIG.supabaseKey,
+          'apikey': APP_CONFIG.supabaseKey
+        },
+        body: JSON.stringify({ model, max_tokens: maxTokens, messages })
+      });
+      if (res.status === 429) throw new Error('Rate limit reached — try again in an hour');
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error('Edge function error: ' + res.status + ' ' + txt.slice(0, 120));
+      }
+      const data = await res.json();
+      const text = (data.content && data.content[0] && data.content[0].text) || '';
+      return text;
+    } catch(e) {
+      // If the edge function isn't deployed, fall through to direct call
+      console.warn('Edge function path failed, trying direct:', e.message);
+    }
+  }
+
+  // Fallback: direct Anthropic API (requires personal key)
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    throw new Error('AI not available — either deploy the Supabase Edge Function or set a personal Anthropic key in Settings.');
+  }
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({ model, max_tokens: maxTokens, messages })
+  });
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error('Anthropic error: ' + res.status + ' ' + txt.slice(0, 120));
+  }
+  const data = await res.json();
+  return (data.content && data.content[0] && data.content[0].text) || '';
 }
 
 
