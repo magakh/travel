@@ -3707,12 +3707,21 @@ function showAllMap() {
 function renderRouteMap() {
   const d = days[currentDay];
   const stops = d.stops;
-  const origin = stops[0].lat+','+stops[0].lng;
-  // Use hotel as final destination if set, otherwise last stop
+  // Build Google Maps URL using only NOT-YET-DONE stops, so when someone
+  // checks off a completed location, the directions skip it.
+  // The map visualization below still shows all stops (done + pending).
+  const remaining = stops.filter((_, i) => !completed.includes(currentDay + '-' + i));
   const hd = window.HOTEL_DATA;
-  const dest = hd ? hd.lat+','+hd.lng : stops[stops.length-1].lat+','+stops[stops.length-1].lng;
-  const wps = (hd ? stops.slice(1) : stops.slice(1,-1)).map(s=>s.lat+','+s.lng).join('|');
-  const gmUrl = 'https://www.google.com/maps/dir/?api=1&origin='+origin+'&destination='+dest+'&waypoints='+encodeURIComponent(wps)+'&travelmode=walking';
+  let gmUrl = '#';
+  if (remaining.length > 0) {
+    const origin = remaining[0].lat + ',' + remaining[0].lng;
+    const dest = hd ? hd.lat+','+hd.lng : remaining[remaining.length-1].lat+','+remaining[remaining.length-1].lng;
+    const middle = hd ? remaining.slice(1) : remaining.slice(1,-1);
+    const wps = middle.map(s => s.lat+','+s.lng).join('|');
+    gmUrl = 'https://www.google.com/maps/dir/?api=1&origin='+origin+'&destination='+dest
+          + (wps ? '&waypoints='+encodeURIComponent(wps) : '')
+          + '&travelmode=walking';
+  }
   const dayColors = ['#1a73e8','#e65100','#5c4db1'];
   const color = dayColors[currentDay] || '#1a73e8';
 
