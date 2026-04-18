@@ -2160,15 +2160,27 @@ function updateConnectorLabels(day, stops) {
     const sp = el.querySelector('.tc-walk-text');
     if (sp) { sp.textContent = text; el.classList.remove('tc-loading'); }
   };
-  // hotel → stop[0]
-  if (hd && stops[0]) paint('tc-'+day+'-0', labelFor(hd, stops[0]));
-  // stop[i] → stop[i+1]
-  for (let i = 0; i < stops.length - 1; i++) {
-    paint('tc-'+day+'-'+(i+1), labelFor(stops[i], stops[i+1]));
-  }
-  // last stop → hotel
-  if (hd && stops.length > 0) {
-    paint('tc-'+day+'-'+stops.length, labelFor(stops[stops.length-1], hd));
+  // Connector ID scheme (set by renderStopList):
+  //   - When HOTEL_DATA exists: connector ABOVE stop[i] has id tc-D-(i+1).
+  //     So tc-D-1 = hotel→stop[0], tc-D-2 = stop[0]→stop[1], ... tc-D-(N+1) = stop[N-1]→hotel (last)
+  //   - When no HOTEL_DATA: connector ABOVE stop[i] has id tc-D-i.
+  //     So tc-D-0 = before stop[0] (empty, no source), tc-D-1 = stop[0]→stop[1], ...
+  if (hd) {
+    // hotel → stop[0]
+    if (stops[0]) paint('tc-'+day+'-1', labelFor(hd, stops[0]));
+    // stop[i] → stop[i+1]
+    for (let i = 0; i < stops.length - 1; i++) {
+      paint('tc-'+day+'-'+(i+2), labelFor(stops[i], stops[i+1]));
+    }
+    // last stop → hotel
+    if (stops.length > 0) {
+      paint('tc-'+day+'-'+(stops.length+1), labelFor(stops[stops.length-1], hd));
+    }
+  } else {
+    // No hotel: first connector is empty, subsequent ones are stop[i]→stop[i+1]
+    for (let i = 0; i < stops.length - 1; i++) {
+      paint('tc-'+day+'-'+(i+1), labelFor(stops[i], stops[i+1]));
+    }
   }
 }
 
@@ -2744,8 +2756,13 @@ function renderStopList() {
   }).join('');
 
   // Last connector: last stop → hotel
+  // When HOTEL_DATA exists, last-stop connector ABOVE is tc-D-(N) where N=stops.length,
+  // so this final bottom connector uses tc-D-(N+1) to avoid collision.
+  // When no hotel, the bottom connector doesn't display walk-to-hotel, so we keep tc-D-N.
   const lastConnIdx = stops.length - 1;
-  const lastConn = '<div class="travel-connector tc-loading" id="tc-'+currentDay+'-'+stops.length+'"><span class="tc-walk-text">🚶 …</span><button class="tc-suggest-btn" onclick="event.stopPropagation();suggestBetween('+lastConnIdx+',-1,'+currentDay+')" title="Add before hotel return">✨ Add here</button></div>';
+  const hdExists = !!window.HOTEL_DATA;
+  const lastConnId = 'tc-' + currentDay + '-' + (hdExists ? (stops.length + 1) : stops.length);
+  const lastConn = '<div class="travel-connector tc-loading" id="' + lastConnId + '"><span class="tc-walk-text">🚶 …</span><button class="tc-suggest-btn" onclick="event.stopPropagation();suggestBetween('+lastConnIdx+',-1,'+currentDay+')" title="Add before hotel return">✨ Add here</button></div>';
 
   document.getElementById('stopList').innerHTML =
     hotelBanner(hotelStartTime, currentDay === 0 ? 'Hotel Check-In' : 'Hotel — Morning departure') +
