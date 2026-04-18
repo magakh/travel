@@ -1113,7 +1113,7 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
 <div class="header" id="appHeader">
   <div class="header-top">
     <div>
-      <h1 id="appTitleEl">London 2026</h1>
+      <h1 id="appTitleEl">Trip</h1>
       <div class="header-sub" id="appSubtitleEl">May 7–10 · hidden gems · rooftop dining</div>
     </div>
     <div style="display:flex;gap:6px;flex-shrink:0;">
@@ -1207,10 +1207,10 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
         <p style="font-size:12px;color:var(--muted);margin-bottom:8px;">Nothing found? Search with AI for new places:</p>
         <label class="form-label">Add result to day</label>
         <select class="form-input" id="searchDay">
-          <option value="0">May 7 — Arrival & City</option>
-          <option value="1">May 8 — East London</option>
-          <option value="2">May 9 — West & Mayfair</option>
-          <option value="3">May 10 — Final Day</option>
+          <option value="0">Day 1</option>
+          <option value="1">Day 2</option>
+          <option value="2">Day 3</option>
+          <option value="3">Day 4</option>
         </select>
         <button class="gen-btn" id="searchBtn" onclick="aiSearch()" style="background:#5c4db1;">🤖 Search with AI →</button>
         <p class="gen-hint">AI finds the best match, writes history &amp; tips, and adds it to your itinerary</p>
@@ -1247,10 +1247,10 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
         </select>
         <label class="form-label">Add to day</label>
         <select class="form-input" id="addDay">
-          <option value="0">May 7 — Arrival & City</option>
-          <option value="1">May 8 — East London</option>
-          <option value="2">May 9 — West & Mayfair</option>
-          <option value="3">May 10 — Final Day</option>
+          <option value="0">Day 1</option>
+          <option value="1">Day 2</option>
+          <option value="2">Day 3</option>
+          <option value="3">Day 4</option>
         </select>
         <label class="form-label">Duration</label>
         <select class="form-input" id="addDuration">
@@ -1272,17 +1272,17 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
       <p>Enter your hotel details — it will appear as a pin on the map and anchor the start and end of each day.</p>
 
       <label class="form-label">Hotel name *</label>
-      <input class="form-input" id="hotelName" type="text" placeholder="e.g. The Ritz London" oninput="updateHotelPreview()">
+      <input class="form-input" id="hotelName" type="text" placeholder="e.g. Hotel name" oninput="updateHotelPreview()">
       <label class="form-label">Address *</label>
-      <input class="form-input" id="hotelAddress" type="text" placeholder="e.g. 150 Piccadilly, London W1J 9BR" oninput="updateHotelPreview()">
+      <input class="form-input" id="hotelAddress" type="text" placeholder="e.g. full street address, city" oninput="updateHotelPreview()">
       <div class="form-row">
         <div>
           <label class="form-label">Latitude</label>
-          <input class="form-input" id="hotelLat" type="number" step="0.0001" placeholder="51.5072">
+          <input class="form-input" id="hotelLat" type="number" step="0.0001" placeholder="e.g. 40.7580">
         </div>
         <div>
           <label class="form-label">Longitude</label>
-          <input class="form-input" id="hotelLng" type="number" step="0.0001" placeholder="-0.1416">
+          <input class="form-input" id="hotelLng" type="number" step="0.0001" placeholder="e.g. -73.9855">
         </div>
       </div>
       <div id="hotelPreview" style="margin-bottom:12px;"></div>
@@ -1297,10 +1297,10 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
       <h2>⚙ Settings</h2>
 
       <label class="form-label">Trip title</label>
-      <input class="form-input" id="setTitle" type="text" placeholder="e.g. London 2026">
+      <input class="form-input" id="setTitle" type="text" placeholder="e.g. My trip">
 
       <label class="form-label">Subtitle</label>
-      <input class="form-input" id="setSubtitle" type="text" placeholder="e.g. May 7–10 · hidden gems">
+      <input class="form-input" id="setSubtitle" type="text" placeholder="e.g. key dates · themes">
 
       <label class="form-label">Number of days (1–7)</label>
       <input class="form-input" id="setNumDays" type="number" min="1" max="7" placeholder="4" oninput="renderDayLabelInputs()">
@@ -1345,14 +1345,14 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
 <script>
 // ── HOTEL (fixed anchor for each day) ────────────────────────────
 const HOTEL = {
-  name: 'Hotel · Piccadilly',
-  type: 'Your base · Piccadilly area',
+  name: 'Hotel',
+  type: 'Your base',
   color: '#444444',
-  lat: 51.5072, lng: -0.1416,
-  address: 'Piccadilly, London W1',
+  lat: 0, lng: 0,
+  address: '',
   badges: [],
-  travel: '🏨 Your hotel base in the Piccadilly area.',
-  history: 'Your hotel in central London.',
+  travel: '🏨 Your hotel base.',
+  history: 'Your hotel for this trip.',
   todo: '<p>Return to the hotel to freshen up or drop bags.</p>',
   duration: '30 min',
   isHotel: true,
@@ -1360,7 +1360,7 @@ const HOTEL = {
 };
 
 function hotelStop(time, label) {
-  return Object.assign({}, HOTEL, { time: time, name: label || 'Hotel · Piccadilly' });
+  return Object.assign({}, HOTEL, { time: time, name: label || 'Hotel' });
 }
 
 
@@ -1377,64 +1377,6 @@ const days = [
 const prebooks = [];
 
 
-
-// ── BREAKFAST STOPS near Piccadilly ──────────────────────────────
-const BREAKFASTS = [
-  {
-    time: "9:00 AM", name: "Regency Café — Breakfast", type: "Breakfast · Legendary London caff · 1946",
-    color: "#1a1a1a", prebook: false, free: false, weekend: false,
-    lat: 51.4937725, lng: -0.132194, address: "17-19 Regency St, London SW1P 4BY",
-    badges: ["food"],
-    travel: "🚶 12-min walk from Piccadilly — south through St James's Park, past Westminster Cathedral, onto Regency Street. Or Tube to Victoria (2 min) then 8-min walk. Worth every step.",
-    history: `<strong>Regency Café</strong> opened in 1946 in a former bomb-damaged Victorian terrace and has barely changed since. The original black-and-white glazed tile exterior, the Formica counter, the hand-written menu board, the orders shouted across the room by the staff — all exactly as they were nearly 80 years ago. It is listed by English Heritage as one of London's most important surviving examples of a traditional working-class café.\n\nThe café sits in <strong>Pimlico</strong>, a neighbourhood of white stucco terraces developed by Thomas Cubitt in the 1840s as a more affordable alternative to Belgravia next door. The regulars have always been a mix of Westminster civil servants, construction workers, taxi drivers, and increasingly, food writers and chefs who make the pilgrimage for what many consider the definitive full English breakfast in London. <strong>Cash only</strong> — bring notes.`,
-    todo: `<p><span class="tip-icon">🍳</span><strong>Order:</strong> The full English — two eggs (fried or scrambled), back bacon, sausage, beans, toast, and a mug of builder's tea. Ask for bubble and squeak if it's on — a fried patty of leftover potato and cabbage that's a genuine London classic. Order at the counter, find a table, wait for your number to be called. Cash only. Arrive by 9am — it gets packed fast.</p>`,
-    duration: "60 min", prebookText: null, prebookUrl: null
-  },
-  {
-    time: "9:00 AM", name: "Ottolenghi Notting Hill — Breakfast", type: "Breakfast · Middle Eastern & healthy",
-    color: "#1a7a3a", prebook: true, free: false, weekend: false,
-    lat: 51.5149, lng: -0.197, address: "63A Ledbury Rd, London W11 2AD",
-    badges: ["food","prebook"],
-    travel: "🚇 Tube from Piccadilly Circus to Notting Hill Gate (District/Circle, 8 min). Walk 10 min north to Ledbury Road — one of London's loveliest neighbourhood streets.",
-    history: `<strong>Ottolenghi</strong> was founded in 2002 by <strong>Yotam Ottolenghi</strong> and <strong>Sami Tamimi</strong> — one Israeli, one Palestinian, both raised in Jerusalem on opposite sides of the city. Their food is a vivid expression of shared Middle Eastern and Mediterranean heritage.\n\n<strong>Ledbury Road</strong> is one of London's most beautiful neighbourhood streets — Georgian townhouses in pastel colours, independent boutiques, and the relaxed atmosphere of Notting Hill before tourists arrive.`,
-    todo: `<p><span class="tip-icon">🥗</span><strong>Order:</strong> Poached eggs with labneh and za'atar, seasonal grain bowls, or freshly baked pastries with tahini. Everything is clean, bold, beautifully presented. Note: closed Tuesdays and Wednesdays — check before going.</p>`,
-    duration: "60 min", prebookText: "Book ahead or arrive at opening — closed Tue/Wed", prebookUrl: "https://ottolenghi.co.uk/"
-  },
-  {
-    time: "9:00 AM", name: "Colbert — Breakfast", type: "Breakfast · French brasserie · 10 min from Piccadilly",
-    color: "#5c4db1", prebook: true, free: false, weekend: false,
-    lat: 51.4924, lng: -0.1572, address: "50-52 Sloane Square, London SW1W 8AX",
-    badges: ["food","prebook"],
-    travel: "🚇 Tube from Piccadilly Circus to Sloane Square (District/Circle, 10 min). Colbert is right at the station exit on the corner of the square.",
-    history: `<strong>Colbert</strong> opened in 2011, modelled on the great Parisian brasseries — democratic institutions where Parisians breakfasted since the Belle Époque. It is run by the same team as The Wolseley.\n\n<strong>Sloane Square</strong> is one of London's most elegant formal squares, completed in the 1770s. The King's Road running west from here was Henry VIII's private road to Hampton Court, later becoming the epicentre of 1970s punk fashion.`,
-    todo: `<p><span class="tip-icon">☕</span><strong>Order:</strong> Oeufs en cocotte (baked eggs with herbs), avocado and smoked salmon on toast, granola with seasonal fruit. Café au lait is excellent. Proper French brasserie breakfast — elegant, unhurried. Book ahead on weekends.</p>`,
-    duration: "60 min", prebookText: "Book online — popular at weekends", prebookUrl: "https://www.colbert-restaurant.co.uk/"
-  }
-];
-
-// Names of old first-stops to replace (they were coffee/breakfast already in the data)
-const OLD_BREAKFAST_NAMES = [
-  "Daunt Books + Coffee",
-  "Columbia Road Flower Market + Coffee",
-  "Ottolenghi Islington — Healthy Breakfast",
-  "Ottolenghi Islington",
-  "Dishoom Carnaby — Breakfast",
-  "LALÏ — Breakfast"
-];
-
-function prepareBreakfasts() {
-  days.forEach((day, di) => {
-    // Remove old breakfast/coffee first stop if it matches
-    if (day.stops.length > 0 && OLD_BREAKFAST_NAMES.includes(day.stops[0].name)) {
-      day.stops.shift();
-    }
-    // Prepend the Piccadilly-near breakfast
-    const bf = JSON.parse(JSON.stringify(BREAKFASTS[di]));
-    day.stops.unshift(bf);
-    // Reassign times
-    reassignTimesForDay(di);
-  });
-}
 
 function reassignTimesForDay(di) {
   // Reassigns start times for a whole day using the rule:
@@ -1599,6 +1541,42 @@ function getTripConfig() {
     dayLabels: APP_CONFIG.dayLabels,
     dayTitles: APP_CONFIG.dayTitles
   };
+}
+
+// Best-effort: what city is this trip about?
+// Priority: hotel address > trip title first word > 'your destination'
+function getTripCity() {
+  if (window.HOTEL_DATA && window.HOTEL_DATA.address) {
+    const addr = window.HOTEL_DATA.address;
+    // Try to pull a city-looking token from the address (last word or second-to-last)
+    const parts = addr.split(/[,;]/).map(p => p.trim()).filter(Boolean);
+    // Last non-postcode-looking part
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const p = parts[i];
+      // Skip parts that are mostly digits/postcode-like
+      if (/^[a-z\u00c0-\u017f][a-z\u00c0-\u017f\s'-]+$/i.test(p) && p.length >= 3) return p;
+    }
+  }
+  const title = (APP_CONFIG.title || '').trim();
+  if (title) {
+    // Take the first word that's a proper noun (capitalized, length >= 3)
+    const tokens = title.split(/[\s,]+/).filter(t => t && t.length >= 3 && /^[A-Z]/.test(t));
+    if (tokens.length) return tokens[0];
+  }
+  return 'your destination';
+}
+
+// Where should "near here" searches center? Priority: hotel > first stop > 0,0
+function getTripCenter() {
+  if (window.HOTEL_DATA && window.HOTEL_DATA.lat && window.HOTEL_DATA.lng) {
+    return { lat: window.HOTEL_DATA.lat, lng: window.HOTEL_DATA.lng };
+  }
+  for (const d of days) {
+    for (const s of (d.stops || [])) {
+      if (s.lat && s.lng) return { lat: s.lat, lng: s.lng };
+    }
+  }
+  return null;
 }
 
 // Apply remote data to local state (from cloudLoad or realtime event)
@@ -1959,7 +1937,7 @@ function optimizeRouteForDay(di) {
   const stops = days[di].stops;
   if (stops.length < 3) return;
 
-  // Haversine distance in metres (accurate for London scale)
+  // Haversine distance in metres (accurate at city scale)
   function dist(a, b) {
     const R = 6371000;
     const p1 = a.lat * Math.PI/180, p2 = b.lat * Math.PI/180;
@@ -2070,34 +2048,40 @@ async function aiSearch() {
   const dayIdx = parseInt(document.getElementById('searchDay').value);
   if (!query) { showToast('Enter what you are looking for', true); return; }
 
+  const city = getTripCity();
+  const center = getTripCenter();
+  const nearHint = center
+    ? ` near lat ${center.lat.toFixed(4)}, lng ${center.lng.toFixed(4)}`
+    : '';
+
   const btn = document.getElementById('searchBtn');
   btn.textContent = 'Searching…'; btn.disabled = true;
-  document.getElementById('searchResults').innerHTML = '<p style="color:#888;font-size:13px;text-align:center;padding:20px;">AI is finding the best matches in London…</p>';
+  document.getElementById('searchResults').innerHTML = '<p style="color:#888;font-size:13px;text-align:center;padding:20px;">AI is finding the best matches in ' + city.replace(/[<>&"]/g,'') + '…</p>';
 
-  const existing = days.flatMap(d => d.stops.map(s => s.name)).join(', ');
+  const existing = days.flatMap(d => d.stops.map(s => s.name)).join(', ') || 'nothing yet';
 
-  const prompt = `You are a London expert tour guide. A couple is visiting London for a few days staying near Piccadilly. They love hidden gems, healthy eating, art, culture, and rooftop dining. They have already visited: ${existing}.
+  const prompt = `You are an expert tour guide for ${city}. A visitor is planning a trip and staying${center ? ' near the hotel at lat ' + center.lat.toFixed(4) + ', lng ' + center.lng.toFixed(4) : ' in ' + city}. They have already visited: ${existing}.
 
 The user is searching for: "${query}"
 
-Find 3 real, specific London places that match this search. For each place return a JSON object. Respond ONLY with a JSON array of exactly 3 objects, no markdown:
+Find 3 real, specific places in ${city} that match this search${nearHint}. For each place return a JSON object. Respond ONLY with a JSON array of exactly 3 objects, no markdown:
 [
   {
     "name": "Exact place name",
-    "address": "Full London address",
-    "lat": 51.5XXX,
-    "lng": -0.XXXX,
-    "type_label": "Short type e.g. Rooftop bar · City of London",
+    "address": "Full street address in ${city}",
+    "lat": 0.0000,
+    "lng": 0.0000,
+    "type_label": "Short type e.g. Rooftop bar · downtown",
     "color": "#hex color",
     "free": false,
     "prebook": false,
-    "description": "2 sentences why this is perfect for them",
-    "history": "2 rich paragraphs about the history of this place in HTML with <strong> tags. Separate paragraphs with \n\n",
-    "travel": "🚶 or 🚇 Practical travel directions from Piccadilly Circus",
-    "todo": "<p><span class=\"tip-icon\">🏛️</span><strong>What to do:</strong> 3-4 specific practical sentences about what to see, order, or experience.</p>"
+    "description": "2 sentences why this is a good match",
+    "history": "2 rich paragraphs about the history of this place in HTML with <strong> tags. Separate paragraphs with \\n\\n",
+    "travel": "🚶 or 🚇 Practical travel directions from the hotel area",
+    "todo": "<p><span class=\\"tip-icon\\">🏛️</span><strong>What to do:</strong> 3-4 specific practical sentences about what to see, order, or experience.</p>"
   }
 ]
-Only include real places. Use accurate coordinates. Return raw JSON only.`;
+Only include real, well-known places in ${city}. Use accurate coordinates (4+ decimal places). Return raw JSON only.`;
 
   try {
     const text = await callAnthropic({ prompt, maxTokens: 2000 });
@@ -2215,7 +2199,7 @@ function _haversineMetres(aLat, aLng, bLat, bLng) {
 
 // Fallback walking estimate when OSRM can't be reached.
 // Formula: great-circle-km × 12 min/km (5 km/h walking pace).
-// Calibrated against OSRM results for central London — avg error ~3 min.
+// Calibrated against OSRM results for dense urban areas — avg error ~3 min.
 // Urban routes are rarely much longer than straight-line at this scale
 // (buildings form walkable grids), so no detour multiplier is applied.
 function _walkMinsFallback(aLat, aLng, bLat, bLng) {
@@ -3241,7 +3225,8 @@ function suggestBetween(afterIdx, beforeIdx, dayIdx) {
 
   // Get midpoint between the two stops for location context
   const stops = days[dayIdx].stops;
-  let midLat = 51.515, midLng = -0.13; // London default
+  const tc = getTripCenter();
+  let midLat = tc ? tc.lat : 0, midLng = tc ? tc.lng : 0;
   if (afterIdx >= 0 && afterIdx < stops.length) {
     const a = stops[afterIdx];
     const b = beforeIdx >= 0 && beforeIdx < stops.length ? stops[beforeIdx] : (window.HOTEL_DATA || a);
@@ -3325,10 +3310,11 @@ async function runSuggest(midLat, midLng, afterIdx, dayIdx) {
   _suggestResults = [];
 
   try {
+    const city = getTripCity();
     const isWalk = query.toLowerCase().includes('walk') || query.toLowerCase().includes('neighbourhood') || query.toLowerCase().includes('route');
     const prompt = isWalk
-      ? 'You are a London walking tour expert. Suggest 4 excellent short walking experiences or scenic routes between lat ' + midLat.toFixed(3) + ', lng ' + midLng.toFixed(3) + ' matching: "' + query + '". Each should be a specific street, lane, square or area worth strolling through. Return ONLY a JSON array (no markdown): [{"name":"...","type":"Walking route · neighbourhood","address":"...","lat":0.0,"lng":0.0,"why":"1 sentence why this walk is special","duration":"20 min"}]. Use real London locations with accurate coordinates.'
-      : 'You are a London travel expert. Suggest 4 excellent real places matching: "' + query + '" near lat ' + midLat.toFixed(3) + ', lng ' + midLng.toFixed(3) + ' in London. Return ONLY a JSON array (no markdown): [{"name":"...","type":"...","address":"...","lat":0.0,"lng":0.0,"why":"1 sentence why it fits here","duration":"45 min"}]. Use real places with accurate coordinates.';
+      ? 'You are a walking tour expert for ' + city + '. Suggest 4 excellent short walking experiences or scenic routes between lat ' + midLat.toFixed(3) + ', lng ' + midLng.toFixed(3) + ' matching: "' + query + '". Each should be a specific street, lane, square or area in ' + city + ' worth strolling through. Return ONLY a JSON array (no markdown): [{"name":"...","type":"Walking route · neighbourhood","address":"...","lat":0.0,"lng":0.0,"why":"1 sentence why this walk is special","duration":"20 min"}]. Use real locations with accurate coordinates.'
+      : 'You are a travel expert for ' + city + '. Suggest 4 excellent real places matching: "' + query + '" near lat ' + midLat.toFixed(3) + ', lng ' + midLng.toFixed(3) + ' in ' + city + '. Return ONLY a JSON array (no markdown): [{"name":"...","type":"...","address":"...","lat":0.0,"lng":0.0,"why":"1 sentence why it fits here","duration":"45 min"}]. Use real places with accurate coordinates.';
 
     const text = await callAnthropic({ prompt, maxTokens: 1000 });
     const clean = (text || '[]').replace(/```json|```/g, '').trim();
@@ -3868,7 +3854,26 @@ function applyConfig() {
     }
   });
 
+  // Populate the "Add to day" selects (AI search + manual add)
+  populateDaySelects();
+
   // renderAll() is called after data loads in init()
+}
+
+// Fill #searchDay and #addDay <select> elements with the current trip's days
+function populateDaySelects() {
+  const dayTitles = APP_CONFIG.dayTitles || [];
+  const dayLabels = APP_CONFIG.dayLabels || [];
+  const n = APP_CONFIG.numDays || 4;
+  let opts = '';
+  for (let i = 0; i < n; i++) {
+    const label = dayTitles[i] || dayLabels[i] || ('Day ' + (i+1));
+    opts += '<option value="' + i + '">' + label.replace(/[<>&]/g,'') + '</option>';
+  }
+  ['searchDay', 'addDay'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = opts;
+  });
 }
 
 function confirmResetAll() {
@@ -4319,7 +4324,7 @@ function renderAllMap() {
 
   document.getElementById('allMapContent').innerHTML = `
     <div class="all-map-header">
-      <h2>All 4 Days &mdash; London</h2>
+      <h2>All ${APP_CONFIG.numDays || 4} Days &mdash; ${(APP_CONFIG.title || 'Trip').replace(/[<>&]/g,'')}</h2>
       <div class="map-legend">${legend}</div>
       <div style="display:flex;gap:8px;">
         ${dayColors.map((c,i)=>`<button onclick="switchDay(${i})" style="flex:1;padding:8px;border-radius:8px;border:2px solid ${c};background:#fff;color:${c};font-size:12px;font-weight:700;cursor:pointer;">${dayNames[i]}</button>`).join('')}
@@ -4362,15 +4367,20 @@ function renderAllMap() {
 async function generateLocation() {
   const name = document.getElementById('addName').value.trim();
   const address = document.getElementById('addAddress').value.trim();
-  const lat = parseFloat(document.getElementById('addLat').value) || 51.515;
-  const lng = parseFloat(document.getElementById('addLng').value) || -0.12;
+  const tc = getTripCenter();
+  const lat = parseFloat(document.getElementById('addLat').value) || (tc ? tc.lat : 0);
+  const lng = parseFloat(document.getElementById('addLng').value) || (tc ? tc.lng : 0);
   const type = document.getElementById('addType').value;
   const dayIdx = parseInt(document.getElementById('addDay').value);
   const duration = document.getElementById('addDuration').value;
   if (!name || !address) { showToast('Enter a name and address', true); return; }
   const btn = document.getElementById('genBtn');
   btn.textContent = 'Generating…'; btn.disabled = true;
-  const prompt = `You are a London tour guide. Write a JSON object (no markdown) for "${name}" at "${address}" (type: ${type}):\n{"history":"2-3 paragraphs in HTML with <strong> tags, \\n\\n between paragraphs","todo":"<p><span class=\\"tip-icon\\">🏛️</span><strong>What to do:</strong> 3-4 practical sentences</p>","travel":"🚶 or 🚇 practical directions from Piccadilly","type_label":"short description like Museum · Free","prebook":false,"free":true,"color":"#5c4db1"}`;
+  const city = getTripCity();
+  const fromHint = window.HOTEL_DATA && window.HOTEL_DATA.name
+    ? 'from ' + window.HOTEL_DATA.name
+    : 'from the hotel area';
+  const prompt = `You are an expert tour guide for ${city}. Write a JSON object (no markdown) for "${name}" at "${address}" (type: ${type}):\n{"history":"2-3 paragraphs in HTML with <strong> tags, \\n\\n between paragraphs","todo":"<p><span class=\\"tip-icon\\">🏛️</span><strong>What to do:</strong> 3-4 practical sentences</p>","travel":"🚶 or 🚇 practical directions ${fromHint}","type_label":"short description like Museum · Free","prebook":false,"free":true,"color":"#5c4db1"}`;
   try {
     const text = await callAnthropic({ prompt, maxTokens: 1000 });
     const raw = (text || '{}').replace(/```json|```/g,'').trim();
