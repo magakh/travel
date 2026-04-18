@@ -1317,17 +1317,6 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
         <p class="gen-hint">Creates a new trip in Supabase. You'll get a shareable URL.</p>
       </div>
 
-      <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:16px;">
-        <h3 style="margin:0 0 8px 0;font-size:14px;">☁️ Supabase (cloud backend)</h3>
-        <label class="form-label">Supabase URL</label>
-        <input class="form-input" id="setSupabaseUrl" type="text" placeholder="https://xxxxx.supabase.co">
-
-        <label class="form-label">Supabase anon key</label>
-        <input class="form-input" id="setSupabaseKey" type="password" placeholder="eyJ…">
-        <p class="gen-hint" style="margin-bottom:12px;">Get these from your Supabase project → Settings → API. Stored on this device only.</p>
-        <button class="gen-btn" onclick="saveSupabase()" style="background:#2e8454;margin-bottom:8px;">☁️ Save Supabase config</button>
-      </div>
-
       <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:8px;">
         <p style="font-size:12px;color:#888;margin-bottom:8px;">Danger zone</p>
         <button onclick="confirmResetAll()" style="width:100%;padding:12px;border-radius:10px;border:1px solid #c0392b;background:#fde8e8;color:#c0392b;font-size:13px;font-weight:700;cursor:pointer;">🗑 Reset all data</button>
@@ -3407,13 +3396,6 @@ function loadSettingsUI() {
   document.getElementById('setNumDays').value = c.numDays || 4;
   const curEl = document.getElementById('setCurrentTrip');
   if (curEl) curEl.textContent = TRIP_ID;
-  const urlEl = document.getElementById('setSupabaseUrl');
-  if (urlEl) urlEl.value = c.supabaseUrl || '';
-  const kEl = document.getElementById('setSupabaseKey');
-  if (kEl) {
-    kEl.value = '';
-    kEl.placeholder = c.supabaseKey ? '••••• key saved (enter to replace)' : 'eyJ…';
-  }
   renderDayLabelInputs();
 }
 
@@ -3461,25 +3443,6 @@ async function saveSettings() {
 
   showToast('Settings saved ✓');
   showView('list');
-}
-
-function saveSupabase() {
-  const url = document.getElementById('setSupabaseUrl').value.trim();
-  const key = document.getElementById('setSupabaseKey').value.trim();
-  if (!url && !key) { showToast('Enter URL and key', true); return; }
-  if (url) {
-    if (!/^https:\/\/.+\.supabase\.co\/?$/i.test(url)) {
-      showToast('URL must look like https://xxxxx.supabase.co', true); return;
-    }
-    APP_CONFIG.supabaseUrl = url.replace(/\/$/, '');
-  }
-  if (key) {
-    if (!key.startsWith('eyJ')) { showToast('Anon key should start with eyJ…', true); return; }
-    APP_CONFIG.supabaseKey = key;
-  }
-  try { localStorage.setItem('app_config_v2', JSON.stringify(APP_CONFIG)); } catch(e) {}
-  showToast('Supabase saved ✓ Reloading…');
-  setTimeout(() => location.reload(), 700);
 }
 
 // ── NEW TRIP ─────────────────────────────────────────────────────
