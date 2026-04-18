@@ -2448,6 +2448,59 @@ function calcEndTime(timeStr, durStr) {
   } catch(e) { return ''; }
 }
 
+// Compute when you'd actually arrive at stops[idx] based on the previous stop's
+// end time plus the walk between them. For stop[0], arrival = stops[0].time
+// (nothing to walk from within the day's chain — the previous "point" is the
+// hotel, and we don't enforce a hotel start time).
+// Returns minutes-since-midnight, or null if it can't be computed.
+function computeArrivalMins(dayIdx, idx) {
+  const stops = days[dayIdx] && days[dayIdx].stops;
+  if (!stops || !stops[idx]) return null;
+  if (idx === 0) {
+    // First stop: arrival = its own time (the day's anchor)
+    return timeStrToMins(stops[0].time || '9:00 AM');
+  }
+  const prev = stops[idx-1];
+  const here = stops[idx];
+  if (!prev || !prev.time || !here || !here.lat || !prev.lat) return null;
+  const prevEndMin = timeStrToMins(prev.time) + parseDurationMins(prev.duration || '60 min');
+  const key = prev.lat.toFixed(4)+','+prev.lng.toFixed(4)+'->'+here.lat.toFixed(4)+','+here.lng.toFixed(4);
+  const cached = _walkCache[key];
+  const walk = (typeof cached === 'number' && cached > 0)
+    ? cached
+    : _walkMinsFallback(prev.lat, prev.lng, here.lat, here.lng);
+  return prevEndMin + walk;
+}
+
+// Build the "🎟 Booked 5:00 PM · Arrive 4:20 PM · 40 min early" line
+// for a stop that has a reservation.time. Returns HTML string or '' if no res.
+function bookingArrivalHtml(dayIdx, idx) {
+  const s = days[dayIdx] && days[dayIdx].stops && days[dayIdx].stops[idx];
+  if (!s || !s.reservation || !s.reservation.time) return '';
+  const bookedMin = timeStrToMins(s.reservation.time);
+  const arriveMin = computeArrivalMins(dayIdx, idx);
+  if (arriveMin == null) return '';
+  const diff = bookedMin - arriveMin; // positive = arrive before booking (good)
+  let statusText, statusColor, statusBg;
+  if (diff < 0) {
+    // Arriving AFTER booked time — late
+    statusText = Math.abs(diff) + ' min late';
+    statusColor = '#a42420';
+    statusBg = '#fde8e8';
+  } else if (diff === 0) {
+    statusText = 'on time';
+    statusColor = '#7a5a00';
+    statusBg = '#fff4d6';
+  } else {
+    statusText = diff + ' min early';
+    statusColor = '#155724';
+    statusBg = '#d4edda';
+  }
+  return '<div class="booking-arrival" style="margin-top:4px;font-size:12px;padding:6px 8px;border-radius:6px;background:' + statusBg + ';color:' + statusColor + ';">' +
+    '🎟 Booked <strong>' + s.reservation.time + '</strong> · Arrive <strong>' + minsToTimeStr(arriveMin) + '</strong> · ' + statusText +
+    '</div>';
+}
+
 // ── MOVE STOP BETWEEN DAYS ────────────────────────────────────────
 function moveStopToDay(targetDay, stopIdx) {
   if (targetDay === undefined || targetDay === '' || targetDay === currentDay) return;
@@ -2731,6 +2784,7 @@ function renderStopList() {
           <span onclick="event.stopPropagation(); editDuration(${i});" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;color:var(--muted);" title="Tap to edit duration">⏳ ${s.duration}</span>
           &nbsp;→&nbsp;<span style="color:var(--hint);">${endTime}</span>
         </div>
+        ${bookingArrivalHtml(currentDay, i)}
         ${getConflict(i) ? '<div class="conflict-banner">⚠️ Time conflict with previous stop</div>' : ''}
         <div class="stop-name-label">${s.name}${s.reservation ? ' <span class="res-badge ' + (s.reservation.confirmed?'confirmed':'') + '">' + (s.reservation.confirmed?'✓ Booked':'⏳ Pending') + '</span>' : ''}</div>
         <div class="stop-type-label">${s.type}</div>
@@ -2865,6 +2919,7 @@ function renderDetail() {
           </div>
           <div style="font-size:13px;color:var(--text);line-height:1.7;">
             ${s.reservation.time ? `<div>🕐 <strong>Booked time:</strong> ${s.reservation.time}</div>` : ''}
+            ${s.reservation.time ? bookingArrivalHtml(currentDay, currentStop) : ''}
 
             ${s.reservation.notes ? `<div>📝 ${s.reservation.notes}</div>` : ''}
           </div>
