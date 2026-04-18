@@ -1135,7 +1135,6 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
     <button class="day-tab blue" onclick="showRouteMap()" id="dtabMap">Route Map</button>
     <button class="day-tab green-tab" onclick="showAllMap()" id="dtabAll">All Days Map</button>
     <button class="day-tab" onclick="showView('search')" id="dtabSearch" style="border-color:#1a73e8;color:#1a73e8;">+ Add / Search</button>
-    <button class="day-tab" onclick="showView('hotel')" id="dtabHotel" style="border-color:#888;color:#888;">🏨 Hotel</button>
     <button class="day-tab" onclick="showView('settings')" id="dtabSettings" style="border-color:#555;color:#555;">⚙ Settings</button>
   </div>
 </div>
@@ -1270,80 +1269,97 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
 
   <!-- HOTEL -->
   <div class="panel" id="panel-hotel">
-    <div class="add-view">
-      <h2>🏨 Your Hotel</h2>
-      <p>Enter your hotel details — it will appear as a pin on the map and anchor the start and end of each day.</p>
-
-      <label class="form-label">Hotel name *</label>
-      <input class="form-input" id="hotelName" type="text" placeholder="e.g. Hotel Edison" oninput="updateHotelPreview()">
-      <label class="form-label">Address *</label>
-      <input class="form-input" id="hotelAddress" type="text" placeholder="e.g. 228 W 47th St, New York, NY" oninput="updateHotelPreview()" onblur="geocodeHotelAddress()">
-      <p class="gen-hint" id="hotelGeocodeStatus" style="margin-bottom:10px;">💡 Coordinates will be looked up automatically when you tab out of the address field.</p>
-      <details style="margin-bottom:10px;">
-        <summary style="font-size:12px;color:#888;cursor:pointer;">Advanced: set coordinates manually</summary>
-        <div class="form-row" style="margin-top:8px;">
-          <div>
-            <label class="form-label">Latitude</label>
-            <input class="form-input" id="hotelLat" type="number" step="0.0001" placeholder="e.g. 40.7580">
-          </div>
-          <div>
-            <label class="form-label">Longitude</label>
-            <input class="form-input" id="hotelLng" type="number" step="0.0001" placeholder="e.g. -73.9855">
-          </div>
-        </div>
-      </details>
-      <div id="hotelPreview" style="margin-bottom:12px;"></div>
-      <button class="gen-btn" onclick="saveHotel()" style="background:#444;">🏨 Save Hotel</button>
-      <p class="gen-hint">Save hotel here, then tap 💾 in the header to sync it to all devices</p>
-    </div>
+    <!-- Kept as an empty panel so legacy links to showView('hotel') still work: we redirect to settings below. -->
   </div>
 
-  <!-- SETTINGS -->
+  <!-- SETTINGS (merged with hotel) -->
   <div class="panel" id="panel-settings">
     <div class="add-view">
-      <h2>⚙ Settings</h2>
+      <h2>⚙ Trip Settings</h2>
 
-      <label class="form-label">Trip title</label>
-      <input class="form-input" id="setTitle" type="text" placeholder="e.g. My trip">
-
-      <label class="form-label">Subtitle</label>
+      <!-- ── TRIP BASICS ── -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div>
+          <label class="form-label">Trip title</label>
+          <input class="form-input" id="setTitle" type="text" placeholder="e.g. NYC 2026" style="margin:0;">
+        </div>
+        <div>
+          <label class="form-label">Number of days (1–7)</label>
+          <input class="form-input" id="setNumDays" type="number" min="1" max="7" placeholder="4" oninput="renderDayLabelInputs()" style="margin:0;">
+        </div>
+      </div>
+      <label class="form-label" style="margin-top:8px;">Subtitle</label>
       <input class="form-input" id="setSubtitle" type="text" placeholder="e.g. key dates · themes">
 
-      <label class="form-label">Number of days (1–7)</label>
-      <input class="form-input" id="setNumDays" type="number" min="1" max="7" placeholder="4" oninput="renderDayLabelInputs()">
+      <div id="setDayLabelsWrap" style="margin-top:10px;"></div>
 
-      <div id="setDayLabelsWrap"></div>
+      <!-- ── HOTEL & TIMING (combined) ── -->
+      <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
+        <h3 style="margin:0 0 10px 0;font-size:14px;">🏨 Hotel & arrival/departure times</h3>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;">
-        <div>
-          <label class="form-label">Day 1 hotel arrival time</label>
-          <input class="form-input" id="setArrivalTime" type="time" placeholder="17:00">
-          <p class="gen-hint" style="font-size:11px;">No stops planned before this on Day 1.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div>
+            <label class="form-label">Hotel name</label>
+            <input class="form-input" id="hotelName" type="text" placeholder="e.g. Hotel Edison" oninput="updateHotelPreview()" style="margin:0;">
+          </div>
+          <div>
+            <label class="form-label">Day 1 hotel arrival</label>
+            <input class="form-input" id="setArrivalTime" type="time" style="margin:0;">
+            <p class="gen-hint" style="font-size:11px;margin-top:2px;">No stops before this on Day 1.</p>
+          </div>
         </div>
-        <div>
-          <label class="form-label">Last day flight departure</label>
-          <input class="form-input" id="setDepartureTime" type="time" placeholder="16:00">
-          <p class="gen-hint" style="font-size:11px;">No stops within 3h of this.</p>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px;">
+          <div>
+            <label class="form-label">Hotel address</label>
+            <input class="form-input" id="hotelAddress" type="text" placeholder="e.g. 228 W 47th St, New York, NY" oninput="updateHotelPreview()" onblur="geocodeHotelAddress()" style="margin:0;">
+          </div>
+          <div>
+            <label class="form-label">Last day flight departure</label>
+            <input class="form-input" id="setDepartureTime" type="time" style="margin:0;">
+            <p class="gen-hint" style="font-size:11px;margin-top:2px;">No stops within 3h of flight.</p>
+          </div>
         </div>
+
+        <p class="gen-hint" id="hotelGeocodeStatus" style="margin-top:6px;font-size:11px;">💡 Address coordinates are looked up automatically when you tab out.</p>
+
+        <details style="margin-top:4px;">
+          <summary style="font-size:12px;color:#888;cursor:pointer;">Advanced: set hotel coordinates manually</summary>
+          <div class="form-row" style="margin-top:8px;">
+            <div>
+              <label class="form-label">Latitude</label>
+              <input class="form-input" id="hotelLat" type="number" step="0.0001" placeholder="e.g. 40.7580">
+            </div>
+            <div>
+              <label class="form-label">Longitude</label>
+              <input class="form-input" id="hotelLng" type="number" step="0.0001" placeholder="e.g. -73.9855">
+            </div>
+          </div>
+        </details>
+        <div id="hotelPreview" style="margin-top:8px;"></div>
       </div>
 
-      <button class="gen-btn" onclick="saveSettings()" style="background:#1a1a1a;margin-top:8px;">💾 Save Settings</button>
-      <p class="gen-hint">Trip settings sync to all devices via Supabase.</p>
+      <!-- ── AI FILL ── -->
+      <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
+        <h3 style="margin:0 0 6px 0;font-size:14px;">🪄 Fill itinerary with AI</h3>
+        <p class="gen-hint" style="margin-bottom:10px;font-size:12px;">AI fills empty time slots with popular tourist picks. Respects existing stops, hotel arrival, and flight departure. Works 9 AM–12 AM daily.</p>
+        <button class="gen-btn" onclick="runFillItinerary()" style="background:#5c4db1;margin-bottom:0;">🪄 Fill empty slots with AI</button>
+      </div>
 
-      <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:16px;">
+      <!-- ── SAVE ── -->
+      <button class="gen-btn" onclick="saveAllSettings()" style="background:#1a1a1a;margin-top:14px;">💾 Save all settings</button>
+      <p class="gen-hint">Trip settings &amp; hotel sync to all devices via Supabase.</p>
+
+      <!-- ── TRIPS ── -->
+      <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
         <h3 style="margin:0 0 8px 0;font-size:14px;">🗂 Trips</h3>
-        <p class="gen-hint" style="margin-bottom:10px;">Current trip: <strong id="setCurrentTrip">london2026</strong></p>
-        <button class="gen-btn" onclick="showNewTripDialog()" style="background:#1a73e8;margin-bottom:8px;">+ New trip</button>
-        <p class="gen-hint">Creates a new trip in Supabase. You'll get a shareable URL.</p>
+        <p class="gen-hint" style="margin-bottom:10px;font-size:12px;">Current trip: <strong id="setCurrentTrip">london2026</strong></p>
+        <button class="gen-btn" onclick="showNewTripDialog()" style="background:#1a73e8;margin-bottom:6px;">+ New trip</button>
+        <p class="gen-hint" style="font-size:12px;">Creates a new trip in Supabase. You'll get a shareable URL.</p>
       </div>
 
-      <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:16px;">
-        <h3 style="margin:0 0 8px 0;font-size:14px;">🪄 Fill itinerary with AI</h3>
-        <p class="gen-hint" style="margin-bottom:10px;">AI fills empty time slots in your CURRENT trip with popular tourist picks. Respects your existing stops, hotel arrival, and flight departure. Works within 9 AM – 12 AM daily.</p>
-        <button class="gen-btn" onclick="runFillItinerary()" style="background:#5c4db1;margin-bottom:8px;">🪄 Fill empty slots with AI</button>
-      </div>
-
-      <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:8px;">
+      <!-- ── DANGER ZONE ── -->
+      <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
         <p style="font-size:12px;color:#888;margin-bottom:8px;">Danger zone</p>
         <button onclick="confirmResetAll()" style="width:100%;padding:12px;border-radius:10px;border:1px solid #c0392b;background:#fde8e8;color:#c0392b;font-size:13px;font-weight:700;cursor:pointer;">🗑 Reset all data</button>
       </div>
@@ -2954,13 +2970,14 @@ function updateHeaderHeight() {
 
 // ── VIEW MANAGEMENT ───────────────────────────────────────────────
 function showView(v) {
+  // Hotel tab merged into Settings — redirect any legacy calls
+  if (v === 'hotel') v = 'settings';
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   const panelEl = document.getElementById('panel-' + v);
   if (!panelEl) { console.warn('No panel:', v); return; }
   panelEl.classList.add('active');
   if (v !== currentView) document.getElementById('mainArea').scrollTop = 0;
-  if (v === 'hotel') setTimeout(loadHotelUI, 50);
-  if (v === 'settings') setTimeout(loadSettingsUI, 50);
+  if (v === 'settings') setTimeout(() => { loadSettingsUI(); loadHotelUI(); }, 50);
   const mapBtn = document.getElementById('mapToggleBtn');
   if (mapBtn) mapBtn.style.display = v === 'list' ? 'flex' : 'none';
   currentView = v;
@@ -2976,10 +2993,10 @@ function showView(v) {
 }
 
 function updateTabHighlight() {
-  ['dtab0','dtab1','dtab2','dtab3','dtab4','dtab5','dtab6','dtabMap','dtabAll','dtabSearch','dtabHotel','dtabSettings'].forEach(id => {
+  ['dtab0','dtab1','dtab2','dtab3','dtab4','dtab5','dtab6','dtabMap','dtabAll','dtabSearch','dtabSettings'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
-    if (['dtabMap','dtabAll','dtabSearch','dtabHotel','dtabSettings'].includes(id)) return;
+    if (['dtabMap','dtabAll','dtabSearch','dtabSettings'].includes(id)) return;
     el.classList.remove('active');
   });
   if (currentView === 'list' || currentView === 'detail') {
@@ -3585,6 +3602,61 @@ async function saveSettings() {
   if (EDITOR_MODE) await cloudSave('updated trip settings');
 
   showToast('Settings saved ✓');
+  showView('list');
+}
+
+// Combined save: trip settings + hotel in one shot.
+async function saveAllSettings() {
+  // ── Read hotel fields (optional — only save if name is present) ──
+  const hName = document.getElementById('hotelName').value.trim();
+  const hAddr = document.getElementById('hotelAddress').value.trim();
+  const hLatRaw = document.getElementById('hotelLat').value;
+  const hLngRaw = document.getElementById('hotelLng').value;
+
+  if (hName) {
+    if (!hLatRaw || !hLngRaw) {
+      showToast('Hotel needs coordinates — type the address and wait for auto-lookup, or expand Advanced', true);
+      return;
+    }
+    const lat = parseFloat(hLatRaw);
+    const lng = parseFloat(hLngRaw);
+    if (isNaN(lat) || isNaN(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+      showToast('Invalid hotel coordinates', true); return;
+    }
+    window.HOTEL_DATA = { name: hName, address: hAddr, lat, lng };
+    HOTEL.name = hName; HOTEL.address = hAddr; HOTEL.lat = lat; HOTEL.lng = lng;
+    try { localStorage.setItem('hotel_data_' + TRIP_ID, JSON.stringify(window.HOTEL_DATA)); } catch(e) {}
+  }
+
+  // ── Read trip settings (same logic as old saveSettings) ──
+  const n = parseInt(document.getElementById('setNumDays').value) || 4;
+  const dayLabels = [], dayTitles = [];
+  for (let i = 0; i < n; i++) {
+    dayLabels.push(document.getElementById('setDayLabel'+i)?.value.trim() || ('Day '+(i+1)));
+    dayTitles.push(document.getElementById('setDayTitle'+i)?.value.trim() || ('Day '+(i+1)));
+  }
+
+  APP_CONFIG.title    = document.getElementById('setTitle').value.trim() || APP_CONFIG.title;
+  APP_CONFIG.subtitle = document.getElementById('setSubtitle').value.trim() || APP_CONFIG.subtitle;
+  APP_CONFIG.numDays  = n;
+  APP_CONFIG.dayLabels = dayLabels;
+  APP_CONFIG.dayTitles = dayTitles;
+  const arrVal = document.getElementById('setArrivalTime')?.value || '';
+  const depVal = document.getElementById('setDepartureTime')?.value || '';
+  APP_CONFIG.arrivalTime  = arrVal ? time24to12(arrVal) : '';
+  APP_CONFIG.departureTime = depVal ? time24to12(depVal) : '';
+
+  while (days.length < n) days.push({ title: dayLabels[days.length] + ' — New Day', note: '', stops: [] });
+  days.length = n;
+  days.forEach((d, i) => { if (dayTitles[i]) d.title = dayTitles[i]; });
+
+  try { localStorage.setItem('app_config_v2', JSON.stringify(APP_CONFIG)); } catch(e) {}
+  applyConfig();
+  renderStopList();
+
+  if (EDITOR_MODE) await cloudSave('updated trip settings and hotel');
+
+  showToast('Saved ✓ — syncing to all devices');
   showView('list');
 }
 
