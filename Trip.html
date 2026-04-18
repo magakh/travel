@@ -1536,8 +1536,8 @@ function moveStop(i, dir) {
 // Device-local: supabase URL/key, GitHub repo (for migration import only).
 // Trip-local (stored in Supabase, shared across devices): title, dayLabels, etc.
 const DEFAULT_CONFIG = {
-  supabaseUrl: '',
-  supabaseKey: '',
+  supabaseUrl: 'https://wnpanbjzmcsvhfyjdczv.supabase.co',
+  supabaseKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InducGFuYmp6bWNzdmhmeWpkY3p2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0NzU4NjcsImV4cCI6MjA5MjA1MTg2N30.r3Vie2AAOfzYmLy4IRUk1s9mjkC6bDSoxAIYKfcz6jQ',
   ghRepo: 'magakh/travel'  // only used for one-time import of legacy JSON
 };
 const DEFAULT_TRIP_CONFIG = {
@@ -1555,7 +1555,13 @@ const DEFAULT_TRIP_CONFIG = {
 let APP_CONFIG = Object.assign({}, DEFAULT_CONFIG);
 try {
   const saved = localStorage.getItem('app_config_v2');
-  if (saved) APP_CONFIG = Object.assign({}, DEFAULT_CONFIG, JSON.parse(saved));
+  if (saved) {
+    const parsed = JSON.parse(saved);
+    // Don't let empty saved values override the hardcoded defaults
+    if (!parsed.supabaseUrl) delete parsed.supabaseUrl;
+    if (!parsed.supabaseKey) delete parsed.supabaseKey;
+    APP_CONFIG = Object.assign({}, DEFAULT_CONFIG, parsed);
+  }
 } catch(e) {}
 
 // Trip slug from ?trip=xxx, default 'london2026'
