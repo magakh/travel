@@ -1154,7 +1154,6 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
   <div class="panel active" id="panel-list">
     <div class="split-layout" id="splitLayout">
       <div class="split-list" id="splitListCol">
-        <div class="day-note" id="dayNote"></div>
         <div class="progress-wrap"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
         <div class="action-bar">
           <button onclick="optimizeRoute()">⚡ Optimize route</button>
@@ -2942,7 +2941,6 @@ function switchDay(d) {
   ['dtab0','dtab1','dtab2','dtab3'].forEach((id, i) => {
     document.getElementById(id).classList.toggle('active', i === d);
   });
-  document.getElementById('dayNote').textContent = days[d].note || '';
   renderAll();
   showView('list');
   setTimeout(loadWalkTimes, 200);
