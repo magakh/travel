@@ -1666,8 +1666,7 @@ async function syncSave() {
     if (res && res.ok) {
       window._lastSyncTime = Date.now();
       _lastSyncedPayload = payload;
-      const hSaved = window.HOTEL_DATA ? ' + hotel' : '';
-      showToast('Saved & synced' + hSaved + ' ✓');
+      showToast('Saved & synced ✓');
     } else {
       showToast('Saved locally ✓');
     }
@@ -1685,8 +1684,7 @@ async function manualRefresh() {
       _walkLoadedDays.clear();
       switchDay(currentDay);
       renderPrebook();
-      const hotelOk = data.hotel ? '+ hotel ✓' : '(no hotel yet)';
-      showToast('✨ Refreshed ' + hotelOk);
+      showToast('✨ Refreshed');
     } else {
       showToast('No sync data found');
     }
