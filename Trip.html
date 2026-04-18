@@ -4325,19 +4325,37 @@ function toggleInlineMap() {
 }
 
 function buildInlineMap() {
-  const stops = days[currentDay].stops;
-  if (!stops || !stops.length) return;
+  const stops = days[currentDay].stops || [];
   const container = document.getElementById('inlineMapDiv');
   if (!container) return;
 
-  // Destroy old map
+  // Always destroy the old map first — otherwise switching to an empty
+  // day would leave the previous day's map visible.
   if (_inlineMap) { _inlineMap.remove(); _inlineMap = null; }
   _inlineMapDay = currentDay;
 
+  const hd = window.HOTEL_DATA;
+
+  // Empty day fallback: show hotel only, or a message if no hotel
+  if (!stops.length) {
+    if (!hd || !hd.lat || !hd.lng) {
+      container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:13px;background:#f5f4f0;padding:20px;text-align:center;">No stops or hotel to show yet</div>';
+      return;
+    }
+    container.innerHTML = '';
+    const em = L.map(container, { zoomControl: true, attributionControl: false }).setView([hd.lat, hd.lng], 14);
+    _inlineMap = em;
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(em);
+    const hi = L.divIcon({ className:'', html:'<div style="background:#444;color:#fff;width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:15px;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.3);">🏨</div>', iconSize:[28,28], iconAnchor:[14,14] });
+    L.marker([hd.lat, hd.lng], { icon: hi }).addTo(em).bindPopup('<b>🏨 ' + hd.name + '</b>');
+    setTimeout(() => em.invalidateSize(), 100);
+    return;
+  }
+
+  container.innerHTML = '';
   const dayColors = ['#1a73e8','#e65100','#1a7a3a','#7b1fa2'];
   const color = dayColors[currentDay] || '#1a73e8';
   const coords = stops.map(s => [s.lat, s.lng]);
-  const hd = window.HOTEL_DATA;
 
   // Build map
   const cLat = stops.reduce((a,s) => a+s.lat, 0) / stops.length;
@@ -4369,7 +4387,7 @@ function buildInlineMap() {
       .on('click', () => selectStop(i));
   });
 
-  // Fit all points
+  // Fit all points including hotel
   const allCoords = hd ? [[hd.lat, hd.lng], ...coords] : coords;
   setTimeout(() => {
     map.invalidateSize();
@@ -4451,26 +4469,34 @@ function renderRouteMap() {
       ${s.prebook?'<span class="tag-pill prebook" style="flex-shrink:0;align-self:flex-start;">Pre-book</span>':''}
     </div>`).join('');
 
+  const emptyState = stops.length === 0
+    ? '<div style="padding:30px 16px;text-align:center;color:#888;background:#f9f9f6;border-radius:12px;margin-top:12px;"><div style="font-size:32px;margin-bottom:8px;">📭</div><p style="font-size:14px;font-weight:600;margin-bottom:4px;color:#555;">No stops planned for this day yet</p><p style="font-size:12px;">Add stops from the <strong>+ Add / Search</strong> tab, or tap 🪄 <strong>Fill with AI</strong> in Settings.</p></div>'
+    : '';
+
+  const controls = stops.length > 0
+    ? '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">' +
+        '<a class="map-open-btn" href="' + gmUrl + '" target="_blank" style="margin-bottom:0;font-size:12px;padding:10px 8px;">&#128506; Google Maps route</a>' +
+        '<button onclick="optimizeRoute(); renderRouteMap();" style="padding:10px 8px;background:#1a1a1a;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;">&#9889; Optimize route</button>' +
+      '</div>' +
+      '<p style="font-size:11px;color:#888;">Tap map pins for details. Use arrows or drag to reorder below.</p>'
+    : '';
+
+  const stopsHeader = stops.length > 0
+    ? '<div style="font-size:11px;font-weight:700;color:var(--hint);text-transform:uppercase;letter-spacing:0.6px;margin:12px 0 8px;">' + stops.length + ' stops in order &mdash; tap to view details</div>'
+    : '';
+
   document.getElementById('routeMapContent').innerHTML = `
     <div class="map-header">
       <h2>${d.title}</h2>
       <p style="font-size:11px;color:#888;margin-bottom:8px;">${d.note || ''}</p>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
-        <a class="map-open-btn" href="${gmUrl}" target="_blank" style="margin-bottom:0;font-size:12px;padding:10px 8px;">&#128506; Google Maps route</a>
-        <button onclick="optimizeRoute(); renderRouteMap();"
-          style="padding:10px 8px;background:#1a1a1a;color:#fff;border:none;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;">
-          &#9889; Optimize route
-        </button>
-      </div>
-      <p style="font-size:11px;color:#888;">Tap map pins for details. Use arrows or drag to reorder below.</p>
+      ${controls}
     </div>
     <div id="routeMapIframe" style="width:100%;height:340px;background:#e8f0e4;display:flex;align-items:center;justify-content:center;">
       <span style="color:#888;font-size:13px;">Loading map...</span>
     </div>
+    ${emptyState}
     <div class="mini-stop-cards">
-      <div style="font-size:11px;font-weight:700;color:var(--hint);text-transform:uppercase;letter-spacing:0.6px;margin:12px 0 8px;">
-        ${stops.length} stops in order &mdash; tap to view details
-      </div>
+      ${stopsHeader}
       ${cards}
     </div>
   `;
@@ -4486,6 +4512,23 @@ function buildRouteMapIframe(stops, color) {
   if (window._routeMap) { window._routeMap.remove(); window._routeMap = null; }
   container.innerHTML = '<div id="routeMapDiv" style="width:100%;height:340px;"></div>';
 
+  var h = window.HOTEL_DATA;
+
+  // Empty day — show hotel only (or a message if no hotel either)
+  if (!stops || stops.length === 0) {
+    if (!h || !h.lat || !h.lng) {
+      container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:340px;color:#888;font-size:13px;background:#f5f4f0;">No stops or hotel to show on the map yet.</div>';
+      return;
+    }
+    var emptyMap = L.map('routeMapDiv', {zoomControl:false}).setView([h.lat, h.lng], 14);
+    window._routeMap = emptyMap;
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution:'© OpenStreetMap contributors', maxZoom:19}).addTo(emptyMap);
+    var emptyHotelIcon = L.divIcon({className:'', html:'<div style="background:#444;color:#fff;width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;border:2.5px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.35);">🏨</div>', iconSize:[32,32], iconAnchor:[16,16], popupAnchor:[0,-20]});
+    L.marker([h.lat, h.lng], {icon:emptyHotelIcon}).addTo(emptyMap).bindPopup('<b>🏨 ' + h.name + '</b><br><span style="font-size:11px;color:#888;">' + (h.address||'Your hotel') + '</span>');
+    setTimeout(function() { emptyMap.invalidateSize(); }, 100);
+    return;
+  }
+
   var cLat = stops.reduce(function(a,s){return a+s.lat;},0)/stops.length;
   var cLng = stops.reduce(function(a,s){return a+s.lng;},0)/stops.length;
   var map = L.map('routeMapDiv', {zoomControl:false}).setView([cLat, cLng], 14);
@@ -4494,7 +4537,6 @@ function buildRouteMapIframe(stops, color) {
 
   var coords = stops.map(function(s){return [s.lat, s.lng];});
   // Add hotel to start and end of route line if set
-  var h = window.HOTEL_DATA;
   var routeCoords = h ? [[h.lat, h.lng]].concat(coords).concat([[h.lat, h.lng]]) : coords;
   L.polyline(routeCoords, {color:color, weight:5, opacity:0.85, dashArray:'10,6'}).addTo(map);
   if (h) {
@@ -4509,10 +4551,11 @@ function buildRouteMapIframe(stops, color) {
     var popup = '<div style="min-width:180px"><b style="color:'+s.color+';font-size:13px;">Stop '+(i+1)+'</b><br><b style="font-size:14px;">'+s.name+'</b><br><span style="color:#666;font-size:12px;">'+s.time+' · '+s.duration+'</span><br><span style="font-size:11px;color:#888;">'+s.address+'</span>'+resInfo+(s.prebook&&!s.reservation?'<br><span style="color:#c0392b;font-size:11px;font-weight:700;">⚠ Pre-book needed</span>':'')+(s.free?'<br><span style="color:#1a7a3a;font-size:11px;font-weight:700;">✓ Free</span>':'')+'</div>';
     L.marker([s.lat, s.lng], {icon:icon}).addTo(map).bindPopup(popup);
   });
-  // Wait for map container to have dimensions before fitting bounds
+  // Include hotel in bounds so map shows both
+  var boundsCoords = h ? [[h.lat, h.lng]].concat(coords) : coords;
   setTimeout(function() {
     map.invalidateSize();
-    map.fitBounds(L.latLngBounds(coords), {padding:[40,40]});
+    map.fitBounds(L.latLngBounds(boundsCoords), {padding:[40,40]});
   }, 100);
 }
 
