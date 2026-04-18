@@ -2063,7 +2063,16 @@ async function aiSearch() {
 
 The user is searching for: "${query}"
 
-Find 3 real, specific places in ${city} that match this search${nearHint}. For each place return a JSON object. Respond ONLY with a JSON array of exactly 3 objects, no markdown:
+Find 3 real, specific places in ${city} that match this search${nearHint}.
+
+CRITICAL OUTPUT RULES — YOU MUST FOLLOW EXACTLY:
+- Respond with ONLY a JSON array. Nothing else.
+- Do NOT write any introduction, explanation, notice, or commentary.
+- Do NOT wrap the JSON in markdown code blocks.
+- Your entire response must start with [ and end with ].
+- If you cannot fulfill the request, still return a JSON array — even if it has one placeholder object explaining why.
+
+The array must contain exactly 3 objects with this shape:
 [
   {
     "name": "Exact place name",
@@ -2075,17 +2084,18 @@ Find 3 real, specific places in ${city} that match this search${nearHint}. For e
     "free": false,
     "prebook": false,
     "description": "2 sentences why this is a good match",
-    "history": "2 rich paragraphs about the history of this place in HTML with <strong> tags. Separate paragraphs with \\n\\n",
+    "history": "2 rich paragraphs about the history in HTML with <strong> tags, separate paragraphs with \\n\\n",
     "travel": "🚶 or 🚇 Practical travel directions from the hotel area",
-    "todo": "<p><span class=\\"tip-icon\\">🏛️</span><strong>What to do:</strong> 3-4 specific practical sentences about what to see, order, or experience.</p>"
+    "todo": "<p><span class=\\"tip-icon\\">🏛️</span><strong>What to do:</strong> 3-4 specific practical sentences.</p>"
   }
 ]
-Only include real, well-known places in ${city}. Use accurate coordinates (4+ decimal places). Return raw JSON only.`;
+
+Only include real, well-known places in ${city}. Use accurate coordinates (4+ decimal places).`;
 
   try {
     const text = await callAnthropic({ prompt, maxTokens: 2000 });
-    const raw = (text || '[]').replace(/```json|```/g, '').trim();
-    const results = JSON.parse(raw);
+    const results = extractJsonArray(text);
+    if (!results || !results.length) throw new Error('AI returned no usable results — try rephrasing');
     renderSearchResults(results, dayIdx);
   } catch(e) {
     document.getElementById('searchResults').innerHTML =
@@ -2093,6 +2103,35 @@ Only include real, well-known places in ${city}. Use accurate coordinates (4+ de
     showToast('AI search unavailable', true);
   }
   btn.textContent = 'Search with AI →'; btn.disabled = false;
+}
+
+// Robustly extract a JSON array from an AI response that may include preamble
+// like "I notice the request..." or markdown fences. Returns [] if nothing found.
+function extractJsonArray(text) {
+  if (!text) return [];
+  // Strip markdown fences
+  let cleaned = text.replace(/```json|```/g, '').trim();
+  // Try direct parse first
+  try {
+    const r = JSON.parse(cleaned);
+    if (Array.isArray(r)) return r;
+    if (r && typeof r === 'object' && Array.isArray(r.results)) return r.results;
+  } catch(e) {}
+  // Find first '[' and its matching ']' — try all '[...]' spans
+  const start = cleaned.indexOf('[');
+  const end = cleaned.lastIndexOf(']');
+  if (start >= 0 && end > start) {
+    const slice = cleaned.slice(start, end + 1);
+    try { const r = JSON.parse(slice); if (Array.isArray(r)) return r; } catch(e) {}
+  }
+  // Last resort: find the first '{' and last '}' and wrap as array
+  const oStart = cleaned.indexOf('{');
+  const oEnd = cleaned.lastIndexOf('}');
+  if (oStart >= 0 && oEnd > oStart) {
+    const slice = '[' + cleaned.slice(oStart, oEnd + 1) + ']';
+    try { const r = JSON.parse(slice); if (Array.isArray(r)) return r; } catch(e) {}
+  }
+  return [];
 }
 
 function renderSearchResults(results, dayIdx) {
@@ -2110,10 +2149,7 @@ function renderSearchResults(results, dayIdx) {
         <button class="src-add-btn" onclick="addFromSearch(${i})">+ Add to Day ${dayIdx+1}</button>
         <select onchange="document.getElementById('searchDay').value=this.value;document.getElementById('sr-day-${i}').textContent='Add to Day '+(parseInt(this.value)+1)"
           style="padding:8px 10px;border-radius:8px;border:1px solid #ddd;font-size:13px;font-weight:600;background:#fff;cursor:pointer;">
-          <option value="0" ${dayIdx===0?'selected':''}>May 7</option>
-          <option value="1" ${dayIdx===1?'selected':''}>May 8</option>
-          <option value="2" ${dayIdx===2?'selected':''}>May 9</option>
-          <option value="3" ${dayIdx===3?'selected':''}>May 10</option>
+          ${(APP_CONFIG.dayLabels || []).slice(0, APP_CONFIG.numDays || 4).map((lbl,di) => `<option value="${di}" ${dayIdx===di?'selected':''}>${(lbl||'Day '+(di+1)).replace(/[<>&]/g,'')}</option>`).join('')}
         </select>
       </div>
     </div>`).join('');
@@ -2129,9 +2165,10 @@ function renderSearchResults(results, dayIdx) {
 function addFromSearch(i) {
   const r = window._searchResults[i];
   const dayIdx = parseInt(document.getElementById('searchDay').value);
+  const tc = getTripCenter();
   addStop(dayIdx, {
     name: r.name, address: r.address,
-    lat: r.lat || 51.515, lng: r.lng || -0.12,
+    lat: r.lat || (tc ? tc.lat : 0), lng: r.lng || (tc ? tc.lng : 0),
     type: r.type_label, duration: '60 min',
     history: r.history, todo: r.todo, travel: r.travel,
     type_label: r.type_label, prebook: r.prebook || false,
@@ -3315,8 +3352,8 @@ async function runSuggest(midLat, midLng, afterIdx, dayIdx) {
       : 'You are a travel expert for ' + city + '. Suggest 4 excellent real places matching: "' + query + '" near lat ' + midLat.toFixed(3) + ', lng ' + midLng.toFixed(3) + ' in ' + city + '. Return ONLY a JSON array (no markdown): [{"name":"...","type":"...","address":"...","lat":0.0,"lng":0.0,"why":"1 sentence why it fits here","duration":"45 min"}]. Use real places with accurate coordinates.';
 
     const text = await callAnthropic({ prompt, maxTokens: 1000 });
-    const clean = (text || '[]').replace(/```json|```/g, '').trim();
-    _suggestResults = JSON.parse(clean);
+    _suggestResults = extractJsonArray(text);
+    if (!_suggestResults.length) throw new Error('AI returned no usable results');
     renderSuggestResults(_suggestResults, afterIdx, dayIdx);
   } catch(e) {
     console.error('Suggest error:', e);
@@ -4378,10 +4415,18 @@ async function generateLocation() {
   const fromHint = window.HOTEL_DATA && window.HOTEL_DATA.name
     ? 'from ' + window.HOTEL_DATA.name
     : 'from the hotel area';
-  const prompt = `You are an expert tour guide for ${city}. Write a JSON object (no markdown) for "${name}" at "${address}" (type: ${type}):\n{"history":"2-3 paragraphs in HTML with <strong> tags, \\n\\n between paragraphs","todo":"<p><span class=\\"tip-icon\\">🏛️</span><strong>What to do:</strong> 3-4 practical sentences</p>","travel":"🚶 or 🚇 practical directions ${fromHint}","type_label":"short description like Museum · Free","prebook":false,"free":true,"color":"#5c4db1"}`;
+  const prompt = `You are an expert tour guide for ${city}. Write info for "${name}" at "${address}" (type: ${type}).
+
+CRITICAL: Respond with ONLY a JSON object. Your entire response must start with { and end with }. No introduction, no explanation, no markdown.
+
+{"history":"2-3 paragraphs in HTML with <strong> tags, \\n\\n between paragraphs","todo":"<p><span class=\\"tip-icon\\">🏛️</span><strong>What to do:</strong> 3-4 practical sentences</p>","travel":"🚶 or 🚇 practical directions ${fromHint}","type_label":"short description like Museum · Free","prebook":false,"free":true,"color":"#5c4db1"}`;
   try {
     const text = await callAnthropic({ prompt, maxTokens: 1000 });
-    const raw = (text || '{}').replace(/```json|```/g,'').trim();
+    // Extract first { ... } block even if AI adds preamble
+    let raw = (text || '{}').replace(/```json|```/g,'').trim();
+    const oStart = raw.indexOf('{');
+    const oEnd = raw.lastIndexOf('}');
+    if (oStart >= 0 && oEnd > oStart) raw = raw.slice(oStart, oEnd + 1);
     const info = JSON.parse(raw);
     addStop(dayIdx, {name, address, lat, lng, type, duration, ...info});
   } catch(e) {
