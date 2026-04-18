@@ -1713,7 +1713,7 @@ function startRealtime() {
 }
 
 function isUserBusy() {
-  const overlays = ['time-overlay','dur-overlay','res-overlay','hotel-overlay','suggest-overlay','lock-overlay','newtrip-overlay','ai-gen-overlay'];
+  const overlays = ['time-overlay','dur-overlay','res-overlay','hotel-overlay','suggest-overlay','lock-overlay','newtrip-overlay','ai-gen-overlay','fill-picker-overlay'];
   for (const id of overlays) if (document.getElementById(id)) return true;
   const a = document.activeElement;
   if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.isContentEditable)) return true;
@@ -3641,7 +3641,7 @@ async function createNewTrip() {
 // ── AI FILL ITINERARY (fills empty slots in current trip) ───────
 // Only works on the CURRENT trip. Respects existing stops, arrival time
 // on day 1, and flight departure on last day.
-async function runFillItinerary() {
+function runFillItinerary() {
   if (!EDITOR_MODE) { showToast('Unlock to edit (🔒)', true); return; }
   if (!supabaseReady()) { showToast('Supabase not available', true); return; }
 
@@ -3652,97 +3652,159 @@ async function runFillItinerary() {
   }
 
   const numDays = APP_CONFIG.numDays || days.length;
-  const tc = getTripCenter();
 
-  // Build a "brief" for each day describing existing stops and available windows
-  const dayBriefs = [];
+  // Compute gaps for each day so we can tell the user which days have empty slots
+  const dayGapCounts = [];
   for (let di = 0; di < numDays; di++) {
-    const stops = (days[di] && days[di].stops) || [];
-    const isDay1 = (di === 0);
-    const isLastDay = (di === numDays - 1);
-
-    // Day's window: 9 AM to 12 AM (midnight). Apply arrival/departure adjustments.
-    let dayStart = 9 * 60;   // 9:00 AM
-    let dayEnd = 24 * 60;    // 12:00 AM
-
-    if (isDay1 && APP_CONFIG.arrivalTime) {
-      const arrMin = timeStrToMins(APP_CONFIG.arrivalTime);
-      if (!isNaN(arrMin) && arrMin > dayStart) dayStart = arrMin;
-    }
-    if (isLastDay && APP_CONFIG.departureTime) {
-      const depMin = timeStrToMins(APP_CONFIG.departureTime);
-      if (!isNaN(depMin)) {
-        // No stops within 3 hours of flight
-        const cutoff = depMin - 180;
-        if (cutoff < dayEnd) dayEnd = cutoff;
-      }
-    }
-
-    if (dayEnd <= dayStart) {
-      dayBriefs.push({ dayIdx: di, skipReason: 'No available time today' });
-      continue;
-    }
-
-    // Compute gaps (windows not occupied by existing stops)
-    const occupied = stops
-      .filter(s => s.time && s.duration)
-      .map(s => ({
-        start: timeStrToMins(s.time),
-        end: timeStrToMins(s.time) + parseDurationMins(s.duration || '60 min'),
-        name: s.name
-      }))
-      .sort((a,b) => a.start - b.start);
-
-    const gaps = [];
-    let cursor = dayStart;
-    for (const o of occupied) {
-      if (o.start > cursor) gaps.push({ start: cursor, end: Math.min(o.start, dayEnd) });
-      cursor = Math.max(cursor, o.end);
-      if (cursor >= dayEnd) break;
-    }
-    if (cursor < dayEnd) gaps.push({ start: cursor, end: dayEnd });
-
-    // Filter out gaps that are too short to fit even a single stop (< 45 min)
-    const bigGaps = gaps.filter(g => (g.end - g.start) >= 45);
-
-    dayBriefs.push({
-      dayIdx: di,
-      dayLabel: APP_CONFIG.dayTitles[di] || APP_CONFIG.dayLabels[di] || ('Day ' + (di+1)),
-      dayStart: minsToTimeStr(dayStart),
-      dayEnd: minsToTimeStr(dayEnd),
-      existing: stops.map(s => ({ name: s.name, time: s.time, duration: s.duration, lat: s.lat, lng: s.lng })),
-      gaps: bigGaps.map(g => ({ start: minsToTimeStr(g.start), end: minsToTimeStr(g.end), minutes: g.end - g.start })),
-      isDay1, isLastDay,
-      arrivalTime: isDay1 ? (APP_CONFIG.arrivalTime || '') : '',
-      departureTime: isLastDay ? (APP_CONFIG.departureTime || '') : ''
-    });
+    const brief = computeDayBrief(di, numDays);
+    dayGapCounts.push(brief.gaps ? brief.gaps.length : 0);
   }
 
-  // Any day with at least one gap to fill?
-  const toFill = dayBriefs.filter(b => b.gaps && b.gaps.length);
-  if (!toFill.length) {
+  const totalGaps = dayGapCounts.reduce((a,b) => a + b, 0);
+  if (totalGaps === 0) {
     showToast('No empty slots found — all days are full', true);
     return;
   }
 
-  const confirmed = await new Promise(resolve => {
-    const gapCount = toFill.reduce((sum,d) => sum + d.gaps.length, 0);
-    showConfirm(
-      'AI will fill ' + gapCount + ' empty slot(s) across ' + toFill.length + ' day(s) with tourist picks for ' + city + '. Existing stops stay untouched. Continue?',
-      () => resolve(true)
+  // Build the day-picker dialog
+  const overlay = document.createElement('div');
+  overlay.id = 'fill-picker-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto;';
+
+  const dayRows = [];
+  for (let di = 0; di < numDays; di++) {
+    const gaps = dayGapCounts[di];
+    const label = APP_CONFIG.dayTitles[di] || APP_CONFIG.dayLabels[di] || ('Day ' + (di+1));
+    const gapText = gaps ? gaps + ' empty slot' + (gaps===1?'':'s') : 'no gaps — fully scheduled';
+    const disabled = gaps === 0;
+    dayRows.push(
+      '<label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid ' + (disabled?'#eee':'#ddd') + ';border-radius:10px;margin-bottom:8px;cursor:' + (disabled?'not-allowed':'pointer') + ';background:' + (disabled?'#fafafa':'#fff') + ';opacity:' + (disabled?'0.5':'1') + ';">' +
+        '<input type="checkbox" class="fill-day-cb" data-day="' + di + '" ' + (disabled?'disabled':'checked') + ' style="flex-shrink:0;width:18px;height:18px;">' +
+        '<div style="flex:1;">' +
+          '<div style="font-size:14px;font-weight:700;color:#1a1a1a;">' + label.replace(/[<>&]/g,'') + '</div>' +
+          '<div style="font-size:12px;color:' + (disabled?'#aaa':'#666') + ';margin-top:2px;">' + gapText + '</div>' +
+        '</div>' +
+      '</label>'
     );
-    // If user cancels, showConfirm just closes without calling callback.
-    // Timeout after a minute — user would've clicked by then if they wanted to.
-    setTimeout(() => resolve(false), 60000);
+  }
+
+  overlay.innerHTML =
+    '<div style="background:#fff;border-radius:16px;padding:20px;max-width:420px;width:100%;max-height:85vh;overflow-y:auto;">' +
+      '<h3 style="margin:0 0 6px 0;">🪄 Fill with AI</h3>' +
+      '<p style="color:#666;font-size:13px;margin:0 0 14px 0;">Choose which days to fill. AI will only add stops in empty time slots — existing stops stay untouched.</p>' +
+      '<div style="display:flex;gap:8px;margin-bottom:12px;">' +
+        '<button onclick="toggleAllFillDays(true)" style="flex:1;padding:8px;border-radius:8px;border:1px solid #ddd;background:#fff;font-size:12px;font-weight:700;cursor:pointer;">Select all</button>' +
+        '<button onclick="toggleAllFillDays(false)" style="flex:1;padding:8px;border-radius:8px;border:1px solid #ddd;background:#fff;font-size:12px;font-weight:700;cursor:pointer;">Clear all</button>' +
+      '</div>' +
+      dayRows.join('') +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;">' +
+        '<button onclick="document.getElementById(&quot;fill-picker-overlay&quot;).remove()" style="padding:12px;border-radius:10px;border:1px solid #ddd;background:#fff;font-weight:700;cursor:pointer;">Cancel</button>' +
+        '<button id="fillGoBtn" onclick="submitFillDialog()" style="padding:12px;border-radius:10px;border:none;background:#5c4db1;color:#fff;font-weight:700;cursor:pointer;">🪄 Fill selected</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(overlay);
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+}
+
+function toggleAllFillDays(check) {
+  document.querySelectorAll('.fill-day-cb').forEach(cb => {
+    if (!cb.disabled) cb.checked = !!check;
   });
-  if (!confirmed) return;
+}
+
+async function submitFillDialog() {
+  const selected = Array.from(document.querySelectorAll('.fill-day-cb:checked'))
+    .map(cb => parseInt(cb.dataset.day));
+  if (!selected.length) { showToast('Select at least one day', true); return; }
+
+  const btn = document.getElementById('fillGoBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Thinking…'; }
+
+  try {
+    await doFillItinerary(selected);
+  } finally {
+    const ov = document.getElementById('fill-picker-overlay');
+    if (ov) ov.remove();
+  }
+}
+
+// Compute a day brief: start/end windows, existing stops, gaps
+function computeDayBrief(di, numDays) {
+  const stops = (days[di] && days[di].stops) || [];
+  const isDay1 = (di === 0);
+  const isLastDay = (di === numDays - 1);
+
+  let dayStart = 9 * 60;
+  let dayEnd = 24 * 60;
+
+  if (isDay1 && APP_CONFIG.arrivalTime) {
+    const arrMin = timeStrToMins(APP_CONFIG.arrivalTime);
+    if (!isNaN(arrMin) && arrMin > dayStart) dayStart = arrMin;
+  }
+  if (isLastDay && APP_CONFIG.departureTime) {
+    const depMin = timeStrToMins(APP_CONFIG.departureTime);
+    if (!isNaN(depMin)) {
+      const cutoff = depMin - 180;
+      if (cutoff < dayEnd) dayEnd = cutoff;
+    }
+  }
+
+  if (dayEnd <= dayStart) {
+    return { dayIdx: di, gaps: [], existing: stops, skipReason: 'No available time' };
+  }
+
+  const occupied = stops
+    .filter(s => s.time && s.duration)
+    .map(s => ({
+      start: timeStrToMins(s.time),
+      end: timeStrToMins(s.time) + parseDurationMins(s.duration || '60 min'),
+      name: s.name
+    }))
+    .sort((a,b) => a.start - b.start);
+
+  const gaps = [];
+  let cursor = dayStart;
+  for (const o of occupied) {
+    if (o.start > cursor) gaps.push({ start: cursor, end: Math.min(o.start, dayEnd) });
+    cursor = Math.max(cursor, o.end);
+    if (cursor >= dayEnd) break;
+  }
+  if (cursor < dayEnd) gaps.push({ start: cursor, end: dayEnd });
+
+  const bigGaps = gaps.filter(g => (g.end - g.start) >= 45);
+
+  return {
+    dayIdx: di,
+    dayLabel: APP_CONFIG.dayTitles[di] || APP_CONFIG.dayLabels[di] || ('Day ' + (di+1)),
+    dayStart: minsToTimeStr(dayStart),
+    dayEnd: minsToTimeStr(dayEnd),
+    existing: stops.map(s => ({ name: s.name, time: s.time, duration: s.duration, lat: s.lat, lng: s.lng })),
+    gaps: bigGaps.map(g => ({ start: minsToTimeStr(g.start), end: minsToTimeStr(g.end), minutes: g.end - g.start })),
+    isDay1, isLastDay,
+    arrivalTime: isDay1 ? (APP_CONFIG.arrivalTime || '') : '',
+    departureTime: isLastDay ? (APP_CONFIG.departureTime || '') : ''
+  };
+}
+
+async function doFillItinerary(selectedDayIndices) {
+  const city = getTripCity();
+  const tc = getTripCenter();
+  const numDays = APP_CONFIG.numDays || days.length;
+
+  const dayBriefs = selectedDayIndices
+    .map(di => computeDayBrief(di, numDays))
+    .filter(b => b.gaps && b.gaps.length);
+
+  if (!dayBriefs.length) {
+    showToast('Selected days have no gaps to fill', true);
+    return;
+  }
 
   showToast('⏳ AI is planning — may take 30-60 seconds…');
 
   const prompt = buildFillPrompt(city, tc, dayBriefs);
   try {
     const text = await callAnthropic({ prompt, maxTokens: 6000 });
-    // Extract JSON — expect { days: [{dayIdx, stops: [...]}] }
     let raw = (text || '{}').replace(/```json|```/g, '').trim();
     const oStart = raw.indexOf('{');
     const oEnd = raw.lastIndexOf('}');
@@ -3750,7 +3812,6 @@ async function runFillItinerary() {
     const parsed = JSON.parse(raw);
     if (!parsed.days || !Array.isArray(parsed.days)) throw new Error('AI returned unexpected shape');
 
-    // Merge into existing days, preserving original stops
     let addedCount = 0;
     parsed.days.forEach(aiDay => {
       const di = aiDay.dayIdx;
@@ -3758,7 +3819,6 @@ async function runFillItinerary() {
       const newStops = shapeStops(aiDay.stops || []);
       days[di].stops = days[di].stops.concat(newStops);
       addedCount += newStops.length;
-      // Sort by time
       days[di].stops.sort((a,b) => timeStrToMins(a.time) - timeStrToMins(b.time));
     });
 
