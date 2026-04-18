@@ -2740,7 +2740,6 @@ function renderStopList() {
   const area = document.getElementById('mainArea');
   const scrollY = area ? area.scrollTop : 0;
 
-  const hotelStartTime = currentDay === 0 ? '12:00 PM' : '9:00 AM';
   const hotelEndName = currentDay === 3 ? 'Hotel — Check Out' : 'Hotel — Return for the night';
   const hd = window.HOTEL_DATA;
   const hotelLabel = hd ? hd.name : 'Hotel';
@@ -2748,7 +2747,7 @@ function renderStopList() {
     <div onclick="showHotelDetail()" style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:#f5f4f0;border-bottom:1px solid var(--border);cursor:pointer;transition:background 0.1s;" onmouseenter="this.style.background='#ece9e4'" onmouseleave="this.style.background='#f5f4f0'">
       <div style="width:26px;height:26px;border-radius:8px;background:#444;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;">🏨</div>
       <div style="flex:1;">
-        <div style="font-size:11px;color:var(--hint);">⏱ ${time}</div>
+        ${time ? `<div style="font-size:11px;color:var(--hint);">⏱ ${time}</div>` : ''}
         <div style="font-size:13px;font-weight:700;color:#333;">${hotelLabel} <span style="font-weight:400;color:#888;font-size:12px;">— ${label}</span></div>
       </div>
       <span style="color:#ccc;font-size:16px;">›</span>
@@ -2837,7 +2836,7 @@ function renderStopList() {
   }
 
   document.getElementById('stopList').innerHTML =
-    hotelBanner(hotelStartTime, currentDay === 0 ? 'Hotel Check-In' : 'Hotel — Morning departure') +
+    hotelBanner('', currentDay === 0 ? 'Hotel Check-In' : 'Hotel — Morning departure') +
     stopRows + lastConn +
     hotelBanner(hotelReturnTime, hotelEndName);
 
