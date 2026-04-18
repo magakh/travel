@@ -3795,6 +3795,110 @@ function computeDayBrief(di, numDays) {
   };
 }
 
+// Tolerant parser for the fill response. The AI sometimes writes HTML strings
+// with internal quotes that break JSON, or gets cut off mid-response at the
+// token limit. This tries hard to recover a usable `{ days: [...] }`.
+function tolerantParseFillJson(text) {
+  if (!text) return null;
+  let raw = text.replace(/```json|```/g, '').trim();
+
+  // Trim to the first { and whatever balanced close we can find
+  const oStart = raw.indexOf('{');
+  if (oStart < 0) return null;
+  raw = raw.slice(oStart);
+
+  // Attempt 1: direct parse
+  try { return JSON.parse(raw); } catch(e) {}
+
+  // Attempt 2: trim to last }
+  const lastClose = raw.lastIndexOf('}');
+  if (lastClose > 0) {
+    try { return JSON.parse(raw.slice(0, lastClose + 1)); } catch(e) {}
+  }
+
+  // Attempt 3: extract stops array-by-array with regex, preserving as many
+  // complete stop objects as possible per day
+  try {
+    // Find the days array start
+    const daysStart = raw.indexOf('"days"');
+    if (daysStart < 0) return null;
+    const arrStart = raw.indexOf('[', daysStart);
+    if (arrStart < 0) return null;
+
+    const recoveredDays = [];
+    // Walk character by character, tracking brace depth, and capture each
+    // complete day object inside the days array
+    let depth = 0, inStr = false, esc = false, objStart = -1;
+    for (let i = arrStart + 1; i < raw.length; i++) {
+      const c = raw[i];
+      if (esc) { esc = false; continue; }
+      if (c === '\\') { esc = true; continue; }
+      if (c === '"') { inStr = !inStr; continue; }
+      if (inStr) continue;
+      if (c === '{') { if (depth === 0) objStart = i; depth++; }
+      else if (c === '}') {
+        depth--;
+        if (depth === 0 && objStart >= 0) {
+          const chunk = raw.slice(objStart, i + 1);
+          try {
+            const dayObj = JSON.parse(chunk);
+            recoveredDays.push(dayObj);
+          } catch(e) {
+            // Try recovering partial stops from this day
+            const partial = recoverPartialStopsForDay(chunk);
+            if (partial) recoveredDays.push(partial);
+          }
+          objStart = -1;
+        }
+      } else if (c === ']' && depth === 0) {
+        break; // end of days array
+      }
+    }
+    if (recoveredDays.length) return { days: recoveredDays };
+  } catch(e) {
+    console.warn('tolerant parse stage 3 failed:', e);
+  }
+
+  return null;
+}
+
+// Given one day's raw JSON (possibly malformed), try to extract valid stop
+// objects one by one.
+function recoverPartialStopsForDay(dayChunk) {
+  // Find dayIdx
+  const idxMatch = dayChunk.match(/"dayIdx"\s*:\s*(\d+)/);
+  if (!idxMatch) return null;
+  const dayIdx = parseInt(idxMatch[1]);
+
+  // Find stops array
+  const stopsStart = dayChunk.indexOf('"stops"');
+  if (stopsStart < 0) return { dayIdx, stops: [] };
+  const arrStart = dayChunk.indexOf('[', stopsStart);
+  if (arrStart < 0) return { dayIdx, stops: [] };
+
+  const stops = [];
+  let depth = 0, inStr = false, esc = false, objStart = -1;
+  for (let i = arrStart + 1; i < dayChunk.length; i++) {
+    const c = dayChunk[i];
+    if (esc) { esc = false; continue; }
+    if (c === '\\') { esc = true; continue; }
+    if (c === '"') { inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (c === '{') { if (depth === 0) objStart = i; depth++; }
+    else if (c === '}') {
+      depth--;
+      if (depth === 0 && objStart >= 0) {
+        const chunk = dayChunk.slice(objStart, i + 1);
+        try {
+          stops.push(JSON.parse(chunk));
+        } catch(e) { /* drop malformed stops */ }
+        objStart = -1;
+      }
+    } else if (c === ']' && depth === 0) break;
+  }
+  return { dayIdx, stops };
+}
+
 async function doFillItinerary(selectedDayIndices) {
   const city = getTripCity();
   const tc = getTripCenter();
@@ -3813,23 +3917,27 @@ async function doFillItinerary(selectedDayIndices) {
 
   const prompt = buildFillPrompt(city, tc, dayBriefs);
   try {
-    const text = await callAnthropic({ prompt, maxTokens: 6000 });
-    let raw = (text || '{}').replace(/```json|```/g, '').trim();
-    const oStart = raw.indexOf('{');
-    const oEnd = raw.lastIndexOf('}');
-    if (oStart >= 0 && oEnd > oStart) raw = raw.slice(oStart, oEnd + 1);
-    const parsed = JSON.parse(raw);
-    if (!parsed.days || !Array.isArray(parsed.days)) throw new Error('AI returned unexpected shape');
+    const text = await callAnthropic({ prompt, maxTokens: 8000 });
+    const parsed = tolerantParseFillJson(text);
+    if (!parsed || !parsed.days || !Array.isArray(parsed.days)) {
+      throw new Error('AI response unreadable — please try again');
+    }
 
     let addedCount = 0;
     parsed.days.forEach(aiDay => {
       const di = aiDay.dayIdx;
       if (di < 0 || di >= days.length) return;
       const newStops = shapeStops(aiDay.stops || []);
+      if (!newStops.length) return;
       days[di].stops = days[di].stops.concat(newStops);
       addedCount += newStops.length;
       days[di].stops.sort((a,b) => timeStrToMins(a.time) - timeStrToMins(b.time));
     });
+
+    if (addedCount === 0) {
+      showToast('AI returned no usable stops — try again', true);
+      return;
+    }
 
     if (EDITOR_MODE) await cloudSave('AI filled ' + addedCount + ' stops');
     _walkLoadedDays.clear();
@@ -3895,16 +4003,24 @@ CRITICAL OUTPUT RULES:
           "free": true,
           "prebook": false,
           "color": "#1a7a3a",
-          "history": "<strong>Central Park</strong> opened in 1858... (2 short paragraphs in HTML with <strong> tags)",
-          "todo": "<p><span class=\"tip-icon\">🌳</span><strong>What to do:</strong> 3-4 practical sentences</p>",
-          "travel": "🚶 or 🚇 Local directions WITHIN ${city}, from nearby stops or the hotel area"
+          "history": "<strong>Central Park</strong> opened in 1858 and spans 843 acres. 1-2 short sentences.",
+          "todo": "<p>3 practical sentences about what to do, see, or order.</p>",
+          "travel": "🚶 or 🚇 Local directions WITHIN ${city}, brief"
         }
       ]
     }
   ]
 }
 
-Use accurate lat/lng (4+ decimal places). Use real, well-known places in ${city}. Only output days that you are filling (skip days with no gaps). Time format: "H:MM AM/PM". Duration: "45 min", "1 hour", "90 min".`;
+CRITICAL JSON ESCAPING:
+- ALL inner double quotes inside strings MUST be escaped as \\"
+- Keep history/todo/travel fields SHORT — 1-2 sentences each
+- Use simple HTML only (<strong>, <p>) — never nested quotes inside HTML attributes
+- NEVER write text like class="foo" — write class=\\"foo\\" or just avoid attributes
+
+Use accurate lat/lng (4+ decimal places). Use real, well-known places in ${city}. Only output days that you are filling (skip days with no gaps). Time format: "H:MM AM/PM". Duration: "45 min", "1 hour", "90 min".
+
+Keep your response COMPACT — longer responses get truncated. Each stop = 1 paragraph of content max.`;
 }
 
 // Normalize stops from AI output to the shape the app expects
@@ -4693,9 +4809,10 @@ async function geocodeAddress(address, targetLatId, targetLngId, statusElId) {
   const lngEl = document.getElementById(targetLngId);
   if (!latEl || !lngEl) return;
 
-  // If both lat and lng already set and not empty, don't overwrite
-  if (latEl.value && lngEl.value) {
-    if (statusEl) statusEl.textContent = '✓ Coordinates already set (edit above if wrong).';
+  // Don't re-run for the same address if we just succeeded
+  const cacheKey = '_lastGeo_' + targetLatId;
+  if (window[cacheKey] === address) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:#1a7a3a;">✓ Coordinates already resolved for this address.</span>';
     return;
   }
 
@@ -4724,7 +4841,8 @@ Use accurate coordinates (4+ decimal places). If the address is ambiguous or unr
     }
     latEl.value = lat.toFixed(4);
     lngEl.value = lng.toFixed(4);
-    if (statusEl) statusEl.innerHTML = '<span style="color:#1a7a3a;">✓ Found: ' + lat.toFixed(4) + ', ' + lng.toFixed(4) + '</span>';
+    window[cacheKey] = address;
+    if (statusEl) statusEl.innerHTML = '<span style="color:#1a7a3a;">✓ Found: ' + lat.toFixed(4) + ', ' + lng.toFixed(4) + ' (saved automatically)</span>';
   } catch(e) {
     console.warn('Geocode error:', e);
     if (statusEl) statusEl.innerHTML = '<span style="color:#c0392b;">⚠ Lookup failed — ' + (e.message || 'unknown') + '. Set coordinates manually below.</span>';
