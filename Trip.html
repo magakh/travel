@@ -1328,13 +1328,6 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
         <button class="gen-btn" onclick="saveSupabase()" style="background:#2e8454;margin-bottom:8px;">☁️ Save Supabase config</button>
       </div>
 
-      <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:16px;">
-        <label class="form-label">Anthropic API Key (fallback for AI features)</label>
-        <input class="form-input" id="setApiKey" type="password" placeholder="sk-ant-…">
-        <p class="gen-hint" style="margin-bottom:12px;">Only needed if you didn't deploy the Supabase Edge Function. Stored in session only.</p>
-        <button class="gen-btn" onclick="saveApiKey()" style="background:#5c4db1;margin-bottom:16px;">🔑 Save API Key</button>
-      </div>
-
       <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:8px;">
         <p style="font-size:12px;color:#888;margin-bottom:8px;">Danger zone</p>
         <button onclick="confirmResetAll()" style="width:100%;padding:12px;border-radius:10px;border:1px solid #c0392b;background:#fde8e8;color:#c0392b;font-size:13px;font-weight:700;cursor:pointer;">🗑 Reset all data</button>
@@ -3409,9 +3402,6 @@ function insertSuggestedStop(resultIdx, afterIdx, dayIdx) {
 // ── SETTINGS ──────────────────────────────────────────────────────
 function loadSettingsUI() {
   const c = APP_CONFIG;
-  const savedKey = sessionStorage.getItem('anthropic_key');
-  const keyEl = document.getElementById('setApiKey');
-  if (keyEl) keyEl.placeholder = savedKey ? '••••• key saved (enter to replace)' : 'sk-ant-…';
   document.getElementById('setTitle').value = c.title || '';
   document.getElementById('setSubtitle').value = c.subtitle || '';
   document.getElementById('setNumDays').value = c.numDays || 4;
@@ -4208,17 +4198,6 @@ function showToast(msg, isError=false) {
 // ── API KEY / ANTHROPIC HELPER ────────────────────────────────────
 function getApiKey() {
   return sessionStorage.getItem('anthropic_key') || '';
-}
-
-function saveApiKey() {
-  const key = (document.getElementById('setApiKey')?.value || '').trim();
-  if (!key || !key.startsWith('sk-')) {
-    showToast('Enter a valid API key (starts with sk-)', true);
-    return;
-  }
-  sessionStorage.setItem('anthropic_key', key);
-  document.getElementById('setApiKey').value = '';
-  showToast('API key saved ✓');
 }
 
 // Single path for all AI calls. Prefers the Supabase Edge Function (so the
