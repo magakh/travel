@@ -2818,10 +2818,28 @@ function renderStopList() {
   const lastConnId = 'tc-' + currentDay + '-' + (hdExists ? (stops.length + 1) : stops.length);
   const lastConn = '<div class="travel-connector tc-loading" id="' + lastConnId + '"><span class="tc-walk-text">🚶 …</span><button class="tc-suggest-btn" onclick="event.stopPropagation();suggestBetween('+lastConnIdx+',-1,'+currentDay+')" title="Add before hotel return">✨ Add here</button></div>';
 
+  // Compute actual hotel return time: last stop's end + walk last stop → hotel.
+  // Falls back to ~10:00 PM when there are no stops or hotel data is missing.
+  let hotelReturnTime = '~10:00 PM';
+  if (stops.length > 0) {
+    const last = stops[stops.length - 1];
+    const lastEndMin = timeStrToMins(last.time) + parseDurationMins(last.duration || '60 min');
+    const hd3 = window.HOTEL_DATA;
+    let walkMin = 0;
+    if (hd3 && last.lat && last.lng) {
+      const key = last.lat.toFixed(4)+','+last.lng.toFixed(4)+'->'+hd3.lat.toFixed(4)+','+hd3.lng.toFixed(4);
+      const cached = _walkCache[key];
+      walkMin = (typeof cached === 'number' && cached > 0)
+        ? cached
+        : _walkMinsFallback(last.lat, last.lng, hd3.lat, hd3.lng);
+    }
+    hotelReturnTime = minsToTimeStr(lastEndMin + walkMin);
+  }
+
   document.getElementById('stopList').innerHTML =
     hotelBanner(hotelStartTime, currentDay === 0 ? 'Hotel Check-In' : 'Hotel — Morning departure') +
     stopRows + lastConn +
-    hotelBanner('~10:00 PM', hotelEndName);
+    hotelBanner(hotelReturnTime, hotelEndName);
 
   // Fetch travel times asynchronously (fills in connectors when ready)
   loadWalkTimes();
