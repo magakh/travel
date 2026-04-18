@@ -4698,71 +4698,162 @@ function getReservationForName(name) {
 }
 
 function renderPrebook() {
-  const labels = {urgent:'Book NOW', medium:'Book this week', low:'Book soon'};
-
-  // Split into booked and needs-booking
+  // Collect from the actual trip data:
+  //   - Booked/Reserved: any stop that has a .reservation object
+  //   - Needs booking: any stop with .prebook === true and no .reservation
   const booked = [];
   const needed = [];
 
-  prebooks.forEach(p => {
-    const res = getReservationForName(p.name);
-    if (res) booked.push({...p, res});
-    else needed.push(p);
-  });
-
-  // Also find any stops with reservations not in the prebooks list
-  const allReserved = [];
   days.forEach((d, di) => {
-    d.stops.forEach(s => {
-      if (s.reservation && !prebooks.find(p => s.name.toLowerCase().includes(p.name.toLowerCase()))) {
-        allReserved.push({name: s.name, day: d.title.split('—')[0].trim(), res: s.reservation, time: s.time});
+    const dayLabel = d.title.split('—')[0].trim();
+    (d.stops || []).forEach(s => {
+      if (s.reservation) {
+        booked.push({ stop: s, dayIdx: di, dayLabel });
+      } else if (s.prebook) {
+        needed.push({ stop: s, dayIdx: di, dayLabel });
       }
     });
   });
 
+  // Also include any AI-suggested bookings that aren't yet matched to a stop
+  const aiSuggested = window._aiBookingSuggestions || [];
+
   let html = '';
 
-  if (booked.length || allReserved.length) {
-    html += '<div style="font-size:11px;font-weight:800;color:#155724;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:10px;margin-top:4px;">✓ Booked & Reserved</div>';
-    booked.forEach(p => {
-      html += `<div class="pb-card" style="border-left:4px solid #28a745;">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-          <span class="res-badge confirmed">✓ ${p.res.confirmed ? 'Confirmed' : 'Reserved'}</span>
-          <span class="pb-day">${p.day}</span>
-        </div>
-        <div class="pb-card-title">${p.name}</div>
-        ${p.res.notes ? `<p style="color:#155724;margin-top:4px;">📝 ${p.res.notes}</p>` : ''}
-        ${p.res.time ? `<p style="color:#555;font-size:12px;">🕐 ${p.res.time}</p>` : ''}
-      </div>`;
-    });
-    allReserved.forEach(r => {
-      html += `<div class="pb-card" style="border-left:4px solid #28a745;">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-          <span class="res-badge confirmed">✓ ${r.res.confirmed ? 'Confirmed' : 'Reserved'}</span>
-          <span class="pb-day">${r.day}</span>
-        </div>
-        <div class="pb-card-title">${r.name}</div>
-        ${r.res.notes ? `<p style="color:#155724;margin-top:4px;">📝 ${r.res.notes}</p>` : ''}
-        ${r.res.time ? `<p style="color:#555;font-size:12px;">🕐 ${r.res.time}</p>` : ''}
-      </div>`;
+  // ── CONFIRMED / RESERVED ──
+  if (booked.length) {
+    html += '<div style="font-size:11px;font-weight:800;color:#155724;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:10px;margin-top:4px;">✓ Booked &amp; Reserved (' + booked.length + ')</div>';
+    booked.forEach(b => {
+      const r = b.stop.reservation;
+      const status = r.confirmed ? 'Confirmed' : 'Reserved';
+      html += '<div class="pb-card" style="border-left:4px solid #28a745;">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;">' +
+          '<span class="res-badge confirmed">✓ ' + status + '</span>' +
+          '<span class="pb-day">' + b.dayLabel + '</span>' +
+        '</div>' +
+        '<div class="pb-card-title">' + b.stop.name + '</div>' +
+        (b.stop.time ? '<p style="color:#555;font-size:12px;margin-top:4px;">🕐 ' + b.stop.time + '</p>' : '') +
+        (r.notes ? '<p style="color:#155724;margin-top:4px;">📝 ' + r.notes + '</p>' : '') +
+        (r.time && r.time !== b.stop.time ? '<p style="color:#555;font-size:12px;">Booking time: ' + r.time + '</p>' : '') +
+      '</div>';
     });
   }
 
+  // ── NEEDS BOOKING ──
   if (needed.length) {
-    html += '<div style="font-size:11px;font-weight:800;color:#c0392b;text-transform:uppercase;letter-spacing:0.6px;margin:14px 0 10px;">⚠️ Still needs booking</div>';
-    needed.forEach(p => {
-      html += `<div class="pb-card">
-        <div class="pb-card-title">${p.name}</div>
-        <span class="pb-urgency ${p.urgency}">${labels[p.urgency]}</span>
-        <span class="pb-day">${p.day}</span>
-        <p>${p.text}</p>
-        <p style="margin-top:6px;"><a href="${p.url}" target="_blank">Book here →</a></p>
-      </div>`;
+    html += '<div style="font-size:11px;font-weight:800;color:#c0392b;text-transform:uppercase;letter-spacing:0.6px;margin:18px 0 10px;">⚠️ Still needs booking (' + needed.length + ')</div>';
+    needed.forEach(n => {
+      const s = n.stop;
+      html += '<div class="pb-card" style="border-left:4px solid #c0392b;">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;">' +
+          '<span class="pb-urgency urgent">Book soon</span>' +
+          '<span class="pb-day">' + n.dayLabel + '</span>' +
+        '</div>' +
+        '<div class="pb-card-title">' + s.name + '</div>' +
+        (s.time ? '<p style="color:#555;font-size:12px;margin-top:4px;">🕐 Planned for ' + s.time + '</p>' : '') +
+        (s.address ? '<p style="color:#888;font-size:11px;">' + s.address + '</p>' : '') +
+        '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">' +
+          '<button onclick="switchDay(' + n.dayIdx + '); setTimeout(function(){selectStop(' + days[n.dayIdx].stops.indexOf(s) + ');},0);" style="padding:8px 12px;background:#1a1a1a;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">Open to add reservation →</button>' +
+          (s.name ? '<a href="https://www.google.com/search?q=' + encodeURIComponent(s.name + ' reservation ' + getTripCity()) + '" target="_blank" style="padding:8px 12px;background:#fff;border:1px solid #ddd;color:#1a73e8;border-radius:8px;font-size:12px;font-weight:700;text-decoration:none;">Search to book ↗</a>' : '') +
+        '</div>' +
+      '</div>';
     });
   }
 
-  if (!html) html = '<p style="color:#888;font-size:14px;text-align:center;padding:30px 20px;line-height:1.6;">No reservations yet.<br><span style="font-size:12px;">Tap any stop and "Add reservation details" to track bookings here.</span></p>';
+  // ── AI SUGGESTIONS (not yet in itinerary) ──
+  if (aiSuggested.length) {
+    html += '<div style="font-size:11px;font-weight:800;color:#5c4db1;text-transform:uppercase;letter-spacing:0.6px;margin:18px 0 10px;">💡 AI suggests booking (' + aiSuggested.length + ')</div>';
+    aiSuggested.forEach(a => {
+      html += '<div class="pb-card" style="border-left:4px solid #5c4db1;">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;">' +
+          '<span class="pb-urgency " style="background:#5c4db1;color:#fff;">AI suggestion</span>' +
+          (a.urgency ? '<span class="pb-day">' + a.urgency + '</span>' : '') +
+        '</div>' +
+        '<div class="pb-card-title">' + a.name + '</div>' +
+        (a.why ? '<p style="color:#555;margin-top:4px;font-size:13px;">' + a.why + '</p>' : '') +
+        (a.bookWhen ? '<p style="color:#c0392b;font-size:12px;margin-top:4px;">⏰ ' + a.bookWhen + '</p>' : '') +
+        '<p style="margin-top:6px;"><a href="https://www.google.com/search?q=' + encodeURIComponent(a.name + ' book ' + getTripCity()) + '" target="_blank">Search to book ↗</a></p>' +
+      '</div>';
+    });
+  }
+
+  // ── AI SUGGEST BUTTON ──
+  html = '<div style="display:flex;gap:8px;margin-bottom:16px;">' +
+    '<button onclick="aiSuggestBookings()" style="flex:1;padding:12px;background:#5c4db1;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">🪄 AI suggest what to book</button>' +
+    (aiSuggested.length ? '<button onclick="clearAiSuggestions()" style="padding:12px;background:#fff;border:1px solid #ddd;color:#666;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">Clear AI</button>' : '') +
+  '</div>' + html;
+
+  if (booked.length + needed.length + aiSuggested.length === 0) {
+    html += '<p style="color:#888;font-size:14px;text-align:center;padding:30px 20px;line-height:1.6;">No bookings tracked yet.<br><span style="font-size:12px;">Flag a stop as "Pre-book needed" when editing, or tap 🪄 above to let AI suggest what usually needs reservations.</span></p>';
+  }
+
   document.getElementById('prebookList').innerHTML = html;
+}
+
+function clearAiSuggestions() {
+  window._aiBookingSuggestions = [];
+  renderPrebook();
+}
+
+async function aiSuggestBookings() {
+  const city = getTripCity();
+  if (!city || city === 'your destination') {
+    showToast('Set a trip title or hotel first so AI knows the city', true);
+    return;
+  }
+
+  // Build a simple summary of the whole itinerary for AI context
+  const itinerary = days.map((d, di) => {
+    const stops = (d.stops || []).map(s => '- ' + s.name + (s.time ? ' (' + s.time + ')' : '') + (s.reservation ? ' [BOOKED]' : (s.prebook ? ' [needs booking]' : ''))).join('\n    ');
+    return 'Day ' + (di+1) + ' — ' + (d.title || '').split('—').slice(1).join('—').trim() + ':\n    ' + (stops || '(empty)');
+  }).join('\n\n');
+
+  showToast('🪄 AI is reviewing your itinerary…');
+
+  const prompt = `You are a travel concierge for ${city}. Review this itinerary and identify stops that typically need reservations, tickets, or advance booking. Look for things like: timed-entry museums, popular restaurants, Broadway/theater shows, ferries to islands, rooftop bars, famous landmarks with queues, guided tours.
+
+Here's the current itinerary:
+
+${itinerary}
+
+CRITICAL OUTPUT RULES:
+- Respond with ONLY a JSON array. Start with [ and end with ]. No preamble.
+- Include ONLY items that realistically need advance booking for ${city}. Skip things that are usually walk-in (casual cafés, free parks, walking streets, etc.).
+- If an item in the itinerary is already marked [BOOKED], skip it.
+- If an item is marked [needs booking], you can confirm it's worth booking and add context.
+- You may also suggest ADDITIONAL items not yet in the itinerary that the traveler should consider booking (like iconic restaurants or timed-entry attractions they might be missing).
+- Return at most 10 items.
+
+Format:
+[
+  {
+    "name": "Ellis Island Ferry",
+    "why": "Timed-entry ferry tickets sell out, especially weekends. One sentence max.",
+    "bookWhen": "2-3 weeks ahead",
+    "urgency": "medium",
+    "inItinerary": true
+  }
+]
+
+urgency values: "urgent" (book NOW, <1 week out), "medium" (1-4 weeks), "low" (flexible).
+Use real venue names. Keep "why" short (1 sentence).`;
+
+  try {
+    const text = await callAnthropic({ prompt, maxTokens: 2500 });
+    let raw = (text || '[]').replace(/```json|```/g, '').trim();
+    const aStart = raw.indexOf('[');
+    const aEnd = raw.lastIndexOf(']');
+    if (aStart >= 0 && aEnd > aStart) raw = raw.slice(aStart, aEnd + 1);
+    const suggestions = JSON.parse(raw);
+    if (!Array.isArray(suggestions)) throw new Error('AI returned wrong shape');
+
+    window._aiBookingSuggestions = suggestions;
+    renderPrebook();
+    showToast('🪄 ' + suggestions.length + ' suggestion' + (suggestions.length===1?'':'s') + ' from AI ✓');
+  } catch(e) {
+    console.error('AI booking suggest failed:', e);
+    showToast('AI suggestions failed: ' + (e.message || 'unknown'), true);
+  }
 }
 
 // ── TOAST ─────────────────────────────────────────────────────────
