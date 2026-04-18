@@ -1518,7 +1518,22 @@ function moveStop(i, dir) {
 
 // ── SAVE / LOAD ───────────────────────────────────────────────────
 function getSaveData() {
-  return JSON.stringify({ days: days, completed: completed, hotel: window.HOTEL_DATA || null, savedAt: new Date().toISOString() });
+  // Include trip-level settings (title, subtitle, day labels/titles) so they
+  // sync across devices. Device-specific things (ghRepo, syncFile, ghToken,
+  // apiKey) remain local to each device.
+  return JSON.stringify({
+    days: days,
+    completed: completed,
+    hotel: window.HOTEL_DATA || null,
+    config: {
+      title: APP_CONFIG.title,
+      subtitle: APP_CONFIG.subtitle,
+      numDays: APP_CONFIG.numDays,
+      dayLabels: APP_CONFIG.dayLabels,
+      dayTitles: APP_CONFIG.dayTitles
+    },
+    savedAt: new Date().toISOString()
+  });
 }
 
 // ── REAL-TIME SYNC via GitHub API (no CDN cache) ─────────────────
@@ -1619,6 +1634,30 @@ async function ghRead() {
   } catch(e) { return null; }
 }
 
+// Helper: apply a freshly-fetched remote payload to local state.
+// Handles stops/completed/hotel AND trip-level config (title, day labels, etc.)
+// so that settings changes sync across devices.
+function applyRemoteData(data) {
+  if (!data) return;
+  if (data.days && data.days.length) {
+    data.days.forEach((d, i) => { if (days[i]) { days[i].stops = d.stops; if (d.title) days[i].title = d.title; if (d.note) days[i].note = d.note; } });
+  }
+  if (Array.isArray(data.completed)) completed = data.completed;
+  if (data.hotel) {
+    window.HOTEL_DATA = data.hotel;
+    HOTEL.name = data.hotel.name; HOTEL.address = data.hotel.address;
+    HOTEL.lat = data.hotel.lat; HOTEL.lng = data.hotel.lng;
+  }
+  // Apply trip-level config from remote (title, dayLabels, etc.) — but keep
+  // device-local settings (ghRepo, syncFile, supabase keys, tokens) untouched.
+  if (data.config) {
+    const keep = { ghRepo: APP_CONFIG.ghRepo, syncFile: APP_CONFIG.syncFile };
+    APP_CONFIG = Object.assign({}, APP_CONFIG, data.config, keep);
+    try { localStorage.setItem('app_config', JSON.stringify(APP_CONFIG)); } catch(e) {}
+    try { applyConfig(); } catch(e) {}
+  }
+}
+
 async function syncSave() {
   const payload = getSaveData();
   try { localStorage.setItem('london2026_v1', payload); } catch(e) {}
@@ -1641,11 +1680,9 @@ async function manualRefresh() {
   try {
     const data = await ghRead();
     if (data && data.days && data.days.length >= 3) {
-      data.days.forEach((d, i) => { if (days[i]) days[i].stops = d.stops; });
-      completed = data.completed || [];
-      if (data.hotel) { window.HOTEL_DATA = data.hotel; HOTEL.name = data.hotel.name; HOTEL.address = data.hotel.address; HOTEL.lat = data.hotel.lat; HOTEL.lng = data.hotel.lng; }
-      _lastSyncedPayload = JSON.stringify({ days: days, completed: completed, hotel: window.HOTEL_DATA || null });
-      _walkLoadedDays.clear(); // new data may have different coords — re-fetch walks
+      applyRemoteData(data);
+      _lastSyncedPayload = getSaveData();
+      _walkLoadedDays.clear();
       switchDay(currentDay);
       renderPrebook();
       const hotelOk = data.hotel ? '+ hotel ✓' : '(no hotel yet)';
@@ -1661,10 +1698,8 @@ async function syncLoad() {
   try {
     const data = await ghRead();
     if (data && data.days && data.days.length >= 3) {
-      data.days.forEach((d, i) => { if (days[i]) days[i].stops = d.stops; });
-      completed = data.completed || [];
-      if (data.hotel) { window.HOTEL_DATA = data.hotel; HOTEL.name = data.hotel.name; HOTEL.address = data.hotel.address; HOTEL.lat = data.hotel.lat; HOTEL.lng = data.hotel.lng; }
-      _lastSyncedPayload = JSON.stringify({ days: days, completed: completed, hotel: window.HOTEL_DATA || null });
+      applyRemoteData(data);
+      _lastSyncedPayload = getSaveData();
       return true;
     }
   } catch(e) {}
@@ -1741,20 +1776,23 @@ async function autoPollRemote() {
     const incoming = JSON.stringify({
       days: data.days.map(d => ({ title: d.title, note: d.note, stops: d.stops })),
       completed: data.completed || [],
-      hotel: data.hotel || null
+      hotel: data.hotel || null,
+      config: data.config || null
     });
     const current = JSON.stringify({
       days: days.map(d => ({ title: d.title, note: d.note, stops: d.stops })),
       completed: completed,
-      hotel: window.HOTEL_DATA || null
+      hotel: window.HOTEL_DATA || null,
+      config: {
+        title: APP_CONFIG.title, subtitle: APP_CONFIG.subtitle,
+        numDays: APP_CONFIG.numDays, dayLabels: APP_CONFIG.dayLabels,
+        dayTitles: APP_CONFIG.dayTitles
+      }
     });
     if (incoming === current) return; // no change
-    // Remote differs from our state — apply it.
-    data.days.forEach((d, i) => { if (days[i]) days[i].stops = d.stops; });
-    completed = data.completed || [];
-    if (data.hotel) { window.HOTEL_DATA = data.hotel; HOTEL.name = data.hotel.name; HOTEL.address = data.hotel.address; HOTEL.lat = data.hotel.lat; HOTEL.lng = data.hotel.lng; }
-    _lastSyncedPayload = JSON.stringify({ days: days, completed: completed, hotel: window.HOTEL_DATA || null });
-    _walkLoadedDays.clear(); // force walk-label refresh for new coords
+    applyRemoteData(data);
+    _lastSyncedPayload = getSaveData();
+    _walkLoadedDays.clear();
     renderAll();
     showToast('↻ Updated by someone else');
   } catch(e) { /* silent — next poll will try again */ }
