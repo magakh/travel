@@ -2827,23 +2827,36 @@ function updateHotelPreview() {
 function saveHotel() {
   const name = document.getElementById('hotelName').value.trim();
   const address = document.getElementById('hotelAddress').value.trim();
-  const lat = parseFloat(document.getElementById('hotelLat').value) || 51.5072;
-  const lng = parseFloat(document.getElementById('hotelLng').value) || -0.1416;
+  const latRaw = document.getElementById('hotelLat').value;
+  const lngRaw = document.getElementById('hotelLng').value;
   if (!name) { showToast('Enter hotel name', true); return; }
+  if (!latRaw || !lngRaw) { showToast('Enter latitude and longitude (tap the address — Google Maps shows coordinates)', true); return; }
+  const lat = parseFloat(latRaw);
+  const lng = parseFloat(lngRaw);
+  if (isNaN(lat) || isNaN(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+    showToast('Invalid coordinates', true); return;
+  }
   window.HOTEL_DATA = { name, address, lat, lng };
-  // Update HOTEL constant
   HOTEL.name = name;
   HOTEL.address = address;
   HOTEL.lat = lat;
   HOTEL.lng = lng;
-  try { localStorage.setItem('hotel_data', JSON.stringify(window.HOTEL_DATA)); } catch(e) {}
-  showToast('Hotel saved — pin will appear on maps 📍');
+  // Save per-trip locally so switching trips doesn't mix hotels
+  try { localStorage.setItem('hotel_data_' + TRIP_ID, JSON.stringify(window.HOTEL_DATA)); } catch(e) {}
+  // Push to cloud so all devices see the hotel
+  if (EDITOR_MODE) {
+    schedulePush();
+    showToast('Hotel saved — syncing to all devices 📍');
+  } else {
+    showToast('Hotel saved locally (unlock to sync) 📍');
+  }
   renderStopList();
 }
 
 function initHotel() {
   try {
-    const raw = localStorage.getItem('hotel_data');
+    // Prefer per-trip storage, fall back to legacy generic key
+    const raw = localStorage.getItem('hotel_data_' + TRIP_ID) || localStorage.getItem('hotel_data');
     if (raw) {
       const h = JSON.parse(raw);
       window.HOTEL_DATA = h;
@@ -4080,7 +4093,6 @@ function optimizeRoute() {
 function confirmDeleteStop(i) {
   const s = days[currentDay].stops[i];
   showConfirm('Remove "' + s.name + '" from Day ' + (currentDay+1) + '?', () => {
-    if (days[currentDay].stops.length <= 2) { showToast('Need at least 2 stops', true); return; }
     days[currentDay].stops.splice(i, 1);
     reassignTimes();
     currentStop = Math.min(currentStop, days[currentDay].stops.length - 1);
@@ -4090,12 +4102,13 @@ function confirmDeleteStop(i) {
 }
 
 function removeStop() {
-  if (days[currentDay].stops.length <= 2) { showToast('Need at least 2 stops', true); return; }
-  const name = days[currentDay].stops[currentStop].name;
+  const stops = days[currentDay].stops;
+  if (!stops.length) { showToast('No stops to remove', true); return; }
+  const name = stops[currentStop].name;
   showConfirm('Remove "' + name + '" from Day ' + (currentDay+1) + '?', () => {
-    days[currentDay].stops.splice(currentStop, 1);
+    stops.splice(currentStop, 1);
     reassignTimes();
-    currentStop = Math.min(currentStop, days[currentDay].stops.length - 1);
+    currentStop = Math.min(currentStop, stops.length - 1);
     renderAll();
     showView('list');
     showToast('Stop removed');
