@@ -1220,19 +1220,23 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
       <div style="border-top:1px solid var(--border);padding-top:14px;">
         <p style="font-size:12px;color:var(--muted);margin-bottom:12px;">Or add a specific place manually:</p>
         <label class="form-label">Place name *</label>
-        <input class="form-input" id="addName" type="text" placeholder="e.g. Hunterian Museum">
+        <input class="form-input" id="addName" type="text" placeholder="e.g. Empire State Building">
         <label class="form-label">Address *</label>
-        <input class="form-input" id="addAddress" type="text" placeholder="e.g. 35 Lincoln's Inn Fields, WC2A">
-        <div class="form-row">
-          <div>
-            <label class="form-label">Latitude</label>
-            <input class="form-input" id="addLat" type="number" step="0.0001" placeholder="51.5174">
+        <input class="form-input" id="addAddress" type="text" placeholder="e.g. 20 W 34th St, New York, NY" onblur="geocodeAddStopAddress()">
+        <p class="gen-hint" id="addGeocodeStatus" style="margin-bottom:10px;">💡 Coordinates will be looked up automatically.</p>
+        <details style="margin-bottom:10px;">
+          <summary style="font-size:12px;color:#888;cursor:pointer;">Advanced: set coordinates manually</summary>
+          <div class="form-row" style="margin-top:8px;">
+            <div>
+              <label class="form-label">Latitude</label>
+              <input class="form-input" id="addLat" type="number" step="0.0001" placeholder="e.g. 40.7484">
+            </div>
+            <div>
+              <label class="form-label">Longitude</label>
+              <input class="form-input" id="addLng" type="number" step="0.0001" placeholder="e.g. -73.9857">
+            </div>
           </div>
-          <div>
-            <label class="form-label">Longitude</label>
-            <input class="form-input" id="addLng" type="number" step="0.0001" placeholder="-0.118">
-          </div>
-        </div>
+        </details>
         <label class="form-label">Type</label>
         <select class="form-input" id="addType">
           <option value="museum">Museum / Gallery</option>
@@ -1271,19 +1275,23 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
       <p>Enter your hotel details — it will appear as a pin on the map and anchor the start and end of each day.</p>
 
       <label class="form-label">Hotel name *</label>
-      <input class="form-input" id="hotelName" type="text" placeholder="e.g. Hotel name" oninput="updateHotelPreview()">
+      <input class="form-input" id="hotelName" type="text" placeholder="e.g. Hotel Edison" oninput="updateHotelPreview()">
       <label class="form-label">Address *</label>
-      <input class="form-input" id="hotelAddress" type="text" placeholder="e.g. full street address, city" oninput="updateHotelPreview()">
-      <div class="form-row">
-        <div>
-          <label class="form-label">Latitude</label>
-          <input class="form-input" id="hotelLat" type="number" step="0.0001" placeholder="e.g. 40.7580">
+      <input class="form-input" id="hotelAddress" type="text" placeholder="e.g. 228 W 47th St, New York, NY" oninput="updateHotelPreview()" onblur="geocodeHotelAddress()">
+      <p class="gen-hint" id="hotelGeocodeStatus" style="margin-bottom:10px;">💡 Coordinates will be looked up automatically when you tab out of the address field.</p>
+      <details style="margin-bottom:10px;">
+        <summary style="font-size:12px;color:#888;cursor:pointer;">Advanced: set coordinates manually</summary>
+        <div class="form-row" style="margin-top:8px;">
+          <div>
+            <label class="form-label">Latitude</label>
+            <input class="form-input" id="hotelLat" type="number" step="0.0001" placeholder="e.g. 40.7580">
+          </div>
+          <div>
+            <label class="form-label">Longitude</label>
+            <input class="form-input" id="hotelLng" type="number" step="0.0001" placeholder="e.g. -73.9855">
+          </div>
         </div>
-        <div>
-          <label class="form-label">Longitude</label>
-          <input class="form-input" id="hotelLng" type="number" step="0.0001" placeholder="e.g. -73.9855">
-        </div>
-      </div>
+      </details>
       <div id="hotelPreview" style="margin-bottom:12px;"></div>
       <button class="gen-btn" onclick="saveHotel()" style="background:#444;">🏨 Save Hotel</button>
       <p class="gen-hint">Save hotel here, then tap 💾 in the header to sync it to all devices</p>
@@ -4670,6 +4678,67 @@ async function callAnthropic({ prompt, maxTokens, model }) {
   }
   const data = await res.json();
   return (data.content && data.content[0] && data.content[0].text) || '';
+}
+
+// ── AI GEOCODING ────────────────────────────────────────────────
+// Given an address string, ask AI for lat/lng and fill the target inputs.
+async function geocodeAddress(address, targetLatId, targetLngId, statusElId) {
+  const statusEl = statusElId ? document.getElementById(statusElId) : null;
+  if (!address || address.length < 5) {
+    if (statusEl) statusEl.textContent = '💡 Coordinates will be looked up automatically.';
+    return;
+  }
+
+  const latEl = document.getElementById(targetLatId);
+  const lngEl = document.getElementById(targetLngId);
+  if (!latEl || !lngEl) return;
+
+  // If both lat and lng already set and not empty, don't overwrite
+  if (latEl.value && lngEl.value) {
+    if (statusEl) statusEl.textContent = '✓ Coordinates already set (edit above if wrong).';
+    return;
+  }
+
+  if (statusEl) statusEl.innerHTML = '<span style="color:#5c4db1;">⏳ Looking up coordinates…</span>';
+
+  const prompt = `Return the latitude and longitude for this address: "${address}"
+
+CRITICAL: Respond with ONLY a JSON object — no introduction, no markdown, no commentary. Start with { and end with }.
+
+Format: {"lat": 40.7484, "lng": -73.9857}
+
+Use accurate coordinates (4+ decimal places). If the address is ambiguous or unrecognizable, return {"lat": 0, "lng": 0}.`;
+
+  try {
+    const text = await callAnthropic({ prompt, maxTokens: 200 });
+    let raw = (text || '{}').replace(/```json|```/g, '').trim();
+    const oStart = raw.indexOf('{');
+    const oEnd = raw.lastIndexOf('}');
+    if (oStart >= 0 && oEnd > oStart) raw = raw.slice(oStart, oEnd + 1);
+    const parsed = JSON.parse(raw);
+    const lat = parseFloat(parsed.lat);
+    const lng = parseFloat(parsed.lng);
+    if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+      if (statusEl) statusEl.innerHTML = '<span style="color:#c0392b;">⚠ Couldn\'t find those coordinates. Try a more specific address, or set them manually below.</span>';
+      return;
+    }
+    latEl.value = lat.toFixed(4);
+    lngEl.value = lng.toFixed(4);
+    if (statusEl) statusEl.innerHTML = '<span style="color:#1a7a3a;">✓ Found: ' + lat.toFixed(4) + ', ' + lng.toFixed(4) + '</span>';
+  } catch(e) {
+    console.warn('Geocode error:', e);
+    if (statusEl) statusEl.innerHTML = '<span style="color:#c0392b;">⚠ Lookup failed — ' + (e.message || 'unknown') + '. Set coordinates manually below.</span>';
+  }
+}
+
+function geocodeHotelAddress() {
+  const addr = document.getElementById('hotelAddress').value.trim();
+  geocodeAddress(addr, 'hotelLat', 'hotelLng', 'hotelGeocodeStatus');
+}
+
+function geocodeAddStopAddress() {
+  const addr = document.getElementById('addAddress').value.trim();
+  geocodeAddress(addr, 'addLat', 'addLng', 'addGeocodeStatus');
 }
 
 
