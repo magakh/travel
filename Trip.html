@@ -1365,18 +1365,10 @@ const days = [
   { title: "May 10 — Parks, Mayfair & Farewell",  note: "Last full day — gentle parks morning, afternoon tea, farewell dinner", stops: [] }
 ];
 
-const prebooks = [
-  { name: "Gymkhana", urgency: "urgent", text: "Book immediately — one of London's hardest reservations. Minimum 2–3 weeks, often longer.", url: "https://www.gymkhanarestaurants.com/", day: "May 8 evening" },
-  { name: "Sky Garden", urgency: "urgent", text: "Free entry but releases slots exactly 3 weeks ahead and sells out within hours. Set a calendar reminder.", url: "https://skygarden.london/sky-garden/", day: "May 7 evening" },
-  { name: "Dennis Severs' House", urgency: "urgent", text: "Very limited Fri/Sat evening slots. Book online as soon as possible.", url: "https://www.dennissevershouse.co.uk/", day: "May 8 evening" },
-  { name: "Sketch — Afternoon Tea", urgency: "medium", text: "Book The Parlour room. 1–2 weeks in advance. Request the Parlour specifically for the violinist and best atmosphere.", url: "https://sketch.london/afternoon-tea/", day: "May 9 afternoon" },
-  { name: "Duck & Waffle", urgency: "medium", text: "Book online and request a window table explicitly. 1–2 weeks ahead should suffice.", url: "https://duckandwaffle.com/london/", day: "May 7 dinner" },
-  { name: "Rochelle Canteen", urgency: "medium", text: "Small restaurant, fills fast. Book online 1 week ahead. Note: no dinner Sunday.", url: "https://www.rochellecanteen.com/", day: "May 8 brunch" },
-  { name: "Dishoom Carnaby", urgency: "low", text: "Book online or arrive at opening (8am) to avoid the queue. Walk-ins accepted early in the morning.", url: "https://www.dishoom.com/reservations/", day: "May 7 brunch" },
-  { name: "Ottolenghi Islington", urgency: "low", text: "Book or arrive at opening. Note closed Tue & Wed — plan Day 3 accordingly.", url: "https://ottolenghi.co.uk/", day: "May 9 breakfast" },
-  { name: "Barbican Concert/Theatre", urgency: "low", text: "Check barbican.org.uk for your dates and book well ahead for popular LSO concerts.", url: "https://www.barbican.org.uk/", day: "May 9 evening" },
-  { name: "Farmacy or NOPI (lunch)", urgency: "low", text: "Book 3–5 days ahead. Both are popular for weekend lunch.", url: "https://www.farmacylondon.com/", day: "May 9 lunch" }
-];
+// Prebook "hit list" — places that explicitly need booking.
+// Empty by default. Populated from trip data if present, or maintained
+// per-trip in Supabase later.
+const prebooks = [];
 
 
 
@@ -4194,7 +4186,7 @@ function renderPrebook() {
     });
   }
 
-  if (!html) html = '<p style="color:#888;font-size:14px;text-align:center;padding:20px;">No bookings needed — you are all set!</p>';
+  if (!html) html = '<p style="color:#888;font-size:14px;text-align:center;padding:30px 20px;line-height:1.6;">No reservations yet.<br><span style="font-size:12px;">Tap any stop and "Add reservation details" to track bookings here.</span></p>';
   document.getElementById('prebookList').innerHTML = html;
 }
 
