@@ -2381,8 +2381,14 @@ function getConflict(i) {
   if (i === 0) return false;
   const prev = stops[i - 1];
   const curr = stops[i];
-  const prevEnd = timeToMins(prev.time) + parseDurationMins(prev.duration || '60 min');
-  const currStart = timeToMins(curr.time);
+  let prevEnd = timeToMins(prev.time) + parseDurationMins(prev.duration || '60 min');
+  let currStart = timeToMins(curr.time);
+  // Handle midnight wrap: if currStart is in early AM (before 6:00) and the
+  // previous stop ended in PM (after noon), assume curr is on the next day
+  // and add 24h to it for comparison purposes.
+  if (currStart < 6 * 60 && prevEnd > 12 * 60) {
+    currStart += 24 * 60;
+  }
   return currStart < prevEnd - 1; // conflict if curr starts before prev ends
 }
 
