@@ -1306,6 +1306,19 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
 
       <div id="setDayLabelsWrap"></div>
 
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;">
+        <div>
+          <label class="form-label">Day 1 hotel arrival time</label>
+          <input class="form-input" id="setArrivalTime" type="time" placeholder="17:00">
+          <p class="gen-hint" style="font-size:11px;">No stops planned before this on Day 1.</p>
+        </div>
+        <div>
+          <label class="form-label">Last day flight departure</label>
+          <input class="form-input" id="setDepartureTime" type="time" placeholder="16:00">
+          <p class="gen-hint" style="font-size:11px;">No stops within 3h of this.</p>
+        </div>
+      </div>
+
       <button class="gen-btn" onclick="saveSettings()" style="background:#1a1a1a;margin-top:8px;">💾 Save Settings</button>
       <p class="gen-hint">Trip settings sync to all devices via Supabase.</p>
 
@@ -1317,9 +1330,9 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
       </div>
 
       <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:16px;">
-        <h3 style="margin:0 0 8px 0;font-size:14px;">🪄 AI Generate Itinerary</h3>
-        <p class="gen-hint" style="margin-bottom:10px;">Let AI plan a multi-day itinerary clustered by neighborhood. Choose destination, days, and interests.</p>
-        <button class="gen-btn" onclick="showAIGenerateDialog()" style="background:#5c4db1;margin-bottom:8px;">🪄 AI Generate Itinerary</button>
+        <h3 style="margin:0 0 8px 0;font-size:14px;">🪄 Fill itinerary with AI</h3>
+        <p class="gen-hint" style="margin-bottom:10px;">AI fills empty time slots in your CURRENT trip with popular tourist picks. Respects your existing stops, hotel arrival, and flight departure. Works within 9 AM – 12 AM daily.</p>
+        <button class="gen-btn" onclick="runFillItinerary()" style="background:#5c4db1;margin-bottom:8px;">🪄 Fill empty slots with AI</button>
       </div>
 
       <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:8px;">
@@ -1538,7 +1551,9 @@ function getTripConfig() {
     subtitle: APP_CONFIG.subtitle,
     numDays: APP_CONFIG.numDays,
     dayLabels: APP_CONFIG.dayLabels,
-    dayTitles: APP_CONFIG.dayTitles
+    dayTitles: APP_CONFIG.dayTitles,
+    arrivalTime: APP_CONFIG.arrivalTime || '',
+    departureTime: APP_CONFIG.departureTime || ''
   };
 }
 
@@ -3478,9 +3493,40 @@ function loadSettingsUI() {
   document.getElementById('setTitle').value = c.title || '';
   document.getElementById('setSubtitle').value = c.subtitle || '';
   document.getElementById('setNumDays').value = c.numDays || 4;
+  // Arrival/departure — convert from 12h display format back to 24h for input[type=time]
+  const arrEl = document.getElementById('setArrivalTime');
+  const depEl = document.getElementById('setDepartureTime');
+  if (arrEl) arrEl.value = time12to24(c.arrivalTime || '');
+  if (depEl) depEl.value = time12to24(c.departureTime || '');
   const curEl = document.getElementById('setCurrentTrip');
   if (curEl) curEl.textContent = TRIP_ID;
   renderDayLabelInputs();
+}
+
+// Convert "5:00 PM" → "17:00" (for HTML time input)
+function time12to24(str) {
+  if (!str) return '';
+  if (/^\d{2}:\d{2}$/.test(str)) return str; // already 24h
+  const m = str.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!m) return '';
+  let h = parseInt(m[1]);
+  const min = m[2];
+  const ap = m[3].toUpperCase();
+  if (ap === 'PM' && h < 12) h += 12;
+  if (ap === 'AM' && h === 12) h = 0;
+  return String(h).padStart(2,'0') + ':' + min;
+}
+
+// Convert "17:00" → "5:00 PM"
+function time24to12(str) {
+  if (!str) return '';
+  const m = str.match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return str;
+  let h = parseInt(m[1]);
+  const min = m[2];
+  const ap = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  return h + ':' + min + ' ' + ap;
 }
 
 function renderDayLabelInputs() {
@@ -3513,6 +3559,10 @@ async function saveSettings() {
   APP_CONFIG.numDays  = n;
   APP_CONFIG.dayLabels = dayLabels;
   APP_CONFIG.dayTitles = dayTitles;
+  const arrVal = document.getElementById('setArrivalTime')?.value || '';
+  const depVal = document.getElementById('setDepartureTime')?.value || '';
+  APP_CONFIG.arrivalTime  = arrVal ? time24to12(arrVal) : '';
+  APP_CONFIG.departureTime = depVal ? time24to12(depVal) : '';
 
   // Update days array
   while (days.length < n) days.push({ title: dayLabels[days.length] + ' — New Day', note: '', stops: [] });
@@ -3588,275 +3638,204 @@ async function createNewTrip() {
   setTimeout(() => { location.href = url; }, 800);
 }
 
-// ── AI GENERATE ITINERARY ────────────────────────────────────────
-function showAIGenerateDialog() {
+// ── AI FILL ITINERARY (fills empty slots in current trip) ───────
+// Only works on the CURRENT trip. Respects existing stops, arrival time
+// on day 1, and flight departure on last day.
+async function runFillItinerary() {
+  if (!EDITOR_MODE) { showToast('Unlock to edit (🔒)', true); return; }
   if (!supabaseReady()) { showToast('Supabase not available', true); return; }
-  // Detect whether current trip has any stops — offers "fill current" only if empty
-  let currentHasStops = false;
-  try {
-    currentHasStops = days.some(d => d.stops && d.stops.length > 0);
-  } catch(e) {}
 
-  const overlay = document.createElement('div');
-  overlay.id = 'ai-gen-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto;';
-  overlay.innerHTML =
-    '<div style="background:#fff;border-radius:16px;padding:20px;max-width:460px;width:100%;max-height:90vh;overflow-y:auto;">' +
-      '<h3 style="margin:0 0 6px 0;">🪄 AI Generate Itinerary</h3>' +
-      '<p style="color:#666;font-size:13px;margin:0 0 14px 0;">AI plans your days clustered by neighborhood. Popular tourist picks by default — add interests to customize.</p>' +
-
-      '<label class="form-label">Destination (city)</label>' +
-      '<input id="aiDest" class="form-input" placeholder="e.g. New York" autofocus>' +
-
-      '<label class="form-label">Number of days</label>' +
-      '<input id="aiDays" class="form-input" type="number" min="1" max="7" value="4">' +
-
-      '<label class="form-label">Interests (optional)</label>' +
-      '<input id="aiInterests" class="form-input" placeholder="e.g. family-friendly, museums, food, budget">' +
-
-      '<label class="form-label" style="margin-top:14px;">Where to save</label>' +
-      '<div style="display:flex;gap:8px;margin-bottom:4px;">' +
-        '<label style="flex:1;display:flex;align-items:center;gap:6px;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:13px;cursor:pointer;">' +
-          '<input type="radio" name="aiTarget" value="new" checked onchange="aiTargetChanged()"> New trip' +
-        '</label>' +
-        (currentHasStops
-          ? ''
-          : '<label style="flex:1;display:flex;align-items:center;gap:6px;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:13px;cursor:pointer;">' +
-              '<input type="radio" name="aiTarget" value="current" onchange="aiTargetChanged()"> Fill current trip' +
-            '</label>'
-        ) +
-      '</div>' +
-      (currentHasStops
-        ? '<p class="gen-hint" style="color:#999;font-size:11px;margin-bottom:10px;">(Current trip has stops — can only create a new trip, not overwrite.)</p>'
-        : ''
-      ) +
-
-      '<div id="aiNewTripFields">' +
-        '<label class="form-label">Slug for the new trip (used in URL)</label>' +
-        '<input id="aiSlug" class="form-input" placeholder="e.g. newyork2027">' +
-      '</div>' +
-
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px;">' +
-        '<button onclick="document.getElementById(&quot;ai-gen-overlay&quot;).remove()" style="padding:12px;border-radius:10px;border:1px solid #ddd;background:#fff;font-weight:700;cursor:pointer;">Cancel</button>' +
-        '<button id="aiGenGo" onclick="runAIGenerate()" style="padding:12px;border-radius:10px;border:none;background:#5c4db1;color:#fff;font-weight:700;cursor:pointer;">🪄 Generate</button>' +
-      '</div>' +
-
-      '<p id="aiGenStatus" style="font-size:12px;color:#666;margin-top:12px;text-align:center;display:none;"></p>' +
-    '</div>';
-  document.body.appendChild(overlay);
-  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
-  setTimeout(() => document.getElementById('aiDest')?.focus(), 60);
-
-  // If destination entered, auto-suggest a slug
-  const destInput = document.getElementById('aiDest');
-  const daysInput = document.getElementById('aiDays');
-  if (destInput && daysInput) {
-    const updateSlug = () => {
-      const slugEl = document.getElementById('aiSlug');
-      if (!slugEl || slugEl.value) return;
-      const city = (destInput.value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-      const year = new Date().getFullYear();
-      if (city) slugEl.placeholder = `e.g. ${city}${year}`;
-    };
-    destInput.addEventListener('input', updateSlug);
+  const city = getTripCity();
+  if (!city || city === 'your destination') {
+    showToast('Set a trip title or hotel first so AI knows the city', true);
+    return;
   }
-}
 
-function aiTargetChanged() {
-  const target = document.querySelector('input[name="aiTarget"]:checked')?.value || 'new';
-  const fields = document.getElementById('aiNewTripFields');
-  if (fields) fields.style.display = (target === 'new') ? 'block' : 'none';
-}
+  const numDays = APP_CONFIG.numDays || days.length;
+  const tc = getTripCenter();
 
-async function runAIGenerate() {
-  const dest = (document.getElementById('aiDest').value || '').trim();
-  const numDays = Math.max(1, Math.min(7, parseInt(document.getElementById('aiDays').value) || 4));
-  const interests = (document.getElementById('aiInterests').value || '').trim();
-  const target = document.querySelector('input[name="aiTarget"]:checked')?.value || 'new';
+  // Build a "brief" for each day describing existing stops and available windows
+  const dayBriefs = [];
+  for (let di = 0; di < numDays; di++) {
+    const stops = (days[di] && days[di].stops) || [];
+    const isDay1 = (di === 0);
+    const isLastDay = (di === numDays - 1);
 
-  if (!dest) { showToast('Destination required', true); return; }
+    // Day's window: 9 AM to 12 AM (midnight). Apply arrival/departure adjustments.
+    let dayStart = 9 * 60;   // 9:00 AM
+    let dayEnd = 24 * 60;    // 12:00 AM
 
-  let slug = '';
-  if (target === 'new') {
-    slug = (document.getElementById('aiSlug').value || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
-    if (!slug) {
-      // Auto-build from destination + current year
-      const cleanCity = dest.toLowerCase().replace(/[^a-z0-9]/g, '');
-      slug = cleanCity + new Date().getFullYear();
+    if (isDay1 && APP_CONFIG.arrivalTime) {
+      const arrMin = timeStrToMins(APP_CONFIG.arrivalTime);
+      if (!isNaN(arrMin) && arrMin > dayStart) dayStart = arrMin;
     }
-    // Check it doesn't exist
-    const { data: existing } = await supa.from('trips').select('id').eq('id', slug).maybeSingle();
-    if (existing) { showToast('Trip "' + slug + '" already exists — pick a different slug', true); return; }
-  }
-
-  const statusEl = document.getElementById('aiGenStatus');
-  const btn = document.getElementById('aiGenGo');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Thinking…'; }
-  if (statusEl) {
-    statusEl.style.display = 'block';
-    statusEl.textContent = 'Calling AI — may take 20-40 seconds…';
-  }
-
-  const prompt = buildItineraryPrompt(dest, numDays, interests);
-
-  try {
-    const text = await callAnthropic({ prompt, maxTokens: 4000 });
-    if (statusEl) statusEl.textContent = 'Parsing result…';
-    const raw = (text || '').replace(/```json|```/g, '').trim();
-    // Find the first '{' and the last '}' to be robust to preamble/postamble
-    const firstBrace = raw.indexOf('{');
-    const lastBrace = raw.lastIndexOf('}');
-    if (firstBrace < 0 || lastBrace <= firstBrace) throw new Error('AI returned unparseable output');
-    const jsonText = raw.slice(firstBrace, lastBrace + 1);
-    const parsed = JSON.parse(jsonText);
-    if (!parsed.days || !Array.isArray(parsed.days)) throw new Error('AI output missing days');
-
-    // Apply to target
-    if (target === 'new') {
-      await createTripFromAI(slug, dest, parsed, numDays);
-    } else {
-      await fillCurrentTripFromAI(parsed, numDays);
+    if (isLastDay && APP_CONFIG.departureTime) {
+      const depMin = timeStrToMins(APP_CONFIG.departureTime);
+      if (!isNaN(depMin)) {
+        // No stops within 3 hours of flight
+        const cutoff = depMin - 180;
+        if (cutoff < dayEnd) dayEnd = cutoff;
+      }
     }
+
+    if (dayEnd <= dayStart) {
+      dayBriefs.push({ dayIdx: di, skipReason: 'No available time today' });
+      continue;
+    }
+
+    // Compute gaps (windows not occupied by existing stops)
+    const occupied = stops
+      .filter(s => s.time && s.duration)
+      .map(s => ({
+        start: timeStrToMins(s.time),
+        end: timeStrToMins(s.time) + parseDurationMins(s.duration || '60 min'),
+        name: s.name
+      }))
+      .sort((a,b) => a.start - b.start);
+
+    const gaps = [];
+    let cursor = dayStart;
+    for (const o of occupied) {
+      if (o.start > cursor) gaps.push({ start: cursor, end: Math.min(o.start, dayEnd) });
+      cursor = Math.max(cursor, o.end);
+      if (cursor >= dayEnd) break;
+    }
+    if (cursor < dayEnd) gaps.push({ start: cursor, end: dayEnd });
+
+    // Filter out gaps that are too short to fit even a single stop (< 45 min)
+    const bigGaps = gaps.filter(g => (g.end - g.start) >= 45);
+
+    dayBriefs.push({
+      dayIdx: di,
+      dayLabel: APP_CONFIG.dayTitles[di] || APP_CONFIG.dayLabels[di] || ('Day ' + (di+1)),
+      dayStart: minsToTimeStr(dayStart),
+      dayEnd: minsToTimeStr(dayEnd),
+      existing: stops.map(s => ({ name: s.name, time: s.time, duration: s.duration, lat: s.lat, lng: s.lng })),
+      gaps: bigGaps.map(g => ({ start: minsToTimeStr(g.start), end: minsToTimeStr(g.end), minutes: g.end - g.start })),
+      isDay1, isLastDay,
+      arrivalTime: isDay1 ? (APP_CONFIG.arrivalTime || '') : '',
+      departureTime: isLastDay ? (APP_CONFIG.departureTime || '') : ''
+    });
+  }
+
+  // Any day with at least one gap to fill?
+  const toFill = dayBriefs.filter(b => b.gaps && b.gaps.length);
+  if (!toFill.length) {
+    showToast('No empty slots found — all days are full', true);
+    return;
+  }
+
+  const confirmed = await new Promise(resolve => {
+    const gapCount = toFill.reduce((sum,d) => sum + d.gaps.length, 0);
+    showConfirm(
+      'AI will fill ' + gapCount + ' empty slot(s) across ' + toFill.length + ' day(s) with tourist picks for ' + city + '. Existing stops stay untouched. Continue?',
+      () => resolve(true)
+    );
+    // If user cancels, showConfirm just closes without calling callback.
+    // Timeout after a minute — user would've clicked by then if they wanted to.
+    setTimeout(() => resolve(false), 60000);
+  });
+  if (!confirmed) return;
+
+  showToast('⏳ AI is planning — may take 30-60 seconds…');
+
+  const prompt = buildFillPrompt(city, tc, dayBriefs);
+  try {
+    const text = await callAnthropic({ prompt, maxTokens: 6000 });
+    // Extract JSON — expect { days: [{dayIdx, stops: [...]}] }
+    let raw = (text || '{}').replace(/```json|```/g, '').trim();
+    const oStart = raw.indexOf('{');
+    const oEnd = raw.lastIndexOf('}');
+    if (oStart >= 0 && oEnd > oStart) raw = raw.slice(oStart, oEnd + 1);
+    const parsed = JSON.parse(raw);
+    if (!parsed.days || !Array.isArray(parsed.days)) throw new Error('AI returned unexpected shape');
+
+    // Merge into existing days, preserving original stops
+    let addedCount = 0;
+    parsed.days.forEach(aiDay => {
+      const di = aiDay.dayIdx;
+      if (di < 0 || di >= days.length) return;
+      const newStops = shapeStops(aiDay.stops || []);
+      days[di].stops = days[di].stops.concat(newStops);
+      addedCount += newStops.length;
+      // Sort by time
+      days[di].stops.sort((a,b) => timeStrToMins(a.time) - timeStrToMins(b.time));
+    });
+
+    if (EDITOR_MODE) await cloudSave('AI filled ' + addedCount + ' stops');
+    _walkLoadedDays.clear();
+    renderAll();
+    showToast('🪄 Added ' + addedCount + ' stop' + (addedCount===1?'':'s') + ' ✓');
   } catch(e) {
-    console.error('AI generate error:', e);
-    if (statusEl) statusEl.textContent = '❌ ' + (e.message || 'Generation failed');
-    if (btn) { btn.disabled = false; btn.textContent = '🪄 Generate'; }
-    showToast('AI generation failed: ' + (e.message || 'unknown'), true);
+    console.error('Fill error:', e);
+    showToast('AI fill failed: ' + (e.message || 'unknown'), true);
   }
 }
 
-function buildItineraryPrompt(dest, numDays, interests) {
-  const interestHint = interests
-    ? `\n\nExtra preferences to consider: ${interests}`
-    : '';
-  return `You are an expert travel planner. Build a ${numDays}-day tourist itinerary for ${dest}, optimized for a first-time visitor hitting POPULAR TOURIST LANDMARKS plus one good lunch and one good dinner per day.
+function buildFillPrompt(city, tc, dayBriefs) {
+  const centerStr = tc
+    ? 'Hotel/base coordinates: lat ' + tc.lat.toFixed(4) + ', lng ' + tc.lng.toFixed(4) + '.'
+    : 'No hotel coordinates provided — use well-known central locations.';
 
-CRITICAL RULES:
-1. Cluster each day by NEIGHBORHOOD / district — all stops on the same day must be walkable or 1 short transit hop apart. DO NOT make someone cross the city multiple times in one day.
-2. Different days should cover DIFFERENT neighborhoods. Don't repeat areas unless geography forces it.
-3. Return ONLY real, existing, well-known places — not invented ones.
-4. Use ACCURATE latitude/longitude (4+ decimal places). Wrong coordinates break the map.
-5. Start each day around 9-10 AM, end around 9 PM. Leave realistic time between stops (45-90 min per stop).
-6. Each day: 4-6 stops typical. Include 1 lunch spot and 1 dinner spot per day.${interestHint}
+  const toFill = dayBriefs.filter(b => b.gaps && b.gaps.length);
+  const brief = toFill.map(d => {
+    const existingLine = d.existing.length
+      ? d.existing.map(s => '    - ' + s.name + ' (' + s.time + ' for ' + s.duration + ')').join('\n')
+      : '    (none)';
+    const gapsLine = d.gaps.map(g => '    - ' + g.start + ' to ' + g.end + ' (' + g.minutes + ' minutes)').join('\n');
+    const constraints = [];
+    if (d.isDay1 && d.arrivalTime) constraints.push('Arrival day — hotel check-in at ' + d.arrivalTime + '. Nothing before that.');
+    if (d.isLastDay && d.departureTime) constraints.push('Departure day — flight at ' + d.departureTime + '. Nothing within 3 hours of flight.');
+    return 'Day index ' + d.dayIdx + ' (' + d.dayLabel + '):\n' +
+           '  Already scheduled:\n' + existingLine + '\n' +
+           '  Empty windows to fill:\n' + gapsLine +
+           (constraints.length ? '\n  Constraints: ' + constraints.join(' ') : '');
+  }).join('\n\n');
 
-Return a JSON object in EXACTLY this shape (no markdown, no preamble):
+  return `You are an expert tour guide for ${city}. Fill empty time slots in an existing travel itinerary with popular tourist picks.
 
+${centerStr}
+
+${brief}
+
+Fill each empty window intelligently:
+- Include meals where appropriate (breakfast ~9-10am, lunch ~12-2pm, dinner ~6-8pm)
+- Include landmarks/attractions suitable for the time of day
+- Keep stops CLOSE to existing stops on the same day (cluster geographically)
+- A typical stop is 45-90 minutes; a meal is 60-90 minutes
+- Don't cram too many stops into a window — leave transit time between them (add 15-30 min walk/transit between stops)
+- Don't duplicate what's already scheduled
+- Stops must start and end WITHIN the allocated window
+
+CRITICAL OUTPUT RULES:
+- Respond with ONLY a JSON object. Start with { end with }. No preamble, no markdown.
+- Format:
 {
-  "title": "NYC Popular Tourist Itinerary",
-  "subtitle": "${numDays} days · famous landmarks · clustered by area",
   "days": [
     {
-      "title": "Day 1 — Midtown icons",
-      "note": "Classic NY tourist day: Times Square, Rockefeller, Central Park",
+      "dayIdx": 0,
       "stops": [
         {
-          "name": "Times Square",
+          "name": "Central Park",
           "time": "10:00 AM",
-          "duration": "45 min",
-          "type": "Iconic landmark · free",
-          "type_label": "Iconic landmark · free",
-          "address": "Manhattan, NY 10036",
-          "lat": 40.7580,
-          "lng": -73.9855,
+          "duration": "90 min",
+          "type_label": "Park · free",
+          "address": "Full street address",
+          "lat": 40.7829,
+          "lng": -73.9654,
           "free": true,
           "prebook": false,
-          "color": "#e53935",
-          "history": "<strong>Times Square</strong> is one of the world's busiest pedestrian intersections, named after The New York Times building from 1904.",
-          "todo": "<p><span class=\\"tip-icon\\">📸</span><strong>What to do:</strong> Walk through, get the skyline photo, see the digital billboards, grab a pretzel.</p>",
-          "travel": "🚇 Subway: 42 St–Times Sq station (1, 2, 3, 7, N, Q, R, S, W lines)"
+          "color": "#1a7a3a",
+          "history": "<strong>Central Park</strong> opened in 1858... (2 short paragraphs in HTML with <strong> tags)",
+          "todo": "<p><span class=\"tip-icon\">🌳</span><strong>What to do:</strong> 3-4 practical sentences</p>",
+          "travel": "🚶 or 🚇 Local directions WITHIN ${city}, from nearby stops or the hotel area"
         }
       ]
     }
   ]
 }
 
-Notes on fields:
-- "time": HH:MM AM/PM format, e.g. "10:00 AM", "2:30 PM"
-- "duration": "45 min", "1 hour", "90 min", "2 hours"
-- "type_label": short descriptor like "Museum · $25", "Park · free", "Restaurant · Italian"
-- "color": hex color for map pin, rotate between #e53935, #1a73e8, #1a7a3a, #ff6f00, #5c4db1
-- "history": 1-2 sentences HTML with <strong> tags around key facts
-- "todo": HTML starting with <p><span class="tip-icon">...</span><strong>What to do:</strong>... — pick an appropriate emoji icon
-- "travel": Short practical directions starting with 🚶 or 🚇 or 🚌
-- "free": true if no ticket/fee required
-- "prebook": true if reservations/advance tickets strongly recommended
-
-Build ${numDays} days for ${dest}. Return only the JSON object.`;
-}
-
-async function createTripFromAI(slug, dest, parsed, numDays) {
-  const statusEl = document.getElementById('aiGenStatus');
-  if (statusEl) statusEl.textContent = 'Creating trip in Supabase…';
-
-  const dayLabels = [], dayTitles = [], shapedDays = [];
-  for (let i = 0; i < numDays; i++) {
-    const aiDay = parsed.days[i] || { title: 'Day ' + (i+1), stops: [] };
-    const label = (aiDay.title || 'Day ' + (i+1)).split('—')[0].trim();
-    dayLabels.push(label);
-    dayTitles.push(aiDay.title || ('Day ' + (i+1)));
-    shapedDays.push({
-      title: aiDay.title || ('Day ' + (i+1)),
-      note: aiDay.note || '',
-      stops: shapeStops(aiDay.stops || [])
-    });
-  }
-
-  const payload = {
-    id: slug,
-    title: parsed.title || dest,
-    subtitle: parsed.subtitle || (numDays + ' days · AI-generated'),
-    config: {
-      title: parsed.title || dest,
-      subtitle: parsed.subtitle || (numDays + ' days · AI-generated'),
-      numDays: numDays,
-      dayLabels: dayLabels,
-      dayTitles: dayTitles
-    },
-    data: { days: shapedDays, completed: [], hotel: null, savedAt: new Date().toISOString() }
-  };
-  const { error } = await supa.from('trips').insert(payload);
-  if (error) { showToast('Could not create trip: ' + error.message, true); return; }
-
-  if (statusEl) statusEl.textContent = '✓ Trip created — opening…';
-  const ov = document.getElementById('ai-gen-overlay');
-  if (ov) ov.remove();
-  const url = location.origin + location.pathname + '?trip=' + slug;
-  setTimeout(() => { location.href = url; }, 800);
-}
-
-async function fillCurrentTripFromAI(parsed, numDays) {
-  const statusEl = document.getElementById('aiGenStatus');
-  if (statusEl) statusEl.textContent = 'Applying to current trip…';
-
-  // Resize days array to match
-  while (days.length < numDays) days.push({ title: 'Day ' + (days.length+1), note: '', stops: [] });
-  days.length = numDays;
-
-  const dayLabels = [], dayTitles = [];
-  for (let i = 0; i < numDays; i++) {
-    const aiDay = parsed.days[i] || { title: 'Day ' + (i+1), stops: [] };
-    days[i].title = aiDay.title || ('Day ' + (i+1));
-    days[i].note = aiDay.note || '';
-    days[i].stops = shapeStops(aiDay.stops || []);
-    dayLabels.push((aiDay.title || 'Day ' + (i+1)).split('—')[0].trim());
-    dayTitles.push(aiDay.title || ('Day ' + (i+1)));
-  }
-
-  APP_CONFIG.title = parsed.title || APP_CONFIG.title;
-  APP_CONFIG.subtitle = parsed.subtitle || APP_CONFIG.subtitle;
-  APP_CONFIG.numDays = numDays;
-  APP_CONFIG.dayLabels = dayLabels;
-  APP_CONFIG.dayTitles = dayTitles;
-  try { localStorage.setItem('app_config_v2', JSON.stringify(APP_CONFIG)); } catch(e) {}
-  try { applyConfig(); } catch(e) {}
-
-  if (EDITOR_MODE) await cloudSave('AI-generated itinerary');
-
-  _walkLoadedDays.clear();
-  renderAll();
-  const ov = document.getElementById('ai-gen-overlay');
-  if (ov) ov.remove();
-  showToast('🪄 Itinerary generated ✓');
+Use accurate lat/lng (4+ decimal places). Use real, well-known places in ${city}. Only output days that you are filling (skip days with no gaps). Time format: "H:MM AM/PM". Duration: "45 min", "1 hour", "90 min".`;
 }
 
 // Normalize stops from AI output to the shape the app expects
@@ -3864,7 +3843,7 @@ function shapeStops(aiStops) {
   const colors = ['#e53935','#1a73e8','#1a7a3a','#ff6f00','#5c4db1','#00897b'];
   return aiStops.map((s, i) => ({
     name: s.name || 'Stop ' + (i+1),
-    time: s.time || ((10 + i) + ':00 AM'),
+    time: s.time || '10:00 AM',
     duration: s.duration || '1 hour',
     type: s.type || s.type_label || 'Attraction',
     type_label: s.type_label || s.type || 'Attraction',
