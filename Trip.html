@@ -1637,6 +1637,7 @@ async function cloudLoad() {
     if (error) { console.warn('cloudLoad', error); return false; }
     if (!data) return false; // trip doesn't exist yet
     applyRemoteData(data);
+    _lastKnownSignature = stateSignature(data);
     return true;
   } catch(e) { console.warn('cloudLoad', e); return false; }
 }
@@ -1645,7 +1646,6 @@ async function cloudLoad() {
 async function cloudSave(summary) {
   if (!supabaseReady() || !EDITOR_MODE) return false;
   try {
-    _suppressNextRealtime = true;
     const payload = {
       id: TRIP_ID,
       title: APP_CONFIG.title,
@@ -1653,10 +1653,40 @@ async function cloudSave(summary) {
       config: getTripConfig(),
       data: getSaveData()
     };
+    // Track the signature we're about to push — realtime events that match
+    // this signature are echoes of our own write and get silently ignored.
+    _lastKnownSignature = stateSignature({
+      config: payload.config, data: payload.data
+    });
     const { error } = await supa.from('trips').upsert(payload, { onConflict: 'id' });
     if (error) { console.warn('cloudSave', error); showToast('Sync failed — saved locally', true); return false; }
     return true;
   } catch(e) { console.warn('cloudSave', e); return false; }
+}
+
+// Build a stable JSON signature of the "meaningful" trip state. Used to
+// decide whether a realtime event actually changed anything vs. being an
+// echo of our own write.
+let _lastKnownSignature = '';
+function stateSignature(row) {
+  if (!row) return '';
+  const cfg = row.config || {};
+  const data = row.data || {};
+  return JSON.stringify({
+    cfg: {
+      title: cfg.title, subtitle: cfg.subtitle, numDays: cfg.numDays,
+      dayLabels: cfg.dayLabels, dayTitles: cfg.dayTitles
+    },
+    days: (data.days || []).map(d => ({
+      title: d.title, note: d.note,
+      stops: (d.stops || []).map(s => ({
+        name: s.name, time: s.time, duration: s.duration,
+        lat: s.lat, lng: s.lng, reservation: s.reservation || null
+      }))
+    })),
+    completed: data.completed || [],
+    hotel: data.hotel || null
+  });
 }
 
 // ── REALTIME SUBSCRIPTION ────────────────────────────────────────
@@ -1667,11 +1697,23 @@ function startRealtime() {
     .on('postgres_changes',
       { event: 'UPDATE', schema: 'public', table: 'trips', filter: 'id=eq.' + TRIP_ID },
       (payload) => {
-        if (_suppressNextRealtime) { _suppressNextRealtime = false; return; }
-        if (isUserBusy()) return; // don't disrupt mid-edit
         const row = payload.new;
         if (!row) return;
+        const incomingSig = stateSignature(row);
+        // Echo of our own write, or no meaningful change → silent
+        if (incomingSig === _lastKnownSignature) return;
+        // Password-only change (TRIP_PW_HASH changed but content identical)
+        // applyRemoteData will still update it quietly; no toast needed.
+        if (isUserBusy()) {
+          // Remember the new signature but skip rendering until the user is done
+          // to avoid disrupting input. The next manual action or renderAll will
+          // be based on the freshest data since applyRemoteData still runs.
+          applyRemoteData(row);
+          _lastKnownSignature = incomingSig;
+          return;
+        }
         applyRemoteData(row);
+        _lastKnownSignature = incomingSig;
         _walkLoadedDays.clear();
         try { renderAll(); } catch(e) {}
         showToast('↻ Updated by someone else');
@@ -1714,8 +1756,17 @@ function lockEditor() {
 
 function updateLockUI() {
   const lock = document.getElementById('lockBtn');
-  if (lock) lock.textContent = EDITOR_MODE ? '🔓' : '🔒';
+  if (lock) {
+    lock.textContent = EDITOR_MODE ? '🔓' : '🔒';
+    lock.title = EDITOR_MODE ? 'Lock (view-only)' : 'Unlock to edit';
+    // Change border color as a visual cue that persists even if the emoji
+    // doesn't change visually on the user's OS
+    lock.style.borderColor = EDITOR_MODE ? '#28a745' : '#aaa';
+    lock.style.color = EDITOR_MODE ? '#28a745' : '#555';
+  }
   document.body.classList.toggle('viewer-mode', !EDITOR_MODE);
+  // Re-render so the viewer-mode CSS states refresh on all stops
+  try { renderStopList(); } catch(e) {}
 }
 
 function showLockDialog() {
