@@ -1626,6 +1626,7 @@ async function syncSave() {
     const res = await ghFetch(payload);
     if (res && res.ok) {
       window._lastSyncTime = Date.now();
+      _lastSyncedPayload = payload;
       const hSaved = window.HOTEL_DATA ? ' + hotel' : '';
       showToast('Saved & synced' + hSaved + ' ✓');
     } else {
@@ -1643,6 +1644,8 @@ async function manualRefresh() {
       data.days.forEach((d, i) => { if (days[i]) days[i].stops = d.stops; });
       completed = data.completed || [];
       if (data.hotel) { window.HOTEL_DATA = data.hotel; HOTEL.name = data.hotel.name; HOTEL.address = data.hotel.address; HOTEL.lat = data.hotel.lat; HOTEL.lng = data.hotel.lng; }
+      _lastSyncedPayload = JSON.stringify({ days: days, completed: completed, hotel: window.HOTEL_DATA || null });
+      _walkLoadedDays.clear(); // new data may have different coords — re-fetch walks
       switchDay(currentDay);
       renderPrebook();
       const hotelOk = data.hotel ? '+ hotel ✓' : '(no hotel yet)';
@@ -1661,23 +1664,110 @@ async function syncLoad() {
       data.days.forEach((d, i) => { if (days[i]) days[i].stops = d.stops; });
       completed = data.completed || [];
       if (data.hotel) { window.HOTEL_DATA = data.hotel; HOTEL.name = data.hotel.name; HOTEL.address = data.hotel.address; HOTEL.lat = data.hotel.lat; HOTEL.lng = data.hotel.lng; }
+      _lastSyncedPayload = JSON.stringify({ days: days, completed: completed, hotel: window.HOTEL_DATA || null });
       return true;
     }
   } catch(e) {}
   return false;
 }
 
+// ── AUTO-PUSH (debounced) AND AUTO-POLL ──────────────────────────
+// Remember last-synced payload so we can detect when remote has changed
+// (compared to what WE last pushed/loaded, not compared to current state).
+let _lastSyncedPayload = '';
+let _autoPushTimer = null;
+let _autoPushInFlight = false;
+
+// Debounce cloud save: wait 2s of inactivity before pushing, so rapid edits
+// (e.g. ticking 5 stops done) coalesce into one commit.
+function schedulePush() {
+  if (!getGhToken()) return; // viewers can't push
+  if (_autoPushTimer) clearTimeout(_autoPushTimer);
+  _autoPushTimer = setTimeout(doAutoPush, 2000);
+}
+
+async function doAutoPush() {
+  _autoPushTimer = null;
+  if (_autoPushInFlight) { schedulePush(); return; } // queue another if already pushing
+  const payload = getSaveData();
+  if (payload === _lastSyncedPayload) return; // nothing to push
+  _autoPushInFlight = true;
+  try {
+    const res = await ghFetch(payload);
+    if (res && res.ok) {
+      _lastSyncedPayload = payload;
+      window._lastSyncTime = Date.now();
+      // Quiet UI — a pill on the save button is nicer than a toast for every edit
+      const btn = document.getElementById('saveBtn');
+      if (btn) {
+        btn.textContent = '✓';
+        setTimeout(() => { if (btn) btn.textContent = '💾'; }, 1500);
+      }
+    }
+  } catch(e) { /* silent — user will see the save button indicator */ }
+  finally { _autoPushInFlight = false; }
+}
+
+// Poll remote every 30s to pick up changes from other devices.
+// Skip when the user is actively editing (any open overlay or focused input).
+let _pollTimer = null;
 function startSyncPolling() {
-  // Polling disabled — use the 🔄 refresh button to pull updates manually
+  if (_pollTimer) clearInterval(_pollTimer);
+  _pollTimer = setInterval(autoPollRemote, 30000);
+}
+function stopSyncPolling() {
+  if (_pollTimer) clearInterval(_pollTimer);
+  _pollTimer = null;
+}
+
+function isUserBusy() {
+  // Any modal overlay open?
+  const overlays = ['time-overlay','dur-overlay','res-overlay','hotel-overlay','suggest-overlay','lock-overlay'];
+  for (const id of overlays) if (document.getElementById(id)) return true;
+  // Focused text input / textarea?
+  const a = document.activeElement;
+  if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.isContentEditable)) return true;
+  // Mid-push?
+  if (_autoPushInFlight || _autoPushTimer) return true;
+  return false;
+}
+
+async function autoPollRemote() {
+  if (document.hidden) return;       // tab not visible — skip
+  if (isUserBusy()) return;          // user editing — skip
+  try {
+    const data = await ghRead();
+    if (!data || !data.days || data.days.length < 3) return;
+    const incoming = JSON.stringify({
+      days: data.days.map(d => ({ title: d.title, note: d.note, stops: d.stops })),
+      completed: data.completed || [],
+      hotel: data.hotel || null
+    });
+    const current = JSON.stringify({
+      days: days.map(d => ({ title: d.title, note: d.note, stops: d.stops })),
+      completed: completed,
+      hotel: window.HOTEL_DATA || null
+    });
+    if (incoming === current) return; // no change
+    // Remote differs from our state — apply it.
+    data.days.forEach((d, i) => { if (days[i]) days[i].stops = d.stops; });
+    completed = data.completed || [];
+    if (data.hotel) { window.HOTEL_DATA = data.hotel; HOTEL.name = data.hotel.name; HOTEL.address = data.hotel.address; HOTEL.lat = data.hotel.lat; HOTEL.lng = data.hotel.lng; }
+    _lastSyncedPayload = JSON.stringify({ days: days, completed: completed, hotel: window.HOTEL_DATA || null });
+    _walkLoadedDays.clear(); // force walk-label refresh for new coords
+    renderAll();
+    showToast('↻ Updated by someone else');
+  } catch(e) { /* silent — next poll will try again */ }
 }
 
 function saveToStorage() { syncSave(); }
 
 function autoSave() {
-  // Save locally immediately on every change — push to cloud only on explicit 💾
+  // Save locally immediately on every change
   try { localStorage.setItem('london2026_v1', getSaveData()); } catch(e) {}
-  // Also persist hotel separately for quick init
   if (window.HOTEL_DATA) try { localStorage.setItem('hotel_data', JSON.stringify(window.HOTEL_DATA)); } catch(e) {}
+  // Schedule a debounced cloud push
+  schedulePush();
 }
 
 function tryLoadSaved() {
@@ -3433,6 +3523,7 @@ function toggleDone(i) {
   const key = currentDay+'-'+i;
   if (completed.includes(key)) completed = completed.filter(k => k !== key);
   else completed.push(key);
+  autoSave(); // persist locally + schedule cloud push
   renderStopList();
   if (currentView === 'detail') updateBottomNav();
 }
