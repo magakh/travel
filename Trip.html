@@ -2401,7 +2401,15 @@ function recalcTimesFrom(fromIdx) {
     ] || 0;
     cursor += walk;
     if (stops[i].fixed || (stops[i].reservation && stops[i].reservation.time)) {
-      // Locked stop — resync cursor to its actual time
+      // Locked stop — check for AM/PM flip: if stored time is ~12h off from cascade, correct it
+      const lockedMin = timeStrToMins(stops[i].time);
+      const diff = lockedMin - cursor;
+      if (Math.abs(Math.abs(diff) - 720) <= 60) {
+        // Almost exactly 12h off — flip AM/PM on the stop time (not the reservation booking time)
+        const corrected = (lockedMin + 720) % 1440;
+        stops[i].time = minsToTimeStr(corrected);
+      }
+      // Resync cursor to the (possibly corrected) locked time
       cursor = timeStrToMins(stops[i].time) + parseDurationMins(stops[i].duration || '60 min');
       continue;
     }
@@ -2799,13 +2807,13 @@ function computeArrivalMins(dayIdx, idx) {
 function bookingArrivalHtml(dayIdx, idx) {
   const s = days[dayIdx] && days[dayIdx].stops && days[dayIdx].stops[idx];
   if (!s || !s.reservation || !s.reservation.time) return '';
-  const bookedMin = timeStrToMins(s.reservation.time);
   const arriveMin = computeArrivalMins(dayIdx, idx);
   if (arriveMin == null) return '';
-  const diff = bookedMin - arriveMin; // positive = arrive before booking (good)
+  // Compare arrive vs the stop's own scheduled time (may have been AM/PM-corrected)
+  const stopMin = timeStrToMins(s.time);
+  const diff = stopMin - arriveMin; // positive = arrive before stop time (good)
   let statusText, statusColor, statusBg;
   if (diff < 0) {
-    // Arriving AFTER booked time — late
     statusText = Math.abs(diff) + ' min late';
     statusColor = '#a42420';
     statusBg = '#fde8e8';
