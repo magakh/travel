@@ -3667,8 +3667,11 @@ async function runSuggest(midLat, midLng, afterIdx, dayIdx, beforeIdx) {
     const toStop   = beforeIdx >= 0 && ctxStops[beforeIdx] ? ctxStops[beforeIdx] : window.HOTEL_DATA;
     _suggestCtx = { midLat, midLng, afterIdx, dayIdx, query, isWalk, city, fromStop, toStop };
 
+    const directM = fromStop && toStop ? _haversineMetres(fromStop.lat, fromStop.lng, toStop.lat, toStop.lng) : 0;
+    const maxDetourM = Math.max(directM * 1.2, 400); // 20% longer than direct, min 400m tolerance
+
     const locationCtx = fromStop && toStop
-      ? ' The person is walking from "' + fromStop.name + '" to "' + toStop.name + '" — only suggest places that are actually on or very close to this route (within a 5-10 min walk of the direct path). Midpoint is lat ' + midLat.toFixed(3) + ', lng ' + midLng.toFixed(3) + '.'
+      ? ' The person is walking from "' + fromStop.name + '" (lat ' + fromStop.lat.toFixed(4) + ', lng ' + fromStop.lng.toFixed(4) + ') to "' + toStop.name + '" (lat ' + toStop.lat.toFixed(4) + ', lng ' + toStop.lng.toFixed(4) + '). Direct distance: ' + Math.round(directM) + 'm. CRITICAL: only suggest places where the total walking path (from→place + place→to) is no more than 20% longer than going direct. Do not suggest places that require a major detour.'
       : ' Near lat ' + midLat.toFixed(3) + ', lng ' + midLng.toFixed(3) + ' in ' + city + '.';
 
     const prompt = isWalk
@@ -3678,6 +3681,17 @@ async function runSuggest(midLat, midLng, afterIdx, dayIdx, beforeIdx) {
     const text = await callAnthropic({ prompt, maxTokens: 1500 });
     _suggestResults = extractJsonArray(text);
     if (!_suggestResults.length) throw new Error('AI returned no usable results');
+
+    // Filter: only keep stops where going through them adds ≤20% extra distance vs direct
+    if (fromStop && toStop && directM > 0) {
+      _suggestResults = _suggestResults.filter(r => {
+        if (!r.lat || !r.lng) return true;
+        const through = _haversineMetres(fromStop.lat, fromStop.lng, r.lat, r.lng) +
+                        _haversineMetres(r.lat, r.lng, toStop.lat, toStop.lng);
+        return through <= maxDetourM;
+      });
+    }
+    if (!_suggestResults.length) throw new Error('No nearby options found — the route is too short for a detour. Try searching the main Add tab instead.');
     renderSuggestResults(_suggestResults, afterIdx, dayIdx);
   } catch(e) {
     console.error('Suggest error:', e);
