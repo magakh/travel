@@ -2701,6 +2701,67 @@ function checkConflicts() {
 
 
 // ── ADJUSTABLE START TIME ─────────────────────────────────────────
+// Duration lookup table — returns minutes for common place types
+function _durationLookup(name, type) {
+  const t = (type + ' ' + name).toLowerCase();
+  if (/museum|gallery|exhibition|tate|national portrait|v&a|victoria|science museum/.test(t)) return 90;
+  if (/theatre|theater|concert|opera|show|performance|west end|play/.test(t)) return 150;
+  if (/dinner|restaurant|bistro|brasserie|dining|supper/.test(t)) return 90;
+  if (/lunch|brunch/.test(t)) return 75;
+  if (/breakfast|café|cafe|coffee|bakery|patisserie|tea salon|tea room/.test(t)) return 45;
+  if (/pub|bar|cocktail|wine/.test(t)) return 60;
+  if (/cathedral|abbey|church|chapel|mosque|synagogue/.test(t)) return 45;
+  if (/castle|palace|fort|tower of london|hampton court/.test(t)) return 120;
+  if (/park|garden|gardens|green|common|heath|kew/.test(t)) return 60;
+  if (/market|arcade|shopping|mall|harrods|selfridges|oxford street/.test(t)) return 60;
+  if (/walk|stroll|route|lane|street|neighbourhood|neighbourhood/.test(t)) return 30;
+  if (/tour|boat|cruise|bus tour|guided/.test(t)) return 90;
+  if (/viewpoint|observation|sky garden|eye|view/.test(t)) return 30;
+  if (/historic|monument|statue|memorial/.test(t)) return 20;
+  return null; // unknown — use AI
+}
+
+async function suggestDurationForStop(i) {
+  const s = days[currentDay].stops[i];
+  const btn = document.getElementById('suggestDurBtn');
+  if (!btn) return;
+
+  // Try lookup table first (instant)
+  const looked = _durationLookup(s.name, s.type || s.type_label || '');
+  if (looked) {
+    const h = Math.floor(looked / 60), m = looked % 60;
+    const durH = document.getElementById('durHrs');
+    const durM = document.getElementById('durMins');
+    if (durH) durH.value = h;
+    if (durM) durM.value = m;
+    btn.textContent = '✅ ' + (h > 0 ? h + 'h ' : '') + (m > 0 ? m + 'min' : '') + ' suggested';
+    btn.style.background = '#e8f5ec'; btn.style.borderColor = '#1a7a3a'; btn.style.color = '#1a7a3a';
+    return;
+  }
+
+  // AI fallback for unusual places
+  btn.textContent = '⏳ Looking up…'; btn.disabled = true;
+  try {
+    const prompt = `How long do visitors typically spend at "${s.name}" (${s.type || 'attraction'}) in ${getTripCity()}? Reply with ONLY a JSON object: {"minutes": 60, "reason": "one short sentence"}. Use a realistic number based on the type of place.`;
+    const text = await callAnthropic({ prompt, maxTokens: 80 });
+    let raw = (text || '{}').replace(/```json|```/g, '').trim();
+    const oS = raw.indexOf('{'), oE = raw.lastIndexOf('}');
+    if (oS >= 0 && oE > oS) raw = raw.slice(oS, oE + 1);
+    const parsed = JSON.parse(raw);
+    const mins = Math.max(15, Math.min(360, parseInt(parsed.minutes) || 60));
+    const h = Math.floor(mins / 60), m = mins % 60;
+    const durH = document.getElementById('durHrs');
+    const durM = document.getElementById('durMins');
+    if (durH) durH.value = h;
+    if (durM) durM.value = m;
+    btn.textContent = '✅ ' + (h > 0 ? h + 'h ' : '') + (m > 0 ? m + 'min' : '') + ' — ' + (parsed.reason || '');
+    btn.style.background = '#e8f5ec'; btn.style.borderColor = '#1a7a3a'; btn.style.color = '#1a7a3a';
+  } catch(e) {
+    btn.textContent = '✨ Suggest typical time for this place';
+    btn.disabled = false;
+  }
+}
+
 function editStopTime(i) { editTimeAndDuration(i); }
 function editDuration(i)  { editTimeAndDuration(i); }
 
@@ -2736,6 +2797,7 @@ function editTimeAndDuration(i) {
       </button>
 
       <p style="font-size:11px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Duration</p>
+      <button id="suggestDurBtn" onclick="suggestDurationForStop(${i})" style="width:100%;padding:8px;border-radius:8px;border:1px solid #c5d8fa;background:#e8f0fd;color:#1a73e8;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:10px;">✨ Suggest typical time for this place</button>
       <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;margin-bottom:16px;">
         <div style="display:flex;flex-direction:column;gap:4px;">
           <label style="font-size:11px;color:#888;text-align:center;">Hours</label>
