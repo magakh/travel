@@ -1387,7 +1387,8 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
       <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
         <h3 style="margin:0 0 6px 0;font-size:14px;">🪄 Fill itinerary with AI</h3>
         <p class="gen-hint" style="margin-bottom:10px;font-size:12px;">AI fills empty time slots with popular tourist picks. Respects existing stops, hotel arrival, and flight departure. Works 9 AM–12 AM daily.</p>
-        <button class="gen-btn" onclick="runFillItinerary()" style="background:#5c4db1;margin-bottom:0;">🪄 Fill empty slots with AI</button>
+        <button class="gen-btn" onclick="runFillItinerary()" style="background:#5c4db1;margin-bottom:8px;">🪄 Fill empty slots with AI</button>
+        <button class="gen-btn" onclick="repairAllCoords()" style="background:#b03a00;margin-bottom:0;">🔧 Repair all coordinates</button>
       </div>
 
       <!-- ── SAVE ── -->
@@ -2259,6 +2260,13 @@ function addFromSearch(i) {
     free: r.free !== undefined ? r.free : false,
     color: r.color || '#5c4db1'
   });
+  // Silently fix coords if AI gave us a placeholder
+  const stopRef = days[dayIdx].stops[days[dayIdx].stops.length - 1];
+  if (isSuspiciousCoords(stopRef.lat, stopRef.lng)) {
+    lookupCoords(r.name + ', ' + r.address).then(fixed => {
+      if (fixed) { stopRef.lat = fixed.lat; stopRef.lng = fixed.lng; renderAll(); cloudSave('Fixed coords: ' + r.name); }
+    });
+  }
   // Clear result card to show it was added
   const cards = document.querySelectorAll('.search-result-card');
   if (cards[i]) {
@@ -3564,6 +3572,13 @@ function insertSuggestedStop(resultIdx, afterIdx, dayIdx) {
 
   renderAll();
   showToast('"' + r.name + '" added ✓');
+
+  // Silently fix coords if AI gave us a placeholder
+  if (isSuspiciousCoords(stop.lat, stop.lng)) {
+    lookupCoords(r.name + (r.address ? ', ' + r.address : '')).then(fixed => {
+      if (fixed) { stop.lat = fixed.lat; stop.lng = fixed.lng; renderAll(); cloudSave('Fixed coords: ' + r.name); }
+    });
+  }
 }
 
 
@@ -4050,15 +4065,17 @@ async function doFillItinerary(selectedDayIndices) {
     }
 
     let addedCount = 0;
-    parsed.days.forEach(aiDay => {
+    for (const aiDay of parsed.days) {
       const di = aiDay.dayIdx;
-      if (di < 0 || di >= days.length) return;
+      if (di < 0 || di >= days.length) continue;
       const newStops = shapeStops(aiDay.stops || []);
-      if (!newStops.length) return;
+      if (!newStops.length) continue;
+      // Fix any placeholder coords before committing
+      await repairStopsCoords(newStops);
       days[di].stops = days[di].stops.concat(newStops);
       addedCount += newStops.length;
       days[di].stops.sort((a,b) => timeStrToMins(a.time) - timeStrToMins(b.time));
-    });
+    }
 
     if (addedCount === 0) {
       showToast('AI returned no usable stops — try again', true);
@@ -5058,6 +5075,107 @@ async function callAnthropic({ prompt, maxTokens, model }) {
 
 // ── AI GEOCODING ────────────────────────────────────────────────
 // Given an address string, ask AI for lat/lng and fill the target inputs.
+// ── COORDINATE HELPERS ────────────────────────────────────────────
+
+// Pure geocoding — returns {lat, lng} or null. No DOM side-effects.
+async function lookupCoords(query) {
+  if (!query || query.length < 3) return null;
+  const city = getTripCity();
+  const fullQuery = (query.toLowerCase().includes(city.toLowerCase())) ? query : query + ', ' + city;
+  const prompt = `Return the latitude and longitude for: "${fullQuery}"\nRespond with ONLY a JSON object: {"lat": 0.0000, "lng": 0.0000}\nUse accurate coordinates (4+ decimal places). If unknown, return {"lat": 0, "lng": 0}.`;
+  try {
+    const text = await callAnthropic({ prompt, maxTokens: 100 });
+    let raw = (text || '{}').replace(/```json|```/g, '').trim();
+    const oStart = raw.indexOf('{'); const oEnd = raw.lastIndexOf('}');
+    if (oStart >= 0 && oEnd > oStart) raw = raw.slice(oStart, oEnd + 1);
+    const parsed = JSON.parse(raw);
+    const lat = parseFloat(parsed.lat); const lng = parseFloat(parsed.lng);
+    if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+    return { lat, lng };
+  } catch(e) { return null; }
+}
+
+// Returns true for 0,0 or the known London-centre AI placeholder ~51.515, -0.12
+function isSuspiciousCoords(lat, lng) {
+  if (!lat && !lng) return true;
+  if (lat === 0 && lng === 0) return true;
+  if (Math.abs(lat - 51.515) < 0.003 && Math.abs(lng - (-0.12)) < 0.003) return true;
+  return false;
+}
+
+// Repair an array of stop objects in-place: re-geocodes any with suspicious coords.
+async function repairStopsCoords(stops) {
+  await Promise.all(stops.map(async stop => {
+    if (isSuspiciousCoords(stop.lat, stop.lng)) {
+      const query = stop.name + (stop.address && stop.address !== stop.name ? ', ' + stop.address : '');
+      const fixed = await lookupCoords(query);
+      if (fixed) { stop.lat = fixed.lat; stop.lng = fixed.lng; }
+    }
+  }));
+}
+
+// Scan every stop across all days, find bad/duplicate coords, prompt user, then fix & save.
+async function repairAllCoords() {
+  if (!EDITOR_MODE) { showToast('Unlock to edit (🔒)', true); return; }
+
+  // Collect coord-frequency map to detect duplicates (3+ stops sharing exact coords)
+  const coordCount = {};
+  days.forEach(d => (d.stops || []).forEach(s => {
+    const key = s.lat + ',' + s.lng;
+    coordCount[key] = (coordCount[key] || 0) + 1;
+  }));
+
+  const toFix = [];
+  days.forEach((d, di) => {
+    (d.stops || []).forEach((s, si) => {
+      const key = s.lat + ',' + s.lng;
+      if (isSuspiciousCoords(s.lat, s.lng) || coordCount[key] >= 3) {
+        toFix.push({ s, di, si, key });
+      }
+    });
+  });
+
+  if (!toFix.length) { showToast('✅ All coordinates look good!'); return; }
+
+  // Show confirm dialog
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:10001;display:flex;align-items:center;justify-content:center;padding:20px;';
+  const listHtml = toFix.map(({ s, di }) =>
+    `<div style="padding:6px 0;border-bottom:1px solid #f0f0f0;font-size:13px;"><b>${s.name}</b> <span style="color:#888;">(Day ${di+1}) — ${s.lat.toFixed(4)}, ${s.lng.toFixed(4)}</span></div>`
+  ).join('');
+  overlay.innerHTML = `<div style="background:#fff;border-radius:16px;padding:22px;max-width:420px;width:100%;max-height:80vh;overflow-y:auto;">
+    <h3 style="margin:0 0 6px 0;">🔧 Repair coordinates</h3>
+    <p style="color:#666;font-size:13px;margin:0 0 12px 0;">Found <b>${toFix.length}</b> stop${toFix.length===1?'':'s'} with missing or placeholder coordinates. AI will look up the correct location for each.</p>
+    <div style="max-height:220px;overflow-y:auto;border:1px solid #eee;border-radius:8px;padding:8px 10px;margin-bottom:14px;">${listHtml}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <button id="repairCancelBtn" style="padding:12px;border-radius:10px;border:1px solid #ddd;background:#fff;font-weight:700;cursor:pointer;">Cancel</button>
+      <button id="repairGoBtn" style="padding:12px;border-radius:10px;border:none;background:#b03a00;color:#fff;font-weight:700;cursor:pointer;">Fix ${toFix.length} stop${toFix.length===1?'':'s'}</button>
+    </div>
+    <div id="repairProgress" style="font-size:12px;color:#5c4db1;margin-top:10px;min-height:16px;"></div>
+  </div>`;
+  document.body.appendChild(overlay);
+  document.getElementById('repairCancelBtn').onclick = () => overlay.remove();
+  document.getElementById('repairGoBtn').onclick = async () => {
+    document.getElementById('repairCancelBtn').style.display = 'none';
+    document.getElementById('repairGoBtn').disabled = true;
+    document.getElementById('repairGoBtn').textContent = '⏳ Fixing…';
+    const prog = document.getElementById('repairProgress');
+    let fixed = 0;
+    for (const { s } of toFix) {
+      prog.textContent = `Geocoding: ${s.name}…`;
+      const query = s.name + (s.address && s.address !== s.name ? ', ' + s.address : '');
+      const result = await lookupCoords(query);
+      if (result) { s.lat = result.lat; s.lng = result.lng; fixed++; }
+    }
+    prog.textContent = `✅ Fixed ${fixed} of ${toFix.length} stops. Saving…`;
+    await cloudSave('Repaired ' + fixed + ' coordinates');
+    _walkLoadedDays.clear();
+    renderAll();
+    overlay.remove();
+    showToast('🔧 Repaired ' + fixed + ' coordinate' + (fixed===1?'':'s') + ' ✓');
+  };
+}
+
 async function geocodeAddress(address, targetLatId, targetLngId, statusElId) {
   const statusEl = statusElId ? document.getElementById(statusElId) : null;
   if (!address || address.length < 5) {
