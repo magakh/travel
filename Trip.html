@@ -3690,10 +3690,10 @@ async function runSuggest(midLat, midLng, afterIdx, dayIdx, beforeIdx) {
       : ' Near lat ' + midLat.toFixed(3) + ', lng ' + midLng.toFixed(3) + ' in ' + city + '.';
 
     const prompt = isWalk
-      ? 'You are a walking tour expert for ' + city + '. Suggest 6 excellent short walking experiences or scenic routes matching: "' + query + '".' + locationCtx + ' Return ONLY a JSON array (no markdown): [{"name":"...","type":"Walking route · neighbourhood","address":"...","lat":0.0,"lng":0.0,"why":"1 sentence why this walk is special","duration":"20 min"}]. Use real locations with accurate coordinates.'
-      : 'You are a travel expert for ' + city + '. Suggest 6 excellent real places matching: "' + query + '".' + locationCtx + ' Return ONLY a JSON array (no markdown): [{"name":"...","type":"...","address":"...","lat":0.0,"lng":0.0,"why":"1 sentence why it fits here","duration":"45 min"}]. Use real places with accurate coordinates.';
+      ? 'You are a walking tour expert for ' + city + '. Suggest 6 excellent short walking experiences or scenic routes matching: "' + query + '".' + locationCtx + ' Return ONLY a JSON array (no markdown): [{"name":"...","type":"Walking route · neighbourhood","address":"...","lat":0.0,"lng":0.0,"why":"1 sentence why this walk is special","duration":"20 min","description":"2-3 sentences with substance about what makes this walk worthwhile","tips":"1-2 sentences of practical insider tips (best time, what to look for)","goodFor":"short label e.g. \\"Architecture lovers\\" or \\"Quiet morning stroll\\"","hoursNote":"any timing/access notes if relevant, else empty string","priceLevel":""}]. Use real locations with accurate coordinates.'
+      : 'You are a travel expert for ' + city + '. Suggest 6 excellent real places matching: "' + query + '".' + locationCtx + ' Return ONLY a JSON array (no markdown): [{"name":"...","type":"...","address":"...","lat":0.0,"lng":0.0,"why":"1 sentence why it fits here","duration":"45 min","description":"2-3 sentences with substance — atmosphere, what to expect, what is special","tips":"1-2 sentences of practical insider tips (what to order, when to go, what to ask for)","goodFor":"short label e.g. \\"Solo lunch\\" or \\"Romantic dinner\\" or \\"Architecture lovers\\"","hoursNote":"opening hours notes if known and relevant, e.g. \\"Closed Mondays\\" or \\"Best 10am-noon\\", else empty string","priceLevel":"$ or $$ or $$$ or $$$$ for restaurants/paid attractions, else empty string"}]. Use real places with accurate coordinates. The description, tips, and hoursNote should reflect general knowledge — never invent specifics you are not confident about; prefer empty string over guessing.';
 
-    const text = await callAnthropic({ prompt, maxTokens: 1500 });
+    const text = await callAnthropic({ prompt, maxTokens: 3000 });
     _suggestResults = extractJsonArray(text);
     if (!_suggestResults.length) throw new Error('AI returned no usable results');
 
@@ -3764,20 +3764,55 @@ function renderSuggestResults(results, afterIdx, dayIdx) {
           (toMins ? toMins + ' to ' + (tSt.name || 'next stop') : '') +
         '</div>'
       : '<div style="font-size:11px;color:#888;margin-top:3px;">⏳ ' + (r.duration || '60 min') + '</div>';
+
+    // ----- Build the rich detail panel (collapsed by default) -----
+    const _esc = (s) => String(s == null ? '' : s).replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+    const detailParts = [];
+    if (r.description) detailParts.push('<div style="font-size:13px;color:#333;line-height:1.4;margin-top:8px;">' + _esc(r.description) + '</div>');
+    if (r.tips) detailParts.push('<div style="font-size:12px;color:#444;background:#fff8e1;border-left:3px solid #f1c40f;padding:6px 10px;border-radius:0 6px 6px 0;margin-top:8px;line-height:1.4;"><b>💡 Tip:</b> ' + _esc(r.tips) + '</div>');
+    const metaChips = [];
+    if (r.goodFor) metaChips.push('<span style="font-size:11px;background:#e8f0fd;color:#1565c0;padding:3px 8px;border-radius:10px;font-weight:600;">' + _esc(r.goodFor) + '</span>');
+    if (r.priceLevel) metaChips.push('<span style="font-size:11px;background:#e8f5e9;color:#1a7a3a;padding:3px 8px;border-radius:10px;font-weight:600;">' + _esc(r.priceLevel) + '</span>');
+    if (r.hoursNote) metaChips.push('<span style="font-size:11px;background:#fdecea;color:#c0392b;padding:3px 8px;border-radius:10px;font-weight:600;">⏱ ' + _esc(r.hoursNote) + '</span>');
+    if (metaChips.length) detailParts.push('<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;">' + metaChips.join('') + '</div>');
+
+    const mapsQuery = encodeURIComponent((r.name || '') + (r.address ? ', ' + r.address : ''));
+    const actionsRow = '<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">' +
+      '<a href="https://www.google.com/maps/search/?api=1&query=' + mapsQuery + '" target="_blank" rel="noopener" onclick="event.stopPropagation();" style="font-size:11px;font-weight:700;color:#1565c0;text-decoration:none;background:#e8f0fd;padding:5px 10px;border-radius:14px;">📍 Open in Maps · reviews</a>' +
+      '</div>';
+
+    const detailBlock = (detailParts.length || (r.address && r.name))
+      ? '<div id="suggestDetail' + i + '" style="display:none;border-top:1px dashed #e0e0e0;margin-top:10px;padding-top:6px;">' + detailParts.join('') + actionsRow + '</div>'
+      : '';
+    const expanderBtn = (detailParts.length)
+      ? '<button onclick="event.stopPropagation();toggleSuggestDetail(' + i + ')" id="suggestDetailBtn' + i + '" style="background:none;border:none;font-size:12px;font-weight:700;color:' + colors[i] + ';cursor:pointer;padding:6px 0 0 0;margin-top:4px;">▸ More info</button>'
+      : '';
+
     html += '<div id="suggestResult'+i+'" onclick="highlightSuggestResult('+i+')" style="border:2px solid '+colors[i]+';border-radius:12px;padding:12px;margin-bottom:10px;cursor:pointer;background:#fff;">' +
       '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">' +
-        '<div style="flex:1;">' +
-          '<div style="font-size:14px;font-weight:700;color:#1a1a1a;">'+(i+1)+'. '+r.name+(r._isFarDetour ? ' <span style="font-size:10px;font-weight:700;background:#fff3cd;color:#856404;padding:2px 6px;border-radius:8px;vertical-align:middle;">↗ Far alternative</span>' : '')+'</div>' +
-          '<div style="font-size:11px;color:#888;margin:2px 0;">'+(r.type||'')+'<br>'+r.address+'</div>' +
-          '<div style="font-size:12px;color:#555;margin-top:4px;">'+(r.why||'')+'</div>' +
+        '<div style="flex:1;min-width:0;">' +
+          '<div style="font-size:14px;font-weight:700;color:#1a1a1a;">'+(i+1)+'. '+_esc(r.name)+(r._isFarDetour ? ' <span style="font-size:10px;font-weight:700;background:#fff3cd;color:#856404;padding:2px 6px;border-radius:8px;vertical-align:middle;">↗ Far alternative</span>' : '')+'</div>' +
+          '<div style="font-size:11px;color:#888;margin:2px 0;">'+_esc(r.type||'')+'<br>'+_esc(r.address||'')+'</div>' +
+          '<div style="font-size:12px;color:#555;margin-top:4px;">'+_esc(r.why||'')+'</div>' +
           walkLine +
+          expanderBtn +
         '</div>' +
         '<button onclick="event.stopPropagation();insertSuggestedStop('+i+','+afterIdx+','+dayIdx+')" style="background:#1a1a1a;color:#fff;border:none;border-radius:20px;padding:6px 14px;font-size:13px;font-weight:700;cursor:pointer;flex-shrink:0;">+ Add</button>' +
       '</div>' +
+      detailBlock +
     '</div>';
   });
   html += '<button id="suggestMoreBtn" onclick="event.stopPropagation();runSuggestMore()" style="width:100%;margin-top:8px;padding:10px;border-radius:12px;border:1px dashed #bbb;background:#fafafa;font-size:13px;font-weight:700;color:#555;cursor:pointer;">🔄 Suggest more</button>';
   listEl.innerHTML = html;
+}
+
+function toggleSuggestDetail(i) {
+  const panel = document.getElementById('suggestDetail' + i);
+  const btn = document.getElementById('suggestDetailBtn' + i);
+  if (!panel) return;
+  const open = panel.style.display !== 'none';
+  panel.style.display = open ? 'none' : 'block';
+  if (btn) btn.textContent = open ? '▸ More info' : '▾ Less';
 }
 
 async function runSuggestMore() {
@@ -3787,9 +3822,9 @@ async function runSuggestMore() {
   const existing = _suggestResults.map(r => r.name).join(', ');
   try {
     const prompt = isWalk
-      ? 'You are a walking tour expert for ' + city + '. Suggest 4 MORE walking experiences near lat ' + midLat.toFixed(3) + ', lng ' + midLng.toFixed(3) + ' matching: \"' + query + '\". Exclude these already shown: ' + existing + '. Return ONLY a JSON array (no markdown): [{\"name\":\"...\",\"type\":\"Walking route · neighbourhood\",\"address\":\"...\",\"lat\":0.0,\"lng\":0.0,\"why\":\"1 sentence\",\"duration\":\"20 min\"}].'
-      : 'You are a travel expert for ' + city + '. Suggest 4 MORE real places matching: \"' + query + '\" near lat ' + midLat.toFixed(3) + ', lng ' + midLng.toFixed(3) + '. Exclude these already shown: ' + existing + '. Return ONLY a JSON array (no markdown): [{\"name\":\"...\",\"type\":\"...\",\"address\":\"...\",\"lat\":0.0,\"lng\":0.0,\"why\":\"1 sentence\",\"duration\":\"45 min\"}].';
-    const text = await callAnthropic({ prompt, maxTokens: 1000 });
+      ? 'You are a walking tour expert for ' + city + '. Suggest 4 MORE walking experiences near lat ' + midLat.toFixed(3) + ', lng ' + midLng.toFixed(3) + ' matching: \"' + query + '\". Exclude these already shown: ' + existing + '. Return ONLY a JSON array (no markdown): [{\"name\":\"...\",\"type\":\"Walking route · neighbourhood\",\"address\":\"...\",\"lat\":0.0,\"lng\":0.0,\"why\":\"1 sentence\",\"duration\":\"20 min\",\"description\":\"2-3 sentences\",\"tips\":\"1-2 sentences\",\"goodFor\":\"short label\",\"hoursNote\":\"\",\"priceLevel\":\"\"}].'
+      : 'You are a travel expert for ' + city + '. Suggest 4 MORE real places matching: \"' + query + '\" near lat ' + midLat.toFixed(3) + ', lng ' + midLng.toFixed(3) + '. Exclude these already shown: ' + existing + '. Return ONLY a JSON array (no markdown): [{\"name\":\"...\",\"type\":\"...\",\"address\":\"...\",\"lat\":0.0,\"lng\":0.0,\"why\":\"1 sentence\",\"duration\":\"45 min\",\"description\":\"2-3 sentences\",\"tips\":\"1-2 sentences\",\"goodFor\":\"short label\",\"hoursNote\":\"\",\"priceLevel\":\"\"}]. Prefer empty strings over guessed specifics.';
+    const text = await callAnthropic({ prompt, maxTokens: 2000 });
     const more = extractJsonArray(text);
     if (more.length) {
       _suggestResults = _suggestResults.concat(more);
