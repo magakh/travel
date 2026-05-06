@@ -1307,26 +1307,23 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
       <h2>⚙ Trip Settings</h2>
 
       <!-- ── TRIP BASICS ── -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-        <div>
-          <label class="form-label">Trip title</label>
-          <input class="form-input" id="setTitle" type="text" placeholder="e.g. NYC 2026" style="margin:0;">
-        </div>
-        <div>
-          <label class="form-label">Number of days (1–7)</label>
-          <input class="form-input" id="setNumDays" type="number" min="1" max="7" placeholder="4" oninput="renderDayLabelInputs()" style="margin:0;">
-        </div>
-      </div>
-      <label class="form-label" style="margin-top:8px;">Subtitle</label>
-      <input class="form-input" id="setSubtitle" type="text" placeholder="e.g. key dates · themes">
+      <label class="form-label">Trip title</label>
+      <input class="form-input" id="setTitle" type="text" placeholder="e.g. NYC 2026">
+      <label class="form-label">Subtitle</label>
+      <input class="form-input" id="setSubtitle" type="text" placeholder="e.g. hidden gems · rooftop dining">
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px;">
         <div>
-          <label class="form-label">Trip start date</label>
+          <label class="form-label">First day</label>
           <input class="form-input" id="setStartDate" type="date" style="margin:0;" oninput="previewDayTabs()">
         </div>
+        <div>
+          <label class="form-label">Last day</label>
+          <input class="form-input" id="setEndDate" type="date" style="margin:0;" oninput="previewDayTabs()">
+        </div>
       </div>
-      <div id="setDayTabPreview" style="margin-top:10px;"></div>
+      <div id="setDayTabPreview" style="margin-top:10px;margin-bottom:4px;"></div>
+      <input type="hidden" id="setNumDays" value="4">
       <div id="setDayLabelsWrap" style="display:none;"></div>
 
       <!-- ── HOTEL & TIMING (combined) ── -->
@@ -1375,11 +1372,8 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
         <div id="hotelPreview" style="margin-top:8px;"></div>
       </div>
 
-      <!-- ── AI FILL ── -->
+      <!-- Repair coords (kept here, fill moved to Add/Search) -->
       <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
-        <h3 style="margin:0 0 6px 0;font-size:14px;">🪄 Fill itinerary with AI</h3>
-        <p class="gen-hint" style="margin-bottom:10px;font-size:12px;">AI fills empty time slots with popular tourist picks. Respects existing stops, hotel arrival, and flight departure. Works 9 AM–12 AM daily.</p>
-        <button class="gen-btn" onclick="runFillItinerary()" style="background:#5c4db1;margin-bottom:8px;">🪄 Fill empty slots with AI</button>
         <button class="gen-btn" onclick="repairAllCoords()" style="background:#b03a00;margin-bottom:0;">🔧 Repair all coordinates</button>
       </div>
 
@@ -3772,9 +3766,18 @@ function loadSettingsUI() {
   if (depEl) depEl.value = time12to24(c.departureTime || '');
   const curEl = document.getElementById('setCurrentTrip');
   if (curEl) curEl.textContent = TRIP_ID;
-  // Populate start date picker
+  // Populate start/end date pickers
   const sdEl = document.getElementById('setStartDate');
-  if (sdEl && c.startDate) sdEl.value = c.startDate;
+  const edEl = document.getElementById('setEndDate');
+  if (sdEl && c.startDate) {
+    sdEl.value = c.startDate;
+    // Derive end date from startDate + numDays - 1
+    if (edEl && c.startDate && c.numDays) {
+      const [y, mo, d] = c.startDate.split('-').map(Number);
+      const end = new Date(y, mo - 1, d + (c.numDays - 1));
+      edEl.value = end.getFullYear() + '-' + String(end.getMonth()+1).padStart(2,'0') + '-' + String(end.getDate()).padStart(2,'0');
+    }
+  }
   previewDayTabs();
 }
 
@@ -3805,20 +3808,27 @@ function time24to12(str) {
 }
 
 function previewDayTabs() {
-  const n = parseInt(document.getElementById('setNumDays')?.value) || 4;
-  const dateVal = document.getElementById('setStartDate')?.value; // 'YYYY-MM-DD'
+  const startVal = document.getElementById('setStartDate')?.value;
+  const endVal = document.getElementById('setEndDate')?.value;
   const wrap = document.getElementById('setDayTabPreview');
   if (!wrap) return;
-  if (!dateVal) { wrap.innerHTML = '<p class="gen-hint">Pick a start date to auto-generate day tabs.</p>'; return; }
-  const [y, mo, d] = dateVal.split('-').map(Number);
+  if (!startVal || !endVal) { wrap.innerHTML = '<p class="gen-hint">Pick first and last day to auto-generate tabs.</p>'; return; }
+  const [sy, smo, sd] = startVal.split('-').map(Number);
+  const [ey, emo, ed] = endVal.split('-').map(Number);
+  const start = new Date(sy, smo - 1, sd);
+  const end = new Date(ey, emo - 1, ed);
+  const n = Math.round((end - start) / 86400000) + 1;
+  if (n < 1 || n > 14) { wrap.innerHTML = '<p class="gen-hint" style="color:#c0392b;">End date must be after start date (max 14 days).</p>'; return; }
+  // Update hidden numDays
+  const ndEl = document.getElementById('setNumDays');
+  if (ndEl) ndEl.value = n;
   const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const tabs = [];
   for (let i = 0; i < n; i++) {
-    const dt = new Date(y, mo - 1, d + i);
-    const label = monthNames[dt.getMonth()] + ' ' + dt.getDate();
-    tabs.push(label + ' · Day ' + (i + 1));
+    const dt = new Date(sy, smo - 1, sd + i);
+    tabs.push(monthNames[dt.getMonth()] + ' ' + dt.getDate() + ' · Day ' + (i + 1));
   }
-  wrap.innerHTML = '<p class="gen-hint" style="margin-bottom:6px;">Day tabs will be:</p>' +
+  wrap.innerHTML = '<p class="gen-hint" style="margin-bottom:6px;">' + n + ' day' + (n===1?'':'s') + ':</p>' +
     '<div style="display:flex;flex-wrap:wrap;gap:6px;">' +
     tabs.map(t => `<span style="background:#f0f0f0;border-radius:20px;padding:4px 12px;font-size:12px;font-weight:700;">${t}</span>`).join('') +
     '</div>';
@@ -3827,8 +3837,16 @@ function previewDayTabs() {
 function renderDayLabelInputs() { previewDayTabs(); } // legacy alias
 
 async function saveSettings() {
-  const n = parseInt(document.getElementById('setNumDays').value) || 4;
-  const dateVal = document.getElementById('setStartDate')?.value; // 'YYYY-MM-DD'
+  const startVal = document.getElementById('setStartDate')?.value;
+  const endVal = document.getElementById('setEndDate')?.value;
+  let n = 4;
+  if (startVal && endVal) {
+    const [sy, smo, sd] = startVal.split('-').map(Number);
+    const [ey, emo, ed] = endVal.split('-').map(Number);
+    n = Math.round((new Date(ey, emo-1, ed) - new Date(sy, smo-1, sd)) / 86400000) + 1;
+    n = Math.max(1, Math.min(14, n));
+  }
+  const dateVal = startVal || '';
 
   // Generate day labels/titles from start date
   const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -3898,8 +3916,16 @@ async function saveAllSettings() {
   }
 
   // ── Read trip settings (same logic as old saveSettings) ──
-  const n = parseInt(document.getElementById('setNumDays').value) || 4;
-  const dateVal2 = document.getElementById('setStartDate')?.value;
+  const startVal2 = document.getElementById('setStartDate')?.value;
+  const endVal2 = document.getElementById('setEndDate')?.value;
+  let n = 4;
+  if (startVal2 && endVal2) {
+    const [sy, smo, sd] = startVal2.split('-').map(Number);
+    const [ey, emo, ed] = endVal2.split('-').map(Number);
+    n = Math.round((new Date(ey, emo-1, ed) - new Date(sy, smo-1, sd)) / 86400000) + 1;
+    n = Math.max(1, Math.min(14, n));
+  }
+  const dateVal2 = startVal2 || '';
   const monthNames2 = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const dayLabels = [], dayTitles = [];
   for (let i = 0; i < n; i++) {
