@@ -2301,6 +2301,11 @@ function addFromSearch(i) {
       if (fixed) { stopRef.lat = fixed.lat; stopRef.lng = fixed.lng; renderAll(); cloudSave('Fixed coords: ' + r.name); }
     });
   }
+  // Auto-enrich with Wikipedia image + richer content if not already enriched
+  if (!stopRef.image && !stopRef.facts) {
+    const newStopIdx = days[dayIdx].stops.length - 1;
+    setTimeout(() => enrichStopContent(newStopIdx, dayIdx), 500);
+  }
   // Clear result card to show it was added
   const cards = document.querySelectorAll('.search-result-card');
   if (cards[i]) {
@@ -3469,7 +3474,7 @@ function renderDetail() {
     <div class="detail-section">
       <div class="section-label">Interesting facts</div>
       <div style="display:flex;flex-direction:column;gap:8px;">
-        ${s.facts.map(f => `<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;background:#f8f7ff;border-radius:10px;border-left:3px solid #5c4db1;"><span style="font-size:16px;flex-shrink:0;">💡</span><span style="font-size:13px;color:#333;line-height:1.5;">${f}</span></div>`).join('')}
+        ${s.facts.map((f, i) => `<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;background:#f8f7ff;border-radius:10px;border-left:3px solid ${s.color||'#5c4db1'};"><span style="font-size:16px;flex-shrink:0;">${['💡','🏛️','⭐','🔍','🎭','📜'][i%6]}</span><span style="font-size:13px;color:#333;line-height:1.5;">${f}</span></div>`).join('')}
       </div>
     </div>` : ''}
 
@@ -3861,6 +3866,11 @@ function insertSuggestedStop(resultIdx, afterIdx, dayIdx) {
     lookupCoords(r.name + (r.address ? ', ' + r.address : '')).then(fixed => {
       if (fixed) { stop.lat = fixed.lat; stop.lng = fixed.lng; renderAll(); cloudSave('Fixed coords: ' + r.name); }
     });
+  }
+  // Auto-enrich with Wikipedia image + richer content
+  if (!stop.image && !stop.facts) {
+    const insertedIdx = days[dayIdx].stops.indexOf(stop);
+    if (insertedIdx >= 0) setTimeout(() => enrichStopContent(insertedIdx, dayIdx), 500);
   }
 }
 
@@ -5195,15 +5205,17 @@ The "travel" field must give LOCAL directions WITHIN ${city} only. No airports o
 
 {"history":"3 rich paragraphs in HTML with <strong> tags. Cover: origins and founding, key historical events/famous figures, architectural or cultural significance. Separate paragraphs with \\n\\n","facts":["Specific fact with numbers/dates","Surprising or little-known detail","Famous person or event connection","Practical insider tip for visitors"],"todo":"<p><span class=\\"tip-icon\\">🏛️</span><strong>What to do:</strong> 4-5 practical sentences on highlights and must-sees</p>","travel":"🚶 or 🚇 local directions within ${city} ${fromHint}","type_label":"short description like Museum · Free","prebook":false,"free":true,"color":"#5c4db1"}`;
   try {
-    const text = await callAnthropic({ prompt, maxTokens: 2500 });
+    const [text, wikiImg] = await Promise.all([
+      callAnthropic({ prompt, maxTokens: 2500 }),
+      fetchWikipediaImage(name)
+    ]);
     // Extract first { ... } block even if AI adds preamble
     let raw = (text || '{}').replace(/```json|```/g,'').trim();
     const oStart = raw.indexOf('{');
     const oEnd = raw.lastIndexOf('}');
     if (oStart >= 0 && oEnd > oStart) raw = raw.slice(oStart, oEnd + 1);
     const info = JSON.parse(raw);
-    const imgUrl = await fetchWikipediaImage(name);
-    addStop(dayIdx, {name, address, lat, lng, type, duration, ...info, image: imgUrl || undefined});
+    addStop(dayIdx, {name, address, lat, lng, type, duration, ...info, image: wikiImg || info.image || undefined});
   } catch(e) {
     addStop(dayIdx, {name, address, lat, lng, type, duration, history:`<strong>${name}</strong> is at ${address}.`, todo:`<p>Explore ${name} during your visit.</p>`, travel:`🚇 Check Google Maps for directions.`, type_label:type, prebook:false, free:true, color:'#5c4db1'});
     showToast('AI unavailable — basic entry added');
