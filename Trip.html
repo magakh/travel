@@ -1377,6 +1377,22 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
         <button class="gen-btn" onclick="repairAllCoords()" style="background:#b03a00;margin-bottom:0;">🔧 Repair all coordinates</button>
       </div>
 
+      <!-- Personal Anthropic API key (overrides Edge Function) -->
+      <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
+        <h3 style="margin:0 0 6px 0;font-size:14px;">🔑 Anthropic API key</h3>
+        <p class="gen-hint" style="margin-bottom:8px;font-size:12px;">
+          Optional. Used as a fallback when the shared backend is out of credit or unavailable.
+          Get yours at <a href="https://platform.claude.com/settings/keys" target="_blank" rel="noopener" style="color:#1a73e8;text-decoration:underline;">platform.claude.com/settings/keys</a>.
+        </p>
+        <input class="form-input" id="setApiKey" type="password" placeholder="sk-ant-... (paste here)" autocomplete="off" style="margin-bottom:8px;font-family:monospace;font-size:12px;">
+        <div id="apiKeyStatus" class="gen-hint" style="margin-bottom:8px;font-size:12px;"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <button class="gen-btn" onclick="saveApiKey()" style="background:#1a73e8;margin:0;">Save key</button>
+          <button class="gen-btn" onclick="clearApiKey()" style="background:#fff;color:#c0392b;border:1px solid #c0392b;margin:0;">Clear</button>
+        </div>
+        <p class="gen-hint" style="margin-top:6px;font-size:11px;color:#888;">Stored only in this browser session. Cleared when you close the tab.</p>
+      </div>
+
       <!-- ── SAVE ── -->
       <button class="gen-btn" onclick="saveAllSettings()" style="background:#1a1a1a;margin-top:14px;">💾 Save all settings</button>
       <p class="gen-hint">Trip settings &amp; hotel sync to all devices via Supabase.</p>
@@ -3814,6 +3830,7 @@ function loadSettingsUI() {
     }
   }
   previewDayTabs();
+  if (typeof refreshApiKeyStatus === 'function') refreshApiKeyStatus();
 }
 
 // Convert "5:00 PM" → "17:00" (for HTML time input)
@@ -5287,7 +5304,46 @@ function showToast(msg, isError=false) {
 
 // ── API KEY / ANTHROPIC HELPER ────────────────────────────────────
 function getApiKey() {
-  return sessionStorage.getItem('anthropic_key') || '';
+  return sessionStorage.getItem('anthropic_key') || localStorage.getItem('anthropic_key') || '';
+}
+
+function saveApiKey() {
+  const v = (document.getElementById('setApiKey')?.value || '').trim();
+  const status = document.getElementById('apiKeyStatus');
+  if (!v) {
+    if (status) status.innerHTML = '<span style="color:#c0392b;">Paste a key first.</span>';
+    return;
+  }
+  if (!v.startsWith('sk-ant-')) {
+    if (status) status.innerHTML = '<span style="color:#c0392b;">Doesn\'t look like an Anthropic key (should start with <code>sk-ant-</code>).</span>';
+    return;
+  }
+  // Persist across sessions for convenience
+  try { localStorage.setItem('anthropic_key', v); } catch(e) {}
+  try { sessionStorage.setItem('anthropic_key', v); } catch(e) {}
+  if (status) status.innerHTML = '<span style="color:#1a7a3a;">✓ Saved. AI calls will use your key.</span>';
+  document.getElementById('setApiKey').value = '';
+}
+
+function clearApiKey() {
+  try { localStorage.removeItem('anthropic_key'); } catch(e) {}
+  try { sessionStorage.removeItem('anthropic_key'); } catch(e) {}
+  const status = document.getElementById('apiKeyStatus');
+  if (status) status.innerHTML = '<span style="color:#888;">Key cleared.</span>';
+  const inp = document.getElementById('setApiKey');
+  if (inp) inp.value = '';
+}
+
+function refreshApiKeyStatus() {
+  const status = document.getElementById('apiKeyStatus');
+  if (!status) return;
+  const k = getApiKey();
+  if (k) {
+    const masked = k.slice(0, 11) + '…' + k.slice(-4);
+    status.innerHTML = '<span style="color:#1a7a3a;">✓ Personal key set (<code>' + masked + '</code>)</span>';
+  } else {
+    status.innerHTML = '<span style="color:#888;">No personal key set — using shared backend.</span>';
+  }
 }
 
 // Single path for all AI calls. Prefers the Supabase Edge Function (so the
