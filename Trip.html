@@ -3431,6 +3431,7 @@ let _suggestInsertDay = 0;
 let _suggestMap = null;
 let _suggestMarkers = [];
 let _suggestResults = [];
+let _suggestCtx = {}; // stores midLat/midLng/afterIdx/dayIdx/query for "suggest more"
 
 function suggestBetween(afterIdx, beforeIdx, dayIdx) {
   _suggestInsertAfter = afterIdx; // insert AFTER this index
@@ -3494,19 +3495,26 @@ function suggestBetween(afterIdx, beforeIdx, dayIdx) {
     if (!mapEl) return;
     _suggestMap = L.map(mapEl, { zoomControl: true, attributionControl: false }).setView([midLat, midLng], 15);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(_suggestMap);
-    // Show surrounding stops as context pins
+
+    // Show FROM and TO stops as bold labeled pins
+    const mkContextPin = (lat, lng, label, name) => {
+      const ic = L.divIcon({ className:'', html:
+        '<div style="background:#1a1a1a;color:#fff;padding:3px 7px;border-radius:10px;font-size:10px;font-weight:900;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.4);border:2px solid #fff;">' + label + '</div>',
+        iconAnchor:[0,10] });
+      L.marker([lat, lng], { icon: ic }).addTo(_suggestMap).bindPopup('<b>' + label + ':</b> ' + name);
+    };
     const ctx = days[dayIdx].stops;
     if (afterIdx >= 0 && ctx[afterIdx]) {
       const a = ctx[afterIdx];
-      L.circleMarker([a.lat, a.lng], {radius:8, color:a.color||'#888', fillColor:a.color||'#888', fillOpacity:0.7}).addTo(_suggestMap).bindPopup('<b>From:</b> ' + a.name);
+      mkContextPin(a.lat, a.lng, 'FROM', a.name);
+    } else if (window.HOTEL_DATA) {
+      mkContextPin(window.HOTEL_DATA.lat, window.HOTEL_DATA.lng, 'FROM', window.HOTEL_DATA.name);
     }
     if (beforeIdx >= 0 && ctx[beforeIdx]) {
       const b = ctx[beforeIdx];
-      L.circleMarker([b.lat, b.lng], {radius:8, color:b.color||'#888', fillColor:b.color||'#888', fillOpacity:0.7}).addTo(_suggestMap).bindPopup('<b>To:</b> ' + b.name);
-    }
-    if (window.HOTEL_DATA && (afterIdx < 0 || beforeIdx < 0)) {
-      const h = window.HOTEL_DATA;
-      L.marker([h.lat, h.lng]).addTo(_suggestMap).bindPopup('🏨 ' + h.name);
+      mkContextPin(b.lat, b.lng, 'TO', b.name);
+    } else if (window.HOTEL_DATA) {
+      mkContextPin(window.HOTEL_DATA.lat, window.HOTEL_DATA.lng, 'TO', window.HOTEL_DATA.name);
     }
   }, 150);
 }
@@ -3528,11 +3536,12 @@ async function runSuggest(midLat, midLng, afterIdx, dayIdx) {
   try {
     const city = getTripCity();
     const isWalk = query.toLowerCase().includes('walk') || query.toLowerCase().includes('neighbourhood') || query.toLowerCase().includes('route');
+    _suggestCtx = { midLat, midLng, afterIdx, dayIdx, query, isWalk, city };
     const prompt = isWalk
-      ? 'You are a walking tour expert for ' + city + '. Suggest 4 excellent short walking experiences or scenic routes between lat ' + midLat.toFixed(3) + ', lng ' + midLng.toFixed(3) + ' matching: "' + query + '". Each should be a specific street, lane, square or area in ' + city + ' worth strolling through. Return ONLY a JSON array (no markdown): [{"name":"...","type":"Walking route · neighbourhood","address":"...","lat":0.0,"lng":0.0,"why":"1 sentence why this walk is special","duration":"20 min"}]. Use real locations with accurate coordinates.'
-      : 'You are a travel expert for ' + city + '. Suggest 4 excellent real places matching: "' + query + '" near lat ' + midLat.toFixed(3) + ', lng ' + midLng.toFixed(3) + ' in ' + city + '. Return ONLY a JSON array (no markdown): [{"name":"...","type":"...","address":"...","lat":0.0,"lng":0.0,"why":"1 sentence why it fits here","duration":"45 min"}]. Use real places with accurate coordinates.';
+      ? 'You are a walking tour expert for ' + city + '. Suggest 6 excellent short walking experiences or scenic routes between lat ' + midLat.toFixed(3) + ', lng ' + midLng.toFixed(3) + ' matching: "' + query + '". Each should be a specific street, lane, square or area in ' + city + ' worth strolling through. Return ONLY a JSON array (no markdown): [{"name":"...","type":"Walking route · neighbourhood","address":"...","lat":0.0,"lng":0.0,"why":"1 sentence why this walk is special","duration":"20 min"}]. Use real locations with accurate coordinates.'
+      : 'You are a travel expert for ' + city + '. Suggest 6 excellent real places matching: "' + query + '" near lat ' + midLat.toFixed(3) + ', lng ' + midLng.toFixed(3) + ' in ' + city + '. Return ONLY a JSON array (no markdown): [{"name":"...","type":"...","address":"...","lat":0.0,"lng":0.0,"why":"1 sentence why it fits here","duration":"45 min"}]. Use real places with accurate coordinates.';
 
-    const text = await callAnthropic({ prompt, maxTokens: 1000 });
+    const text = await callAnthropic({ prompt, maxTokens: 1500 });
     _suggestResults = extractJsonArray(text);
     if (!_suggestResults.length) throw new Error('AI returned no usable results');
     renderSuggestResults(_suggestResults, afterIdx, dayIdx);
@@ -3588,7 +3597,30 @@ function renderSuggestResults(results, afterIdx, dayIdx) {
       '</div>' +
     '</div>';
   });
+  html += '<button id="suggestMoreBtn" onclick="event.stopPropagation();runSuggestMore()" style="width:100%;margin-top:8px;padding:10px;border-radius:12px;border:1px dashed #bbb;background:#fafafa;font-size:13px;font-weight:700;color:#555;cursor:pointer;">🔄 Suggest more</button>';
   listEl.innerHTML = html;
+}
+
+async function runSuggestMore() {
+  const btn = document.getElementById('suggestMoreBtn');
+  if (btn) { btn.textContent = '⏳ Finding more…'; btn.disabled = true; }
+  const { midLat, midLng, afterIdx, dayIdx, query, isWalk, city } = _suggestCtx;
+  const existing = _suggestResults.map(r => r.name).join(', ');
+  try {
+    const prompt = isWalk
+      ? 'You are a walking tour expert for ' + city + '. Suggest 4 MORE walking experiences near lat ' + midLat.toFixed(3) + ', lng ' + midLng.toFixed(3) + ' matching: \"' + query + '\". Exclude these already shown: ' + existing + '. Return ONLY a JSON array (no markdown): [{\"name\":\"...\",\"type\":\"Walking route · neighbourhood\",\"address\":\"...\",\"lat\":0.0,\"lng\":0.0,\"why\":\"1 sentence\",\"duration\":\"20 min\"}].'
+      : 'You are a travel expert for ' + city + '. Suggest 4 MORE real places matching: \"' + query + '\" near lat ' + midLat.toFixed(3) + ', lng ' + midLng.toFixed(3) + '. Exclude these already shown: ' + existing + '. Return ONLY a JSON array (no markdown): [{\"name\":\"...\",\"type\":\"...\",\"address\":\"...\",\"lat\":0.0,\"lng\":0.0,\"why\":\"1 sentence\",\"duration\":\"45 min\"}].';
+    const text = await callAnthropic({ prompt, maxTokens: 1000 });
+    const more = extractJsonArray(text);
+    if (more.length) {
+      _suggestResults = _suggestResults.concat(more);
+      renderSuggestResults(_suggestResults, afterIdx, dayIdx);
+    } else {
+      if (btn) { btn.textContent = 'No more found'; btn.disabled = true; }
+    }
+  } catch(e) {
+    if (btn) { btn.textContent = '🔄 Suggest more'; btn.disabled = false; }
+  }
 }
 
 function highlightSuggestResult(i) {
@@ -4856,7 +4888,7 @@ The "travel" field must give LOCAL directions WITHIN ${city} (walking/transit fr
 
 {"history":"2-3 paragraphs in HTML with <strong> tags, \\n\\n between paragraphs","todo":"<p><span class=\\"tip-icon\\">🏛️</span><strong>What to do:</strong> 3-4 practical sentences</p>","travel":"🚶 or 🚇 local directions within ${city} ${fromHint}","type_label":"short description like Museum · Free","prebook":false,"free":true,"color":"#5c4db1"}`;
   try {
-    const text = await callAnthropic({ prompt, maxTokens: 1000 });
+    const text = await callAnthropic({ prompt, maxTokens: 1500 });
     // Extract first { ... } block even if AI adds preamble
     let raw = (text || '{}').replace(/```json|```/g,'').trim();
     const oStart = raw.indexOf('{');
