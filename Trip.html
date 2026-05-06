@@ -3649,9 +3649,17 @@ async function runSuggest(midLat, midLng, afterIdx, dayIdx, beforeIdx) {
     const isWalk = query.toLowerCase().includes('walk') || query.toLowerCase().includes('neighbourhood') || query.toLowerCase().includes('route');
     _suggestCtx = { midLat, midLng, afterIdx, dayIdx, query, isWalk, city };
 
+    // Get FROM and TO stop names + coords for location context
+    const ctxStops = days[dayIdx] && days[dayIdx].stops || [];
+    const fromStop = afterIdx >= 0 && ctxStops[afterIdx] ? ctxStops[afterIdx] : window.HOTEL_DATA;
+    const toStop   = beforeIdx >= 0 && ctxStops[beforeIdx] ? ctxStops[beforeIdx] : window.HOTEL_DATA;
+    const locationCtx = fromStop && toStop
+      ? ' The person is walking from "' + fromStop.name + '" to "' + toStop.name + '" — only suggest places that are actually on or very close to this route (within a 5-10 min walk of the direct path). Midpoint is lat ' + midLat.toFixed(3) + ', lng ' + midLng.toFixed(3) + '.'
+      : ' Near lat ' + midLat.toFixed(3) + ', lng ' + midLng.toFixed(3) + ' in ' + city + '.';
+
     const prompt = isWalk
-      ? 'You are a walking tour expert for ' + city + '. Suggest 6 excellent short walking experiences or scenic routes near lat ' + midLat.toFixed(3) + ', lng ' + midLng.toFixed(3) + ' matching: "' + query + '". Each should be a specific street, lane, square or area in ' + city + ' worth strolling through. Return ONLY a JSON array (no markdown): [{"name":"...","type":"Walking route · neighbourhood","address":"...","lat":0.0,"lng":0.0,"why":"1 sentence why this walk is special","duration":"20 min"}]. Use real locations with accurate coordinates.'
-      : 'You are a travel expert for ' + city + '. Suggest 6 excellent real places matching: "' + query + '" near lat ' + midLat.toFixed(3) + ', lng ' + midLng.toFixed(3) + ' in ' + city + '. Return ONLY a JSON array (no markdown): [{"name":"...","type":"...","address":"...","lat":0.0,"lng":0.0,"why":"1 sentence why it fits here","duration":"45 min"}]. Use real places with accurate coordinates.';
+      ? 'You are a walking tour expert for ' + city + '. Suggest 6 excellent short walking experiences or scenic routes matching: "' + query + '".' + locationCtx + ' Return ONLY a JSON array (no markdown): [{"name":"...","type":"Walking route · neighbourhood","address":"...","lat":0.0,"lng":0.0,"why":"1 sentence why this walk is special","duration":"20 min"}]. Use real locations with accurate coordinates.'
+      : 'You are a travel expert for ' + city + '. Suggest 6 excellent real places matching: "' + query + '".' + locationCtx + ' Return ONLY a JSON array (no markdown): [{"name":"...","type":"...","address":"...","lat":0.0,"lng":0.0,"why":"1 sentence why it fits here","duration":"45 min"}]. Use real places with accurate coordinates.';
 
     const text = await callAnthropic({ prompt, maxTokens: 1500 });
     _suggestResults = extractJsonArray(text);
