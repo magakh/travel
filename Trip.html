@@ -3540,12 +3540,12 @@ function suggestBetween(afterIdx, beforeIdx, dayIdx) {
 
         <input id="suggestQuery" type="text" placeholder="Describe what you're looking for…"
           class="suggest-input"
-          onkeydown="if(event.key==='Enter')runSuggest(${midLat},${midLng},${afterIdx},${dayIdx})">
+          onkeydown="if(event.key==='Enter')runSuggest(${midLat},${midLng},${afterIdx},${dayIdx},${beforeIdx})">
 
         <div class="suggest-chips">
-          ${SUGGEST_CATEGORIES.map(c => `<button class="suggest-chip" onclick="document.getElementById('suggestQuery').value='${c.label}';runSuggest(${midLat},${midLng},${afterIdx},${dayIdx})">${c.icon} ${c.label}</button>`).join('')}
+          ${SUGGEST_CATEGORIES.map(c => `<button class="suggest-chip" onclick="document.getElementById('suggestQuery').value='${c.label}';runSuggest(${midLat},${midLng},${afterIdx},${dayIdx},${beforeIdx})">${c.icon} ${c.label}</button>`).join('')}
           <button class="suggest-chip suggest-more-btn" onclick="document.getElementById('suggestPanel').classList.add('show-extra')">⋯ More</button>
-          ${SUGGEST_CATEGORIES_MORE.map(c => `<button class="suggest-chip suggest-chip-extra" onclick="document.getElementById('suggestQuery').value='${c.label}';runSuggest(${midLat},${midLng},${afterIdx},${dayIdx})">${c.icon} ${c.label}</button>`).join('')}
+          ${SUGGEST_CATEGORIES_MORE.map(c => `<button class="suggest-chip suggest-chip-extra" onclick="document.getElementById('suggestQuery').value='${c.label}';runSuggest(${midLat},${midLng},${afterIdx},${dayIdx},${beforeIdx})">${c.icon} ${c.label}</button>`).join('')}
         </div>
       </div>
 
@@ -3593,7 +3593,12 @@ function suggestBetween(afterIdx, beforeIdx, dayIdx) {
   }, 150);
 }
 
-async function runSuggest(midLat, midLng, afterIdx, dayIdx) {
+async function runSuggest(midLat, midLng, afterIdx, dayIdx, beforeIdx) {
+  // Default beforeIdx if not passed: assume it's the next consecutive stop, or hotel if past end
+  if (typeof beforeIdx === 'undefined') {
+    const stops = days[dayIdx] && days[dayIdx].stops || [];
+    beforeIdx = (afterIdx + 1 < stops.length) ? afterIdx + 1 : -1;
+  }
   const query = document.getElementById('suggestQuery')?.value.trim();
   if (!query) return;
   const listEl = document.getElementById('suggestResultsList');
