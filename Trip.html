@@ -2389,14 +2389,20 @@ function getTravelMinsForKey(key, fromLat, fromLng, toLat, toLng) {
 }
 
 // Called when user taps a mode pill
-function selectTravelMode(key, mode, mins, dayIdx) {
+function selectTravelMode(key, mode, mins, dayIdx, fromStopIdx) {
   _segmentMode[key] = { mode, mins };
+  // Persist on the stop object so it survives page reload (included in getSaveData)
+  const stops = days[dayIdx] && days[dayIdx].stops;
+  if (stops && fromStopIdx >= 0 && stops[fromStopIdx]) {
+    stops[fromStopIdx].travelAfter = { mode, mins };
+  }
   const savedDay = currentDay;
   currentDay = dayIdx;
   reassignTimesForDay(dayIdx);
   currentDay = savedDay;
   renderStopList();
   updateConnectorLabels(dayIdx, days[dayIdx].stops);
+  autoSave();
 }
 
 async function getWalkMins(fromLat, fromLng, toLat, toLng) {
@@ -2524,20 +2530,26 @@ async function loadWalkTimes() {
 function updateConnectorLabels(day, stops) {
   const hd = window.HOTEL_DATA;
 
-  const paintPills = (elId, a, b) => {
+  const paintPills = (elId, a, b, fromStopIdx) => {
     if (!a || !b) return;
     const el = document.getElementById(elId);
     if (!el) return;
     const key = a.lat.toFixed(4)+','+a.lng.toFixed(4)+'->'+b.lat.toFixed(4)+','+b.lng.toFixed(4);
-    const selected = _segmentMode[key]?.mode || 'walk';
 
+    // Restore persisted mode from stop object if not already in _segmentMode
+    const stops = days[day] && days[day].stops;
+    if (fromStopIdx >= 0 && stops && stops[fromStopIdx] && stops[fromStopIdx].travelAfter && !_segmentMode[key]) {
+      _segmentMode[key] = stops[fromStopIdx].travelAfter;
+    }
+
+    const selected = _segmentMode[key]?.mode || 'walk';
     const walkMins = _walkCache[key] || _walkMinsFallback(a.lat, a.lng, b.lat, b.lng);
     const carMins = _carCache[key] || _carMinsFallback(a.lat, a.lng, b.lat, b.lng);
     const trainMins = _trainEstimateMins(walkMins, a.lat, a.lng, b.lat, b.lng);
 
     const pill = (mode, emoji, mins) => {
       const isActive = selected === mode;
-      return `<button class="tc-mode-pill${isActive?' active':''}" onclick="event.stopPropagation();selectTravelMode('${key}','${mode}',${mins},${day})">${emoji} ${mins} min</button>`;
+      return `<button class="tc-mode-pill${isActive?' active':''}" onclick="event.stopPropagation();selectTravelMode('${key}','${mode}',${mins},${day},${fromStopIdx})">${emoji} ${mins} min</button>`;
     };
 
     const pillsHtml = `<div class="tc-mode-pills">${pill('walk','🚶',walkMins)}${pill('car','🚗',carMins)}${pill('train','🚇',trainMins)}</div>`;
@@ -2549,11 +2561,11 @@ function updateConnectorLabels(day, stops) {
   };
 
   if (hd) {
-    if (stops[0]) paintPills('tc-'+day+'-1', hd, stops[0]);
-    for (let i = 0; i < stops.length - 1; i++) paintPills('tc-'+day+'-'+(i+2), stops[i], stops[i+1]);
-    if (stops.length > 0) paintPills('tc-'+day+'-'+(stops.length+1), stops[stops.length-1], hd);
+    if (stops[0]) paintPills('tc-'+day+'-1', hd, stops[0], -1);
+    for (let i = 0; i < stops.length - 1; i++) paintPills('tc-'+day+'-'+(i+2), stops[i], stops[i+1], i);
+    if (stops.length > 0) paintPills('tc-'+day+'-'+(stops.length+1), stops[stops.length-1], hd, stops.length-1);
   } else {
-    for (let i = 0; i < stops.length - 1; i++) paintPills('tc-'+day+'-'+(i+1), stops[i], stops[i+1]);
+    for (let i = 0; i < stops.length - 1; i++) paintPills('tc-'+day+'-'+(i+1), stops[i], stops[i+1], i);
   }
 
   // Fetch real car times in background and refresh when done
@@ -2881,6 +2893,7 @@ function applyStopTime(i) {
   renderAll();
   if (currentView === 'detail') renderDetail();
   checkConflicts();
+  autoSave();
   showToast('Updated ✓');
 }
 
