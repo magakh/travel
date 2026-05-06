@@ -1379,10 +1379,9 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
 
       <!-- Personal Anthropic API key (overrides Edge Function) -->
       <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
-        <h3 style="margin:0 0 6px 0;font-size:14px;">🔑 Anthropic API key</h3>
-        <p class="gen-hint" style="margin-bottom:8px;font-size:12px;">
-          Optional. Used as a fallback when the shared backend is out of credit or unavailable.
-          Get yours at <a href="https://platform.claude.com/settings/keys" target="_blank" rel="noopener" style="color:#1a73e8;text-decoration:underline;">platform.claude.com/settings/keys</a>.
+        <h3 style="margin:0 0 6px 0;font-size:14px;">🔑 Anthropic API key <span style="font-weight:400;color:var(--muted);font-size:12px;">(this device only)</span></h3>
+        <p class="gen-hint" style="margin-bottom:8px;font-size:12px;line-height:1.5;">
+          Used as a fallback when the shared backend is out of credit. Get yours at <a href="https://platform.claude.com/settings/keys" target="_blank" rel="noopener" style="color:#1a73e8;text-decoration:underline;">platform.claude.com/settings/keys</a>.
         </p>
         <input class="form-input" id="setApiKey" type="password" placeholder="sk-ant-... (paste here)" autocomplete="off" style="margin-bottom:8px;font-family:monospace;font-size:12px;">
         <div id="apiKeyStatus" class="gen-hint" style="margin-bottom:8px;font-size:12px;"></div>
@@ -1390,7 +1389,9 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
           <button class="gen-btn" onclick="saveApiKey()" style="background:#1a73e8;margin:0;">Save key</button>
           <button class="gen-btn" onclick="clearApiKey()" style="background:#fff;color:#c0392b;border:1px solid #c0392b;margin:0;">Clear</button>
         </div>
-        <p class="gen-hint" style="margin-top:6px;font-size:11px;color:#888;">Stored only in this browser session. Cleared when you close the tab.</p>
+        <p class="gen-hint" style="margin-top:8px;font-size:11px;color:#888;line-height:1.5;">
+          🔒 <b>Stays in this browser only.</b> Never written to the trip URL, Supabase, or any saved trip — so when you share a trip link, recipients never see your key. If you share the app with someone to make their own trips, they should paste their own key here.
+        </p>
       </div>
 
       <!-- ── SAVE ── -->
