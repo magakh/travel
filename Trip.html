@@ -1248,79 +1248,51 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
       <button class="gen-btn" onclick="runFillItinerary()" style="background:#1a1a1a;margin-bottom:4px;">🪄 Fill empty slots with AI</button>
       <p class="gen-hint" style="margin-bottom:16px;">AI fills empty time slots across selected days with popular picks.</p>
 
-      <!-- ── UNIFIED AI SEARCH ── -->
+      <!-- ── UNIFIED SEARCH + ADD ── -->
       <div style="border-top:1px solid var(--border);padding-top:14px;">
-      <p style="font-size:12px;color:var(--muted);margin-bottom:8px;">Or search for a specific place:</p>
+        <label class="form-label">Place name or description</label>
+        <input class="form-input" id="searchQuery" type="text"
+          placeholder="🔍 e.g. Harrods, rooftop bar, hidden café near Soho…"
+          oninput="searchExisting(this.value)"
+          onkeydown="if(event.key==='Enter') unifiedAiAdd();"
+          style="margin-bottom:6px;">
+        <div id="existingResults" style="margin-bottom:8px;"></div>
 
-      <input class="form-input" id="searchQuery" type="text"
-        placeholder="🔍 Rooftop bar, hidden café, museum near Westminster…"
-        oninput="searchExisting(this.value)"
-        onkeydown="if(event.key==='Enter') aiSearch();"
-        style="margin-bottom:6px;">
-      <div id="existingResults" style="margin-bottom:10px;"></div>
+        <label class="form-label">Address <span style="font-weight:400;color:var(--muted);">(optional)</span></label>
+        <input class="form-input" id="addAddress" type="text" placeholder="e.g. 87-135 Brompton Rd, London" onblur="geocodeAddStopAddress()" style="margin-bottom:4px;">
+        <p class="gen-hint" id="addGeocodeStatus" style="margin-bottom:8px;"></p>
 
-      <label class="form-label" style="margin-bottom:4px;">Add result to day</label>
-      <select class="form-input" id="searchDay" style="margin-bottom:10px;">
-        <option value="0">Day 1</option>
-        <option value="1">Day 2</option>
-        <option value="2">Day 3</option>
-        <option value="3">Day 4</option>
-      </select>
-      <button class="gen-btn" id="searchBtn" onclick="aiSearch()" style="background:#5c4db1;">🤖 Search with AI →</button>
-      <p class="gen-hint">AI finds matching places, writes history &amp; tips, and adds to your itinerary</p>
-      <div id="searchResults" style="margin-top:16px;"></div>
-      </div>
-
-      <!-- ── MANUAL ADD (collapsed) ── -->
-      <details style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
-        <summary style="font-size:13px;font-weight:700;color:#555;cursor:pointer;margin-bottom:12px;">➕ Add a specific known place manually</summary>
-
-        <label class="form-label">Place name *</label>
-        <input class="form-input" id="addName" type="text" placeholder="e.g. Borough Market">
-        <label class="form-label">Address *</label>
-        <input class="form-input" id="addAddress" type="text" placeholder="e.g. 8 Southwark St, London" onblur="geocodeAddStopAddress()">
-        <p class="gen-hint" id="addGeocodeStatus" style="margin-bottom:10px;">💡 Coordinates will be looked up automatically.</p>
-        <details style="margin-bottom:10px;">
-          <summary style="font-size:12px;color:#888;cursor:pointer;">Advanced: set coordinates manually</summary>
-          <div class="form-row" style="margin-top:8px;">
-            <div>
-              <label class="form-label">Latitude</label>
-              <input class="form-input" id="addLat" type="number" step="0.0001" placeholder="e.g. 40.7484">
-            </div>
-            <div>
-              <label class="form-label">Longitude</label>
-              <input class="form-input" id="addLng" type="number" step="0.0001" placeholder="e.g. -73.9857">
-            </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;">
+          <div>
+            <label class="form-label">Day</label>
+            <select class="form-input" id="searchDay" style="margin:0;">
+              <option value="0">Day 1</option>
+              <option value="1">Day 2</option>
+              <option value="2">Day 3</option>
+              <option value="3">Day 4</option>
+            </select>
           </div>
-        </details>
-        <label class="form-label">Type</label>
-        <select class="form-input" id="addType">
-          <option value="museum">Museum / Gallery</option>
-          <option value="restaurant">Restaurant / Café</option>
-          <option value="market">Market / Street food</option>
-          <option value="park">Park / Garden</option>
-          <option value="landmark">Historic landmark</option>
-          <option value="church">Church / Cathedral</option>
-          <option value="walk">Walking / Neighbourhood</option>
-          <option value="rooftop">Rooftop / View</option>
-        </select>
-        <label class="form-label">Add to day</label>
-        <select class="form-input" id="addDay">
-          <option value="0">Day 1</option>
-          <option value="1">Day 2</option>
-          <option value="2">Day 3</option>
-          <option value="3">Day 4</option>
-        </select>
-        <label class="form-label">Duration</label>
-        <select class="form-input" id="addDuration">
-          <option>30 min</option>
-          <option selected>60 min</option>
-          <option>90 min</option>
-          <option>2 hours</option>
-        </select>
-        <button class="gen-btn" id="genBtn" onclick="generateLocation()">✨ Add &amp; auto-fill details with AI</button>
-        <p class="gen-hint">AI writes history, tips &amp; travel directions for this specific place</p>
-      </details>
+          <div>
+            <label class="form-label">Duration</label>
+            <select class="form-input" id="addDuration" style="margin:0;">
+              <option>30 min</option>
+              <option selected>60 min</option>
+              <option>90 min</option>
+              <option>2 hours</option>
+            </select>
+          </div>
+        </div>
+
+        <input type="hidden" id="addName">
+        <input type="hidden" id="addLat">
+        <input type="hidden" id="addLng">
+        <input type="hidden" id="addType" value="attraction">
+        <input type="hidden" id="addDay">
+
+        <button class="gen-btn" id="searchBtn" onclick="unifiedAiAdd()" style="background:#5c4db1;">🤖 Search / Add with AI →</button>
+        <p class="gen-hint">With address: adds the place directly. Without address: shows matching options to pick from.</p>
+        <div id="searchResults" style="margin-top:16px;"></div>
+      </div>
     </div>
   </div>
 
@@ -2145,6 +2117,24 @@ function showSaveMenu() {
 }
 
 // ── AI SEARCH ─────────────────────────────────────────────────────
+async function unifiedAiAdd() {
+  const query = document.getElementById('searchQuery').value.trim();
+  const address = document.getElementById('addAddress').value.trim();
+  if (!query) { showToast('Enter a place name or description', true); return; }
+
+  // Sync hidden fields used by generateLocation / addFromSearch
+  document.getElementById('addName').value = query;
+  document.getElementById('addDay').value = document.getElementById('searchDay').value;
+
+  if (address) {
+    // Specific place with address → generate directly
+    await generateLocation();
+  } else {
+    // General query → show search results to pick from
+    await aiSearch();
+  }
+}
+
 async function aiSearch() {
   const query = document.getElementById('searchQuery').value.trim();
   const dayIdx = parseInt(document.getElementById('searchDay').value);
@@ -5048,6 +5038,7 @@ function addStop(dayIdx, info) {
   document.getElementById('addAddress').value='';
   document.getElementById('addLat').value='';
   document.getElementById('addLng').value='';
+  document.getElementById('searchQuery').value='';
 }
 
 // ── PRE-BOOKING LIST ──────────────────────────────────────────────
