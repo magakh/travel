@@ -2203,13 +2203,18 @@ The array must contain exactly 3 objects with this shape:
     "free": false,
     "prebook": false,
     "description": "2 sentences why this is a good match",
+    "tips": "1-2 sentences of practical insider tips (what to order, when to go, what to ask for)",
+    "goodFor": "short label e.g. \\"Solo lunch\\" or \\"Romantic dinner\\" or \\"Architecture lovers\\"",
+    "hours": "typical opening hours if known and confident, e.g. \\"Mon-Fri 9am-6pm, Sat-Sun 10am-5pm\\". Leave as empty string if unsure.",
+    "hoursNote": "any short timing/access caveat e.g. \\"Closed Mondays\\" or \\"Best 10am-noon\\", else empty string",
+    "priceLevel": "$ or $$ or $$$ or $$$$ for restaurants/paid attractions, else empty string",
     "history": "2 rich paragraphs about the history in HTML with <strong> tags, separate paragraphs with \\n\\n",
     "travel": "🚶 or 🚇 Practical travel directions WITHIN ${city} only (local walk/transit from elsewhere in ${city}). Do NOT include flights or long-distance travel.",
     "todo": "<p><span class=\\"tip-icon\\">🏛️</span><strong>What to do:</strong> 3-4 specific practical sentences.</p>"
   }
 ]
 
-Only include real, well-known places in ${city}. Use accurate coordinates (4+ decimal places).`;
+Only include real, well-known places in ${city}. Use accurate coordinates (4+ decimal places). For hours, tips, hoursNote, and priceLevel: prefer empty strings over guessed specifics — only include details you are confident about.`;
 
   try {
     const text = await callAnthropic({ prompt, maxTokens: 2000 });
@@ -2259,19 +2264,45 @@ function renderSearchResults(results, dayIdx) {
       '<p style="color:#888;font-size:13px;text-align:center;">No results found — try a different search.</p>';
     return;
   }
-  const html = results.map((r, i) => `
+  const _esc = (s) => String(s == null ? '' : s).replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+  const html = results.map((r, i) => {
+    // Build the expanded detail panel
+    const detailParts = [];
+    if (r.tips) detailParts.push('<div style="font-size:13px;color:#444;background:#fff8e1;border-left:3px solid #f1c40f;padding:8px 10px;border-radius:0 6px 6px 0;margin-top:10px;line-height:1.45;"><b>💡 Tip:</b> ' + _esc(r.tips) + '</div>');
+    if (r.hours) detailParts.push('<div style="font-size:13px;color:#333;margin-top:10px;line-height:1.4;"><b>🕐 Hours:</b> ' + _esc(r.hours) + ' <span style="color:#888;font-size:11px;">(verify on Maps)</span></div>');
+    const metaChips = [];
+    if (r.goodFor) metaChips.push('<span style="font-size:11px;background:#e8f0fd;color:#1565c0;padding:3px 8px;border-radius:10px;font-weight:600;">' + _esc(r.goodFor) + '</span>');
+    if (r.priceLevel) metaChips.push('<span style="font-size:11px;background:#e8f5e9;color:#1a7a3a;padding:3px 8px;border-radius:10px;font-weight:600;">' + _esc(r.priceLevel) + '</span>');
+    if (r.hoursNote) metaChips.push('<span style="font-size:11px;background:#fdecea;color:#c0392b;padding:3px 8px;border-radius:10px;font-weight:600;">⏱ ' + _esc(r.hoursNote) + '</span>');
+    if (metaChips.length) detailParts.push('<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:10px;">' + metaChips.join('') + '</div>');
+
+    const mapsQuery = encodeURIComponent((r.name || '') + (r.address ? ', ' + r.address : ''));
+    const actionsRow = '<div style="margin-top:10px;">' +
+      '<a href="https://www.google.com/maps/search/?api=1&query=' + mapsQuery + '" target="_blank" rel="noopener" style="font-size:12px;font-weight:700;color:#1565c0;text-decoration:none;background:#e8f0fd;padding:6px 12px;border-radius:14px;display:inline-block;">📍 Open in Maps · reviews</a>' +
+      '</div>';
+
+    const hasDetail = detailParts.length > 0;
+    const detailBlock = '<div id="searchDetail' + i + '" style="display:none;border-top:1px dashed #e0e0e0;margin-top:10px;padding-top:6px;">' + detailParts.join('') + actionsRow + '</div>';
+    const expanderBtn = hasDetail
+      ? '<button onclick="event.stopPropagation();toggleSearchDetail(' + i + ')" id="searchDetailBtn' + i + '" style="background:none;border:none;font-size:12px;font-weight:700;color:#5c4db1;cursor:pointer;padding:6px 0 0 0;margin-top:4px;">▸ More info</button>'
+      : '<a href="https://www.google.com/maps/search/?api=1&query=' + mapsQuery + '" target="_blank" rel="noopener" style="font-size:12px;font-weight:700;color:#1565c0;text-decoration:none;display:inline-block;margin-top:6px;">📍 Open in Maps</a>';
+
+    return `
     <div class="search-result-card">
-      <h3>${r.name}</h3>
-      <div class="src-type">${r.type_label} &nbsp;·&nbsp; ${r.address}</div>
-      <div class="src-desc">${r.description}</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <h3>${_esc(r.name)}</h3>
+      <div class="src-type">${_esc(r.type_label || '')} &nbsp;·&nbsp; ${_esc(r.address || '')}</div>
+      <div class="src-desc">${_esc(r.description || '')}</div>
+      ${expanderBtn}
+      ${hasDetail ? detailBlock : ''}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
         <button class="src-add-btn" onclick="addFromSearch(${i})">+ Add to Day ${dayIdx+1}</button>
         <select onchange="document.getElementById('searchDay').value=this.value;document.getElementById('sr-day-${i}').textContent='Add to Day '+(parseInt(this.value)+1)"
           style="padding:8px 10px;border-radius:8px;border:1px solid #ddd;font-size:13px;font-weight:600;background:#fff;cursor:pointer;">
           ${(APP_CONFIG.dayLabels || []).slice(0, APP_CONFIG.numDays || 4).map((lbl,di) => `<option value="${di}" ${dayIdx===di?'selected':''}>${(lbl||'Day '+(di+1)).replace(/[<>&]/g,'')}</option>`).join('')}
         </select>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 
   document.getElementById('searchResults').innerHTML =
     '<div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.6px;margin-bottom:10px;">AI found these matches — tap to add</div>' + html;
@@ -2279,6 +2310,15 @@ function renderSearchResults(results, dayIdx) {
   // Store results for addFromSearch
   window._searchResults = results;
   window._searchDayIdx = dayIdx;
+}
+
+function toggleSearchDetail(i) {
+  const panel = document.getElementById('searchDetail' + i);
+  const btn = document.getElementById('searchDetailBtn' + i);
+  if (!panel) return;
+  const open = panel.style.display !== 'none';
+  panel.style.display = open ? 'none' : 'block';
+  if (btn) btn.textContent = open ? '▸ More info' : '▾ Less';
 }
 
 function addFromSearch(i) {
@@ -3690,8 +3730,8 @@ async function runSuggest(midLat, midLng, afterIdx, dayIdx, beforeIdx) {
       : ' Near lat ' + midLat.toFixed(3) + ', lng ' + midLng.toFixed(3) + ' in ' + city + '.';
 
     const prompt = isWalk
-      ? 'You are a walking tour expert for ' + city + '. Suggest 6 excellent short walking experiences or scenic routes matching: "' + query + '".' + locationCtx + ' Return ONLY a JSON array (no markdown): [{"name":"...","type":"Walking route · neighbourhood","address":"...","lat":0.0,"lng":0.0,"why":"1 sentence why this walk is special","duration":"20 min","description":"2-3 sentences with substance about what makes this walk worthwhile","tips":"1-2 sentences of practical insider tips (best time, what to look for)","goodFor":"short label e.g. \\"Architecture lovers\\" or \\"Quiet morning stroll\\"","hoursNote":"any timing/access notes if relevant, else empty string","priceLevel":""}]. Use real locations with accurate coordinates.'
-      : 'You are a travel expert for ' + city + '. Suggest 6 excellent real places matching: "' + query + '".' + locationCtx + ' Return ONLY a JSON array (no markdown): [{"name":"...","type":"...","address":"...","lat":0.0,"lng":0.0,"why":"1 sentence why it fits here","duration":"45 min","description":"2-3 sentences with substance — atmosphere, what to expect, what is special","tips":"1-2 sentences of practical insider tips (what to order, when to go, what to ask for)","goodFor":"short label e.g. \\"Solo lunch\\" or \\"Romantic dinner\\" or \\"Architecture lovers\\"","hoursNote":"opening hours notes if known and relevant, e.g. \\"Closed Mondays\\" or \\"Best 10am-noon\\", else empty string","priceLevel":"$ or $$ or $$$ or $$$$ for restaurants/paid attractions, else empty string"}]. Use real places with accurate coordinates. The description, tips, and hoursNote should reflect general knowledge — never invent specifics you are not confident about; prefer empty string over guessing.';
+      ? 'You are a walking tour expert for ' + city + '. Suggest 6 excellent short walking experiences or scenic routes matching: "' + query + '".' + locationCtx + ' Return ONLY a JSON array (no markdown): [{"name":"...","type":"Walking route · neighbourhood","address":"...","lat":0.0,"lng":0.0,"why":"1 sentence why this walk is special","duration":"20 min","description":"2-3 sentences with substance about what makes this walk worthwhile","tips":"1-2 sentences of practical insider tips (best time, what to look for)","goodFor":"short label e.g. \\"Architecture lovers\\" or \\"Quiet morning stroll\\"","hours":"","hoursNote":"any timing/access notes if relevant, else empty string","priceLevel":""}]. Use real locations with accurate coordinates.'
+      : 'You are a travel expert for ' + city + '. Suggest 6 excellent real places matching: "' + query + '".' + locationCtx + ' Return ONLY a JSON array (no markdown): [{"name":"...","type":"...","address":"...","lat":0.0,"lng":0.0,"why":"1 sentence why it fits here","duration":"45 min","description":"2-3 sentences with substance — atmosphere, what to expect, what is special","tips":"1-2 sentences of practical insider tips (what to order, when to go, what to ask for)","goodFor":"short label e.g. \\"Solo lunch\\" or \\"Romantic dinner\\" or \\"Architecture lovers\\"","hours":"typical opening hours if known and confident, e.g. \\"Mon-Fri 9am-6pm, Sat-Sun 10am-5pm\\". Empty string if unsure.","hoursNote":"opening hours notes if known and relevant, e.g. \\"Closed Mondays\\" or \\"Best 10am-noon\\", else empty string","priceLevel":"$ or $$ or $$$ or $$$$ for restaurants/paid attractions, else empty string"}]. Use real places with accurate coordinates. The description, tips, hours, and hoursNote should reflect general knowledge — never invent specifics you are not confident about; prefer empty string over guessing.';
 
     const text = await callAnthropic({ prompt, maxTokens: 3000 });
     _suggestResults = extractJsonArray(text);
@@ -3770,6 +3810,7 @@ function renderSuggestResults(results, afterIdx, dayIdx) {
     const detailParts = [];
     if (r.description) detailParts.push('<div style="font-size:13px;color:#333;line-height:1.4;margin-top:8px;">' + _esc(r.description) + '</div>');
     if (r.tips) detailParts.push('<div style="font-size:12px;color:#444;background:#fff8e1;border-left:3px solid #f1c40f;padding:6px 10px;border-radius:0 6px 6px 0;margin-top:8px;line-height:1.4;"><b>💡 Tip:</b> ' + _esc(r.tips) + '</div>');
+    if (r.hours) detailParts.push('<div style="font-size:12px;color:#333;margin-top:8px;line-height:1.4;"><b>🕐 Hours:</b> ' + _esc(r.hours) + ' <span style="color:#888;font-size:10px;">(verify on Maps)</span></div>');
     const metaChips = [];
     if (r.goodFor) metaChips.push('<span style="font-size:11px;background:#e8f0fd;color:#1565c0;padding:3px 8px;border-radius:10px;font-weight:600;">' + _esc(r.goodFor) + '</span>');
     if (r.priceLevel) metaChips.push('<span style="font-size:11px;background:#e8f5e9;color:#1a7a3a;padding:3px 8px;border-radius:10px;font-weight:600;">' + _esc(r.priceLevel) + '</span>');
@@ -3822,8 +3863,8 @@ async function runSuggestMore() {
   const existing = _suggestResults.map(r => r.name).join(', ');
   try {
     const prompt = isWalk
-      ? 'You are a walking tour expert for ' + city + '. Suggest 4 MORE walking experiences near lat ' + midLat.toFixed(3) + ', lng ' + midLng.toFixed(3) + ' matching: \"' + query + '\". Exclude these already shown: ' + existing + '. Return ONLY a JSON array (no markdown): [{\"name\":\"...\",\"type\":\"Walking route · neighbourhood\",\"address\":\"...\",\"lat\":0.0,\"lng\":0.0,\"why\":\"1 sentence\",\"duration\":\"20 min\",\"description\":\"2-3 sentences\",\"tips\":\"1-2 sentences\",\"goodFor\":\"short label\",\"hoursNote\":\"\",\"priceLevel\":\"\"}].'
-      : 'You are a travel expert for ' + city + '. Suggest 4 MORE real places matching: \"' + query + '\" near lat ' + midLat.toFixed(3) + ', lng ' + midLng.toFixed(3) + '. Exclude these already shown: ' + existing + '. Return ONLY a JSON array (no markdown): [{\"name\":\"...\",\"type\":\"...\",\"address\":\"...\",\"lat\":0.0,\"lng\":0.0,\"why\":\"1 sentence\",\"duration\":\"45 min\",\"description\":\"2-3 sentences\",\"tips\":\"1-2 sentences\",\"goodFor\":\"short label\",\"hoursNote\":\"\",\"priceLevel\":\"\"}]. Prefer empty strings over guessed specifics.';
+      ? 'You are a walking tour expert for ' + city + '. Suggest 4 MORE walking experiences near lat ' + midLat.toFixed(3) + ', lng ' + midLng.toFixed(3) + ' matching: \"' + query + '\". Exclude these already shown: ' + existing + '. Return ONLY a JSON array (no markdown): [{\"name\":\"...\",\"type\":\"Walking route · neighbourhood\",\"address\":\"...\",\"lat\":0.0,\"lng\":0.0,\"why\":\"1 sentence\",\"duration\":\"20 min\",\"description\":\"2-3 sentences\",\"tips\":\"1-2 sentences\",\"goodFor\":\"short label\",\"hours\":\"\",\"hoursNote\":\"\",\"priceLevel\":\"\"}].'
+      : 'You are a travel expert for ' + city + '. Suggest 4 MORE real places matching: \"' + query + '\" near lat ' + midLat.toFixed(3) + ', lng ' + midLng.toFixed(3) + '. Exclude these already shown: ' + existing + '. Return ONLY a JSON array (no markdown): [{\"name\":\"...\",\"type\":\"...\",\"address\":\"...\",\"lat\":0.0,\"lng\":0.0,\"why\":\"1 sentence\",\"duration\":\"45 min\",\"description\":\"2-3 sentences\",\"tips\":\"1-2 sentences\",\"goodFor\":\"short label\",\"hours\":\"typical hours if known, e.g. Mon-Fri 9am-6pm. Empty string if unsure.\",\"hoursNote\":\"\",\"priceLevel\":\"\"}]. Prefer empty strings over guessed specifics.';
     const text = await callAnthropic({ prompt, maxTokens: 2000 });
     const more = extractJsonArray(text);
     if (more.length) {
