@@ -5424,8 +5424,30 @@ async function callAnthropic({ prompt, maxTokens, model }) {
   model = model || APP_CONFIG.aiModel || 'claude-sonnet-4-6';
   maxTokens = maxTokens || 1500;
   const messages = [{ role: 'user', content: prompt }];
+  const personalKey = getApiKey();
 
-  // Prefer Edge Function when Supabase is configured
+  // If user has set a personal key, use it directly — skip the Edge Function
+  // (which uses a separate Anthropic account that may have different credit)
+  if (personalKey) {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': personalKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({ model, max_tokens: maxTokens, messages })
+    });
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error('Anthropic error: ' + res.status + ' ' + txt.slice(0, 200));
+    }
+    const data = await res.json();
+    return (data.content && data.content[0] && data.content[0].text) || '';
+  }
+
+  // No personal key — try the shared Edge Function
   if (APP_CONFIG.supabaseUrl && APP_CONFIG.supabaseKey) {
     const url = APP_CONFIG.supabaseUrl.replace(/\/$/, '') + '/functions/v1/ai-proxy';
     try {
@@ -5441,43 +5463,16 @@ async function callAnthropic({ prompt, maxTokens, model }) {
       if (res.status === 429) throw new Error('Rate limit reached — try again in an hour');
       if (!res.ok) {
         const txt = await res.text();
-        throw new Error('Edge function error: ' + res.status + ' ' + txt.slice(0, 120));
+        throw new Error('AI error: ' + res.status + ' ' + txt.slice(0, 200));
       }
       const data = await res.json();
-      const text = (data.content && data.content[0] && data.content[0].text) || '';
-      return text;
+      return (data.content && data.content[0] && data.content[0].text) || '';
     } catch(e) {
-      // Surface the real edge function error — only fall through to direct API
-      // if user has set a personal key
-      console.warn('Edge function path failed:', e.message);
-      if (!getApiKey()) {
-        throw new Error('AI error: ' + (e.message || 'Edge Function failed'));
-      }
-      // else fall through to direct API call below
+      throw new Error(e.message || 'AI request failed');
     }
   }
 
-  // Fallback: direct Anthropic API (requires personal key)
-  const apiKey = getApiKey();
-  if (!apiKey) {
-    throw new Error('AI not available — either deploy the Supabase Edge Function or set a personal Anthropic key in Settings.');
-  }
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
-    body: JSON.stringify({ model, max_tokens: maxTokens, messages })
-  });
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error('Anthropic error: ' + res.status + ' ' + txt.slice(0, 120));
-  }
-  const data = await res.json();
-  return (data.content && data.content[0] && data.content[0].text) || '';
+  throw new Error('AI not available — set a personal Anthropic key in Settings.');
 }
 
 // ── AI GEOCODING ────────────────────────────────────────────────
