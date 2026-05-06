@@ -3649,40 +3649,14 @@ async function runSuggest(midLat, midLng, afterIdx, dayIdx, beforeIdx) {
     const isWalk = query.toLowerCase().includes('walk') || query.toLowerCase().includes('neighbourhood') || query.toLowerCase().includes('route');
     _suggestCtx = { midLat, midLng, afterIdx, dayIdx, query, isWalk, city };
 
-    // Resolve actual FROM and TO points so we can constrain results to the corridor
-    const ctxStops = days[dayIdx].stops;
-    const fromPt = (afterIdx >= 0 && ctxStops[afterIdx]) ? ctxStops[afterIdx] : window.HOTEL_DATA;
-    const toPt   = (beforeIdx >= 0 && ctxStops[beforeIdx]) ? ctxStops[beforeIdx] : window.HOTEL_DATA;
-    const fromName = fromPt ? fromPt.name : 'start';
-    const toName   = toPt   ? toPt.name   : 'end';
-    const km = (fromPt && toPt) ? Math.max(0.3, _haversineMetres(fromPt.lat, fromPt.lng, toPt.lat, toPt.lng) / 1000) : 1;
-    const radiusKm = Math.max(0.4, Math.min(1.5, km * 0.6));
-
-    const corridor = 'STRICT LOCATION RULES:\n' +
-      '- User is travelling from "' + fromName + '" (' + (fromPt && fromPt.lat ? fromPt.lat.toFixed(4) : '?') + ', ' + (fromPt && fromPt.lng ? fromPt.lng.toFixed(4) : '?') + ') to "' + toName + '" (' + (toPt && toPt.lat ? toPt.lat.toFixed(4) : '?') + ', ' + (toPt && toPt.lng ? toPt.lng.toFixed(4) : '?') + ').\n' +
-      '- Route distance: ' + km.toFixed(1) + ' km. EVERY suggestion MUST be on or within ' + radiusKm.toFixed(1) + ' km of the direct line between FROM and TO.\n' +
-      '- A few minutes detour is fine; do NOT suggest places in different neighbourhoods or that require backtracking.\n' +
-      '- Result coordinates should be near the midpoint (' + midLat.toFixed(4) + ', ' + midLng.toFixed(4) + ').';
-
     const prompt = isWalk
-      ? 'You are a walking tour expert for ' + city + '. Suggest 6 short walking experiences matching: "' + query + '".\n' + corridor + '\nReturn ONLY a JSON array (no markdown): [{"name":"...","type":"Walking route · neighbourhood","address":"...","lat":0.0,"lng":0.0,"why":"1 sentence why this walk is special and fits the route","duration":"20 min"}]. Use real locations with accurate coordinates.'
-      : 'You are a travel expert for ' + city + '. Suggest 6 real places matching: "' + query + '".\n' + corridor + '\nReturn ONLY a JSON array (no markdown): [{"name":"...","type":"...","address":"...","lat":0.0,"lng":0.0,"why":"1 sentence why it fits here and is on the way","duration":"45 min"}]. Use real places with accurate coordinates.';
+      ? 'You are a walking tour expert for ' + city + '. Suggest 6 excellent short walking experiences or scenic routes near lat ' + midLat.toFixed(3) + ', lng ' + midLng.toFixed(3) + ' matching: "' + query + '". Each should be a specific street, lane, square or area in ' + city + ' worth strolling through. Return ONLY a JSON array (no markdown): [{"name":"...","type":"Walking route · neighbourhood","address":"...","lat":0.0,"lng":0.0,"why":"1 sentence why this walk is special","duration":"20 min"}]. Use real locations with accurate coordinates.'
+      : 'You are a travel expert for ' + city + '. Suggest 6 excellent real places matching: "' + query + '" near lat ' + midLat.toFixed(3) + ', lng ' + midLng.toFixed(3) + ' in ' + city + '. Return ONLY a JSON array (no markdown): [{"name":"...","type":"...","address":"...","lat":0.0,"lng":0.0,"why":"1 sentence why it fits here","duration":"45 min"}]. Use real places with accurate coordinates.';
 
     const text = await callAnthropic({ prompt, maxTokens: 1500 });
     _suggestResults = extractJsonArray(text);
     if (!_suggestResults.length) throw new Error('AI returned no usable results');
-
-    // Filter out results that are too far off the route corridor
-    if (fromPt && toPt) {
-      const maxKm = km / 2 + radiusKm;
-      _suggestResults = _suggestResults.filter(r => {
-        if (typeof r.lat !== 'number' || typeof r.lng !== 'number') return true;
-        const d = _haversineMetres(midLat, midLng, r.lat, r.lng) / 1000;
-        return d <= maxKm;
-      });
-      if (!_suggestResults.length) throw new Error('No suggestions found near your route — try a broader query');
-    }
-        renderSuggestResults(_suggestResults, afterIdx, dayIdx);
+    renderSuggestResults(_suggestResults, afterIdx, dayIdx);
   } catch(e) {
     console.error('Suggest error:', e);
     listEl.innerHTML = '<p style="color:#c0392b;font-size:13px;text-align:center;padding:20px;">' + (e.message || 'Could not get suggestions — try again') + '</p>';
