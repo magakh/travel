@@ -1137,6 +1137,7 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
 .suggest-panel.has-results .suggest-results { order:2; }
 .suggest-panel.has-results .suggest-map { order:3; }
 @media (max-width: 700px) {
+  .suggest-panel { height:100vh; max-height:100vh; border-radius:0; }
   .suggest-header { padding:12px 14px 0; }
   .suggest-subtitle { margin-bottom:10px; }
   .suggest-input { padding:10px 12px; font-size:13px; margin-bottom:8px; }
@@ -1144,7 +1145,6 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
   .suggest-chip { padding:4px 8px; font-size:11px; }
   .suggest-map { height:120px; }
   .suggest-results { padding:8px 12px 16px; }
-  .suggest-panel.has-results .suggest-map { height:80px; }
   .suggest-panel.has-results .suggest-chips { display:none; }
 }
 </style>
