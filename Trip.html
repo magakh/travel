@@ -1348,7 +1348,14 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
       <label class="form-label" style="margin-top:8px;">Subtitle</label>
       <input class="form-input" id="setSubtitle" type="text" placeholder="e.g. key dates · themes">
 
-      <div id="setDayLabelsWrap" style="margin-top:10px;"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px;">
+        <div>
+          <label class="form-label">Trip start date</label>
+          <input class="form-input" id="setStartDate" type="date" style="margin:0;" oninput="previewDayTabs()">
+        </div>
+      </div>
+      <div id="setDayTabPreview" style="margin-top:10px;"></div>
+      <div id="setDayLabelsWrap" style="display:none;"></div>
 
       <!-- ── HOTEL & TIMING (combined) ── -->
       <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
@@ -3769,14 +3776,16 @@ function loadSettingsUI() {
   document.getElementById('setTitle').value = c.title || '';
   document.getElementById('setSubtitle').value = c.subtitle || '';
   document.getElementById('setNumDays').value = c.numDays || 4;
-  // Arrival/departure — convert from 12h display format back to 24h for input[type=time]
   const arrEl = document.getElementById('setArrivalTime');
   const depEl = document.getElementById('setDepartureTime');
   if (arrEl) arrEl.value = time12to24(c.arrivalTime || '');
   if (depEl) depEl.value = time12to24(c.departureTime || '');
   const curEl = document.getElementById('setCurrentTrip');
   if (curEl) curEl.textContent = TRIP_ID;
-  renderDayLabelInputs();
+  // Populate start date picker
+  const sdEl = document.getElementById('setStartDate');
+  if (sdEl && c.startDate) sdEl.value = c.startDate;
+  previewDayTabs();
 }
 
 // Convert "5:00 PM" → "17:00" (for HTML time input)
@@ -3805,34 +3814,54 @@ function time24to12(str) {
   return h + ':' + min + ' ' + ap;
 }
 
-function renderDayLabelInputs() {
-  const n = parseInt(document.getElementById('setNumDays').value) || 4;
-  const labels = APP_CONFIG.dayLabels || [];
-  const titles = APP_CONFIG.dayTitles || [];
-  const wrap = document.getElementById('setDayLabelsWrap');
+function previewDayTabs() {
+  const n = parseInt(document.getElementById('setNumDays')?.value) || 4;
+  const dateVal = document.getElementById('setStartDate')?.value; // 'YYYY-MM-DD'
+  const wrap = document.getElementById('setDayTabPreview');
   if (!wrap) return;
-  let html = '<label class="form-label" style="margin-top:10px;">Day tab labels & titles</label>';
+  if (!dateVal) { wrap.innerHTML = '<p class="gen-hint">Pick a start date to auto-generate day tabs.</p>'; return; }
+  const [y, mo, d] = dateVal.split('-').map(Number);
+  const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const tabs = [];
   for (let i = 0; i < n; i++) {
-    html += `
-      <div style="display:grid;grid-template-columns:1fr 2fr;gap:8px;margin-bottom:8px;">
-        <input class="form-input" id="setDayLabel${i}" type="text" placeholder="Day ${i+1} label" value="${labels[i]||''}" style="margin:0;">
-        <input class="form-input" id="setDayTitle${i}" type="text" placeholder="Full title" value="${(titles[i]||'').replace(/"/g,'&quot;')}" style="margin:0;">
-      </div>`;
+    const dt = new Date(y, mo - 1, d + i);
+    const label = monthNames[dt.getMonth()] + ' ' + dt.getDate();
+    tabs.push(label + ' · Day ' + (i + 1));
   }
-  wrap.innerHTML = html;
+  wrap.innerHTML = '<p class="gen-hint" style="margin-bottom:6px;">Day tabs will be:</p>' +
+    '<div style="display:flex;flex-wrap:wrap;gap:6px;">' +
+    tabs.map(t => `<span style="background:#f0f0f0;border-radius:20px;padding:4px 12px;font-size:12px;font-weight:700;">${t}</span>`).join('') +
+    '</div>';
 }
+
+function renderDayLabelInputs() { previewDayTabs(); } // legacy alias
 
 async function saveSettings() {
   const n = parseInt(document.getElementById('setNumDays').value) || 4;
+  const dateVal = document.getElementById('setStartDate')?.value; // 'YYYY-MM-DD'
+
+  // Generate day labels/titles from start date
+  const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const dayLabels = [], dayTitles = [];
   for (let i = 0; i < n; i++) {
-    dayLabels.push(document.getElementById('setDayLabel'+i)?.value.trim() || ('Day '+(i+1)));
-    dayTitles.push(document.getElementById('setDayTitle'+i)?.value.trim() || ('Day '+(i+1)));
+    let label, title;
+    if (dateVal) {
+      const [y, mo, d] = dateVal.split('-').map(Number);
+      const dt = new Date(y, mo - 1, d + i);
+      label = monthNames[dt.getMonth()] + ' ' + dt.getDate();
+      title = label + ' · Day ' + (i + 1);
+    } else {
+      label = 'Day ' + (i + 1);
+      title = 'Day ' + (i + 1);
+    }
+    dayLabels.push(label);
+    dayTitles.push(title);
   }
 
   APP_CONFIG.title    = document.getElementById('setTitle').value.trim() || APP_CONFIG.title;
   APP_CONFIG.subtitle = document.getElementById('setSubtitle').value.trim() || APP_CONFIG.subtitle;
   APP_CONFIG.numDays  = n;
+  APP_CONFIG.startDate = dateVal || '';
   APP_CONFIG.dayLabels = dayLabels;
   APP_CONFIG.dayTitles = dayTitles;
   const arrVal = document.getElementById('setArrivalTime')?.value || '';
@@ -3880,15 +3909,28 @@ async function saveAllSettings() {
 
   // ── Read trip settings (same logic as old saveSettings) ──
   const n = parseInt(document.getElementById('setNumDays').value) || 4;
+  const dateVal2 = document.getElementById('setStartDate')?.value;
+  const monthNames2 = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const dayLabels = [], dayTitles = [];
   for (let i = 0; i < n; i++) {
-    dayLabels.push(document.getElementById('setDayLabel'+i)?.value.trim() || ('Day '+(i+1)));
-    dayTitles.push(document.getElementById('setDayTitle'+i)?.value.trim() || ('Day '+(i+1)));
+    let label, title;
+    if (dateVal2) {
+      const [y, mo, d] = dateVal2.split('-').map(Number);
+      const dt = new Date(y, mo - 1, d + i);
+      label = monthNames2[dt.getMonth()] + ' ' + dt.getDate();
+      title = label + ' · Day ' + (i + 1);
+    } else {
+      label = 'Day ' + (i + 1);
+      title = 'Day ' + (i + 1);
+    }
+    dayLabels.push(label);
+    dayTitles.push(title);
   }
 
   APP_CONFIG.title    = document.getElementById('setTitle').value.trim() || APP_CONFIG.title;
   APP_CONFIG.subtitle = document.getElementById('setSubtitle').value.trim() || APP_CONFIG.subtitle;
   APP_CONFIG.numDays  = n;
+  APP_CONFIG.startDate = dateVal2 || '';
   APP_CONFIG.dayLabels = dayLabels;
   APP_CONFIG.dayTitles = dayTitles;
   const arrVal = document.getElementById('setArrivalTime')?.value || '';
