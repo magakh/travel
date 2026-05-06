@@ -3419,11 +3419,13 @@ function renderDetail() {
 
   document.getElementById('detailContent').innerHTML = `
     <div class="detail-hero">
+      ${s.image ? `<img src="${s.image}" alt="${s.name}" style="width:100%;height:200px;object-fit:cover;border-radius:12px;margin-bottom:12px;display:block;">` : ''}
       <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:0;">
         <div class="detail-badge" style="border-left:3px solid ${s.color};padding-left:10px;">
         <span onclick="editStopTime(currentStop)" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;" title="Tap to change start time">⏱ ${s.time}</span> &nbsp;·&nbsp; <span onclick="editDuration(currentStop)" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;" title="Tap to edit duration">⏳ ${s.duration}</span> &nbsp;·&nbsp; ${days[currentDay].title.split('—')[0].trim()}
         </div>
         <div style="display:flex;gap:6px;align-self:flex-start;">
+          <button id="enrichBtn_${currentStop}" onclick="enrichStopContent(${currentStop},${currentDay})" style="background:none;border:none;font-size:12px;font-weight:700;color:#5c4db1;cursor:pointer;padding:3px 8px;border-radius:8px;border:1px solid #d8d0f8;white-space:nowrap;">✨ Refresh</button>
           <button onclick="editStop(currentStop)" style="background:none;border:none;font-size:12px;font-weight:700;color:#1a73e8;cursor:pointer;padding:3px 8px;border-radius:8px;border:1px solid #c5d8fa;white-space:nowrap;">✏️ Edit</button>
           <button onclick="goBackToList()" style="background:none;border:none;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;padding:3px 8px;border-radius:8px;border:1px solid var(--border);white-space:nowrap;">← List</button>
         </div>
@@ -3462,6 +3464,14 @@ function renderDetail() {
       <div class="section-label">History & context</div>
       ${histParas}
     </div>
+
+    ${s.facts && s.facts.length ? `
+    <div class="detail-section">
+      <div class="section-label">Interesting facts</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        ${s.facts.map(f => `<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;background:#f8f7ff;border-radius:10px;border-left:3px solid #5c4db1;"><span style="font-size:16px;flex-shrink:0;">💡</span><span style="font-size:13px;color:#333;line-height:1.5;">${f}</span></div>`).join('')}
+      </div>
+    </div>` : ''}
 
     <div class="detail-section">
       <div class="section-label">What to do</div>
@@ -3837,6 +3847,14 @@ function insertSuggestedStop(resultIdx, afterIdx, dayIdx) {
 
   renderAll();
   showToast('"' + r.name + '" added ✓');
+
+  // Auto-enrich: fetch AI content + Wikipedia image in background
+  const newIdx = days[dayIdx].stops.length - 1;
+  // find actual index after insertion
+  const insertedIdx = days[dayIdx].stops.findIndex(s => s.name === r.name && s.lat === stop.lat);
+  if (insertedIdx >= 0 && !stop.history) {
+    enrichStopContent(insertedIdx, dayIdx);
+  }
 
   // Silently fix coords if AI gave us a placeholder
   if (isSuspiciousCoords(stop.lat, stop.lng)) {
@@ -5096,6 +5114,63 @@ function renderAllMap() {
 
 
 // ── ADD LOCATION WITH AI ──────────────────────────────────────────
+// ── STOP ENRICHMENT ──────────────────────────────────────────────
+
+// Fetch a photo from Wikipedia for a named place. Returns URL or null.
+async function fetchWikipediaImage(name) {
+  try {
+    const title = encodeURIComponent(name.replace(/['']/g, '').replace(/\s+/g, '_'));
+    const res = await fetch('https://en.wikipedia.org/api/rest_v1/page/summary/' + title, { headers: { 'Accept': 'application/json' } });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.thumbnail?.source || data.originalimage?.source || null;
+  } catch(e) { return null; }
+}
+
+// Re-generate AI content (history, facts, todo, travel) + fetch Wikipedia image for a stop.
+async function enrichStopContent(stopIdx, dayIdx) {
+  const s = days[dayIdx].stops[stopIdx];
+  if (!s) return;
+  const city = getTripCity();
+  const fromHint = window.HOTEL_DATA?.name ? 'from ' + window.HOTEL_DATA.name : 'from the hotel area';
+  const prompt = `You are an expert tour guide for ${city}. Write rich, engaging content for "${s.name}" at "${s.address || s.name}, ${city}".
+
+CRITICAL: Respond with ONLY valid JSON starting with { and ending with }. No markdown, no preamble.
+
+{"history":"3 rich paragraphs in HTML with <strong> tags. Cover: origins and founding, key historical events/famous figures, architectural or cultural significance. Separate paragraphs with \\n\\n","facts":["Specific fact with numbers/dates","Surprising or little-known detail","Famous person or event connection","Practical insider tip for visitors"],"todo":"<p><span class=\\"tip-icon\\">🏛️</span><strong>What to do:</strong> 4-5 practical sentences on highlights and must-sees</p>","travel":"🚶 or 🚇 local directions within ${city} ${fromHint}","type_label":"${s.type || 'Attraction'}"}`;
+
+  const btn = document.getElementById('enrichBtn_' + stopIdx);
+  if (btn) { btn.textContent = '⏳ Enriching…'; btn.disabled = true; }
+
+  try {
+    // Run AI content + Wikipedia image fetch in parallel
+    const [text, imgUrl] = await Promise.all([
+      callAnthropic({ prompt, maxTokens: 2500 }),
+      fetchWikipediaImage(s.name)
+    ]);
+
+    let raw = (text || '{}').replace(/```json|```/g, '').trim();
+    const oS = raw.indexOf('{'); const oE = raw.lastIndexOf('}');
+    if (oS >= 0 && oE > oS) raw = raw.slice(oS, oE + 1);
+    const info = JSON.parse(raw);
+
+    if (info.history) s.history = info.history;
+    if (info.facts)   s.facts   = info.facts;
+    if (info.todo)    s.todo    = info.todo;
+    if (info.travel)  s.travel  = info.travel;
+    if (info.type_label) s.type = info.type_label;
+    if (imgUrl) s.image = imgUrl;
+
+    autoSave();
+    if (currentView === 'detail' && currentStop === stopIdx && currentDay === dayIdx) renderDetail();
+    showToast('Content enriched ✓');
+  } catch(e) {
+    showToast('Enrich failed: ' + (e.message || 'try again'), true);
+  } finally {
+    if (btn) { btn.textContent = '✨ Refresh content'; btn.disabled = false; }
+  }
+}
+
 async function generateLocation() {
   const name = document.getElementById('addName').value.trim();
   const address = document.getElementById('addAddress').value.trim();
@@ -5112,22 +5187,23 @@ async function generateLocation() {
   const fromHint = window.HOTEL_DATA && window.HOTEL_DATA.name
     ? 'from ' + window.HOTEL_DATA.name
     : 'from the hotel area';
-  const prompt = `You are an expert tour guide for ${city}. Write info for "${name}" at "${address}" (type: ${type}).
+  const prompt = `You are an expert tour guide for ${city}. Write rich, engaging content for "${name}" at "${address}" (type: ${type}).
 
-CRITICAL: Respond with ONLY a JSON object. Your entire response must start with { and end with }. No introduction, no explanation, no markdown.
+CRITICAL: Respond with ONLY valid JSON starting with { and ending with }. No markdown, no preamble.
 
-The "travel" field must give LOCAL directions WITHIN ${city} (walking/transit from elsewhere in ${city}). DO NOT include flights, airports, or long-distance travel.
+The "travel" field must give LOCAL directions WITHIN ${city} only. No airports or long-distance travel.
 
-{"history":"2-3 paragraphs in HTML with <strong> tags, \\n\\n between paragraphs","todo":"<p><span class=\\"tip-icon\\">🏛️</span><strong>What to do:</strong> 3-4 practical sentences</p>","travel":"🚶 or 🚇 local directions within ${city} ${fromHint}","type_label":"short description like Museum · Free","prebook":false,"free":true,"color":"#5c4db1"}`;
+{"history":"3 rich paragraphs in HTML with <strong> tags. Cover: origins and founding, key historical events/famous figures, architectural or cultural significance. Separate paragraphs with \\n\\n","facts":["Specific fact with numbers/dates","Surprising or little-known detail","Famous person or event connection","Practical insider tip for visitors"],"todo":"<p><span class=\\"tip-icon\\">🏛️</span><strong>What to do:</strong> 4-5 practical sentences on highlights and must-sees</p>","travel":"🚶 or 🚇 local directions within ${city} ${fromHint}","type_label":"short description like Museum · Free","prebook":false,"free":true,"color":"#5c4db1"}`;
   try {
-    const text = await callAnthropic({ prompt, maxTokens: 1500 });
+    const text = await callAnthropic({ prompt, maxTokens: 2500 });
     // Extract first { ... } block even if AI adds preamble
     let raw = (text || '{}').replace(/```json|```/g,'').trim();
     const oStart = raw.indexOf('{');
     const oEnd = raw.lastIndexOf('}');
     if (oStart >= 0 && oEnd > oStart) raw = raw.slice(oStart, oEnd + 1);
     const info = JSON.parse(raw);
-    addStop(dayIdx, {name, address, lat, lng, type, duration, ...info});
+    const imgUrl = await fetchWikipediaImage(name);
+    addStop(dayIdx, {name, address, lat, lng, type, duration, ...info, image: imgUrl || undefined});
   } catch(e) {
     addStop(dayIdx, {name, address, lat, lng, type, duration, history:`<strong>${name}</strong> is at ${address}.`, todo:`<p>Explore ${name} during your visit.</p>`, travel:`🚇 Check Google Maps for directions.`, type_label:type, prebook:false, free:true, color:'#5c4db1'});
     showToast('AI unavailable — basic entry added');
