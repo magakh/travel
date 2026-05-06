@@ -1241,39 +1241,36 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
   <div class="panel" id="panel-search">
     <div class="add-view">
 
-      <!-- ── SEARCH EXISTING ── -->
+      <!-- ── UNIFIED AI SEARCH ── -->
       <h2 style="margin-bottom:4px;">Search &amp; Add</h2>
-      <p style="margin-bottom:12px;">Search your itinerary or find new places with AI.</p>
+      <p style="color:var(--muted);font-size:13px;margin-bottom:12px;">Describe what you're looking for and AI will find it, or search your existing stops.</p>
 
       <input class="form-input" id="searchQuery" type="text"
-        placeholder="🔍 Search existing stops or describe a new place…"
+        placeholder="🔍 Rooftop bar, hidden café, museum near Westminster…"
         oninput="searchExisting(this.value)"
         onkeydown="if(event.key==='Enter') aiSearch();"
         style="margin-bottom:6px;">
-      <div id="existingResults" style="margin-bottom:12px;"></div>
+      <div id="existingResults" style="margin-bottom:10px;"></div>
 
-      <!-- ── AI SEARCH ── -->
-      <div style="border-top:1px solid var(--border);padding-top:14px;margin-bottom:14px;">
-        <p style="font-size:12px;color:var(--muted);margin-bottom:8px;">Nothing found? Search with AI for new places:</p>
-        <label class="form-label">Add result to day</label>
-        <select class="form-input" id="searchDay">
-          <option value="0">Day 1</option>
-          <option value="1">Day 2</option>
-          <option value="2">Day 3</option>
-          <option value="3">Day 4</option>
-        </select>
-        <button class="gen-btn" id="searchBtn" onclick="aiSearch()" style="background:#5c4db1;">🤖 Search with AI →</button>
-        <p class="gen-hint">AI finds the best match, writes history &amp; tips, and adds it to your itinerary</p>
-        <div id="searchResults" style="margin-top:16px;"></div>
-      </div>
+      <label class="form-label" style="margin-bottom:4px;">Add result to day</label>
+      <select class="form-input" id="searchDay" style="margin-bottom:10px;">
+        <option value="0">Day 1</option>
+        <option value="1">Day 2</option>
+        <option value="2">Day 3</option>
+        <option value="3">Day 4</option>
+      </select>
+      <button class="gen-btn" id="searchBtn" onclick="aiSearch()" style="background:#5c4db1;">🤖 Search with AI →</button>
+      <p class="gen-hint">AI finds matching places, writes history &amp; tips, and adds to your itinerary</p>
+      <div id="searchResults" style="margin-top:16px;"></div>
 
-      <!-- ── ADD MANUALLY ── -->
-      <div style="border-top:1px solid var(--border);padding-top:14px;">
-        <p style="font-size:12px;color:var(--muted);margin-bottom:12px;">Or add a specific place manually:</p>
+      <!-- ── MANUAL ADD (collapsed) ── -->
+      <details style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
+        <summary style="font-size:13px;font-weight:700;color:#555;cursor:pointer;margin-bottom:12px;">➕ Add a specific known place manually</summary>
+
         <label class="form-label">Place name *</label>
-        <input class="form-input" id="addName" type="text" placeholder="e.g. Empire State Building">
+        <input class="form-input" id="addName" type="text" placeholder="e.g. Borough Market">
         <label class="form-label">Address *</label>
-        <input class="form-input" id="addAddress" type="text" placeholder="e.g. 20 W 34th St, New York, NY" onblur="geocodeAddStopAddress()">
+        <input class="form-input" id="addAddress" type="text" placeholder="e.g. 8 Southwark St, London" onblur="geocodeAddStopAddress()">
         <p class="gen-hint" id="addGeocodeStatus" style="margin-bottom:10px;">💡 Coordinates will be looked up automatically.</p>
         <details style="margin-bottom:10px;">
           <summary style="font-size:12px;color:#888;cursor:pointer;">Advanced: set coordinates manually</summary>
@@ -1313,9 +1310,9 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
           <option>90 min</option>
           <option>2 hours</option>
         </select>
-        <button class="gen-btn" id="genBtn" onclick="generateLocation()">Generate with AI →</button>
-        <p class="gen-hint">AI researches history, tips &amp; travel directions automatically</p>
-      </div>
+        <button class="gen-btn" id="genBtn" onclick="generateLocation()">✨ Add &amp; auto-fill details with AI</button>
+        <p class="gen-hint">AI writes history, tips &amp; travel directions for this specific place</p>
+      </details>
     </div>
   </div>
 
