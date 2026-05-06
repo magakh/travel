@@ -1377,20 +1377,30 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
         <button class="gen-btn" onclick="repairAllCoords()" style="background:#b03a00;margin-bottom:0;">🔧 Repair all coordinates</button>
       </div>
 
-      <!-- Personal Anthropic API key (overrides Edge Function) -->
+      <!-- Personal Anthropic API key + model selector -->
       <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
-        <h3 style="margin:0 0 6px 0;font-size:14px;">🔑 Anthropic API key <span style="font-weight:400;color:var(--muted);font-size:12px;">(this device only)</span></h3>
-        <p class="gen-hint" style="margin-bottom:8px;font-size:12px;line-height:1.5;">
-          Used as a fallback when the shared backend is out of credit. Get yours at <a href="https://platform.claude.com/settings/keys" target="_blank" rel="noopener" style="color:#1a73e8;text-decoration:underline;">platform.claude.com/settings/keys</a>.
-        </p>
-        <input class="form-input" id="setApiKey" type="password" placeholder="sk-ant-... (paste here)" autocomplete="off" style="margin-bottom:8px;font-family:monospace;font-size:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <h3 style="margin:0;font-size:14px;">🔑 AI settings</h3>
+          <button onclick="showApiKeyHelp()" style="background:none;border:1px solid #ddd;border-radius:20px;padding:3px 10px;font-size:12px;color:#555;cursor:pointer;">❓ How to get a key</button>
+        </div>
+
+        <label class="form-label">AI model</label>
+        <select class="form-input" id="setAiModel" style="margin-bottom:4px;" onchange="saveAiModel()">
+          <option value="claude-haiku-4-5-20251001">⚡ Haiku 4.5 — fastest &amp; cheapest</option>
+          <option value="claude-sonnet-4-6">✨ Sonnet 4.6 — balanced (recommended)</option>
+          <option value="claude-opus-4-6">🧠 Opus 4.6 — most capable</option>
+        </select>
+        <p class="gen-hint" id="modelHint" style="margin-bottom:12px;font-size:11px;"></p>
+
+        <label class="form-label">Personal API key <span style="font-weight:400;color:var(--muted);">(optional)</span></label>
+        <input class="form-input" id="setApiKey" type="password" placeholder="sk-ant-... (paste and save)" autocomplete="off" style="margin-bottom:6px;font-family:monospace;font-size:12px;">
         <div id="apiKeyStatus" class="gen-hint" style="margin-bottom:8px;font-size:12px;"></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
           <button class="gen-btn" onclick="saveApiKey()" style="background:#1a73e8;margin:0;">Save key</button>
-          <button class="gen-btn" onclick="clearApiKey()" style="background:#fff;color:#c0392b;border:1px solid #c0392b;margin:0;">Clear</button>
+          <button class="gen-btn" onclick="clearApiKey()" style="background:#fff;color:#c0392b;border:1px solid #c0392b;margin:0;">Clear key</button>
         </div>
         <p class="gen-hint" style="margin-top:8px;font-size:11px;color:#888;line-height:1.5;">
-          🔄 <b>Syncs across all your devices</b> via Supabase — enter once, works everywhere. Never included in trip URLs or exported files. Hit <b>Clear</b> before sharing the app with someone else so they set up their own.
+          🔄 Syncs across all your devices via Supabase. Hit <b>Clear key</b> before passing the app to someone else so they add their own.
         </p>
       </div>
 
@@ -1628,6 +1638,7 @@ function getTripConfig() {
   };
   // Only include the personal API key if one is set — never write an empty field
   if (APP_CONFIG.anthropicKey) cfg.anthropicKey = APP_CONFIG.anthropicKey;
+  if (APP_CONFIG.aiModel) cfg.aiModel = APP_CONFIG.aiModel;
   return cfg;
 }
 
@@ -5342,15 +5353,67 @@ function clearApiKey() {
   if (inp) inp.value = '';
 }
 
+function showApiKeyHelp() {
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:10001;display:flex;align-items:center;justify-content:center;padding:20px;';
+  ov.innerHTML = `<div style="background:#fff;border-radius:16px;padding:22px;max-width:400px;width:100%;max-height:85vh;overflow-y:auto;">
+    <h3 style="margin:0 0 12px 0;font-size:16px;">🔑 How to get an Anthropic API key</h3>
+    <ol style="padding-left:18px;margin:0 0 14px 0;font-size:13px;line-height:1.8;color:#333;">
+      <li>Go to <a href="https://platform.claude.com/settings/keys" target="_blank" style="color:#1a73e8;">platform.claude.com/settings/keys</a></li>
+      <li>Sign up or log in to your Anthropic account</li>
+      <li>Click <b>"Create Key"</b></li>
+      <li>Give it a name (e.g. "Travel App")</li>
+      <li>Copy the key — it starts with <code style="background:#f5f5f5;padding:2px 5px;border-radius:4px;">sk-ant-</code></li>
+      <li>Paste it in the field below and tap <b>Save key</b></li>
+    </ol>
+    <div style="background:#f0f7ff;border-radius:10px;padding:12px;font-size:12px;color:#333;margin-bottom:14px;line-height:1.6;">
+      <b>💡 About billing</b><br>
+      Anthropic charges per use. For typical trip planning (AI suggestions, filling itineraries), expect <b>a few cents per session</b>. Add a small credit at <a href="https://console.anthropic.com/settings/billing" target="_blank" style="color:#1a73e8;">console.anthropic.com/settings/billing</a> and set up auto top-up so it never runs out.
+    </div>
+    <div style="background:#f5f5f5;border-radius:10px;padding:12px;font-size:12px;color:#555;margin-bottom:14px;line-height:1.6;">
+      <b>🤖 Which model to pick?</b><br>
+      <b>Haiku</b> — cheapest, very fast, great for simple searches<br>
+      <b>Sonnet</b> — best balance of quality &amp; cost (recommended)<br>
+      <b>Opus</b> — highest quality, slower &amp; more expensive
+    </div>
+    <button onclick="this.closest('div[style*=fixed]').remove()" style="width:100%;padding:12px;border-radius:10px;border:none;background:#1a1a1a;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">Got it</button>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.onclick = (e) => { if (e.target === ov) ov.remove(); };
+}
+
+const MODEL_HINTS = {
+  'claude-haiku-4-5-20251001': '⚡ Fastest & cheapest — great for quick searches and suggestions.',
+  'claude-sonnet-4-6':         '✨ Best balance of quality and cost. Recommended for most uses.',
+  'claude-opus-4-6':           '🧠 Highest quality responses, slower and more expensive per call.',
+};
+
+function saveAiModel() {
+  const sel = document.getElementById('setAiModel');
+  if (!sel) return;
+  APP_CONFIG.aiModel = sel.value;
+  const hint = document.getElementById('modelHint');
+  if (hint) hint.textContent = MODEL_HINTS[sel.value] || '';
+  cloudSave('AI model changed');
+}
+
 function refreshApiKeyStatus() {
+  // Model selector
+  const sel = document.getElementById('setAiModel');
+  if (sel) {
+    sel.value = APP_CONFIG.aiModel || 'claude-sonnet-4-6';
+    const hint = document.getElementById('modelHint');
+    if (hint) hint.textContent = MODEL_HINTS[sel.value] || '';
+  }
+  // Key status
   const status = document.getElementById('apiKeyStatus');
   if (!status) return;
   const k = getApiKey();
   if (k) {
     const masked = k.slice(0, 11) + '…' + k.slice(-4);
-    status.innerHTML = '<span style="color:#1a7a3a;">✓ Personal key set (<code>' + masked + '</code>)</span>';
+    status.innerHTML = '<span style="color:#1a7a3a;">✓ Key set (<code>' + masked + '</code>) — AI calls use your personal key.</span>';
   } else {
-    status.innerHTML = '<span style="color:#888;">No personal key set — using shared backend.</span>';
+    status.innerHTML = '<span style="color:#888;">No personal key — using shared backend.</span>';
   }
 }
 
@@ -5358,7 +5421,7 @@ function refreshApiKeyStatus() {
 // Anthropic key lives server-side); falls back to direct Anthropic API if the
 // user has set a personal key in Settings. Throws on any failure.
 async function callAnthropic({ prompt, maxTokens, model }) {
-  model = model || 'claude-sonnet-4-5';
+  model = model || APP_CONFIG.aiModel || 'claude-sonnet-4-6';
   maxTokens = maxTokens || 1500;
   const messages = [{ role: 'user', content: prompt }];
 
