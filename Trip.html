@@ -3558,16 +3558,16 @@ function suggestBetween(afterIdx, beforeIdx, dayIdx) {
   const beforeName = beforeIdx >= 0 && beforeIdx < stops.length ? stops[beforeIdx]?.name : (window.HOTEL_DATA?.name || 'Hotel');
 
   // Compute total walk distance/time between the two stops for the header
-  const fromStop = afterIdx >= 0 && stops[afterIdx] ? stops[afterIdx] : window.HOTEL_DATA;
-  const toStop   = beforeIdx >= 0 && stops[beforeIdx] ? stops[beforeIdx] : window.HOTEL_DATA;
+  const _hdrFrom = afterIdx >= 0 && stops[afterIdx] ? stops[afterIdx] : window.HOTEL_DATA;
+  const _hdrTo   = beforeIdx >= 0 && stops[beforeIdx] ? stops[beforeIdx] : window.HOTEL_DATA;
   const _walkMinsEst = (a, b) => {
     if (!a || !b) return null;
     const m = _haversineMetres(a.lat, a.lng, b.lat, b.lng);
-    const mins = Math.round(m / 83); // ~5 km/h walking
+    const mins = Math.round(m / 83);
     return mins < 1 ? '< 1 min' : mins + ' min';
   };
-  const totalWalk = _walkMinsEst(fromStop, toStop);
-  const totalDist = fromStop && toStop ? Math.round(_haversineMetres(fromStop.lat, fromStop.lng, toStop.lat, toStop.lng)) : null;
+  const totalWalk = _walkMinsEst(_hdrFrom, _hdrTo);
+  const totalDist = _hdrFrom && _hdrTo ? Math.round(_haversineMetres(_hdrFrom.lat, _hdrFrom.lng, _hdrTo.lat, _hdrTo.lng)) : null;
   const distLabel = totalDist ? (totalDist >= 1000 ? (totalDist/1000).toFixed(1) + ' km' : totalDist + ' m') : '';
   const routeSummary = totalWalk ? '🚶 ' + totalWalk + (distLabel ? ' · ' + distLabel : '') + ' total' : '';
 
