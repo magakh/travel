@@ -5320,8 +5320,13 @@ async function callAnthropic({ prompt, maxTokens, model }) {
       const text = (data.content && data.content[0] && data.content[0].text) || '';
       return text;
     } catch(e) {
-      // If the edge function isn't deployed, fall through to direct call
-      console.warn('Edge function path failed, trying direct:', e.message);
+      // Surface the real edge function error — only fall through to direct API
+      // if user has set a personal key
+      console.warn('Edge function path failed:', e.message);
+      if (!getApiKey()) {
+        throw new Error('AI error: ' + (e.message || 'Edge Function failed'));
+      }
+      // else fall through to direct API call below
     }
   }
 
