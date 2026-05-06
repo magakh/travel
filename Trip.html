@@ -3557,6 +3557,20 @@ function suggestBetween(afterIdx, beforeIdx, dayIdx) {
   const afterName = afterIdx >= 0 ? stops[afterIdx]?.name : (window.HOTEL_DATA?.name || 'Hotel');
   const beforeName = beforeIdx >= 0 && beforeIdx < stops.length ? stops[beforeIdx]?.name : (window.HOTEL_DATA?.name || 'Hotel');
 
+  // Compute total walk distance/time between the two stops for the header
+  const fromStop = afterIdx >= 0 && stops[afterIdx] ? stops[afterIdx] : window.HOTEL_DATA;
+  const toStop   = beforeIdx >= 0 && stops[beforeIdx] ? stops[beforeIdx] : window.HOTEL_DATA;
+  const _walkMinsEst = (a, b) => {
+    if (!a || !b) return null;
+    const m = _haversineMetres(a.lat, a.lng, b.lat, b.lng);
+    const mins = Math.round(m / 83); // ~5 km/h walking
+    return mins < 1 ? '< 1 min' : mins + ' min';
+  };
+  const totalWalk = _walkMinsEst(fromStop, toStop);
+  const totalDist = fromStop && toStop ? Math.round(_haversineMetres(fromStop.lat, fromStop.lng, toStop.lat, toStop.lng)) : null;
+  const distLabel = totalDist ? (totalDist >= 1000 ? (totalDist/1000).toFixed(1) + ' km' : totalDist + ' m') : '';
+  const routeSummary = totalWalk ? '🚶 ' + totalWalk + (distLabel ? ' · ' + distLabel : '') + ' total' : '';
+
   const overlay = document.createElement('div');
   overlay.id = 'suggest-overlay';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;';
@@ -3568,7 +3582,7 @@ function suggestBetween(afterIdx, beforeIdx, dayIdx) {
           <div style="font-size:15px;font-weight:800;">✨ Add a stop</div>
           <button onclick="document.getElementById('suggest-overlay').remove();if(_suggestMap){_suggestMap.remove();_suggestMap=null;}" style="background:none;border:none;font-size:22px;color:#aaa;cursor:pointer;">✕</button>
         </div>
-        <div class="suggest-subtitle">Between <b>${afterName}</b> → <b>${beforeName}</b></div>
+        <div class="suggest-subtitle">Between <b>${afterName}</b> → <b>${beforeName}</b>${routeSummary ? ' &nbsp;<span style="color:#1a7a3a;font-weight:600;">' + routeSummary + '</span>' : ''}</div>
 
         <input id="suggestQuery" type="text" placeholder="Describe what you're looking for…"
           class="suggest-input"
@@ -3647,7 +3661,7 @@ async function runSuggest(midLat, midLng, afterIdx, dayIdx, beforeIdx) {
   try {
     const city = getTripCity();
     const isWalk = query.toLowerCase().includes('walk') || query.toLowerCase().includes('neighbourhood') || query.toLowerCase().includes('route');
-    _suggestCtx = { midLat, midLng, afterIdx, dayIdx, query, isWalk, city };
+    _suggestCtx = { midLat, midLng, afterIdx, dayIdx, query, isWalk, city, fromStop, toStop };
 
     // Get FROM and TO stop names + coords for location context
     const ctxStops = days[dayIdx] && days[dayIdx].stops || [];
@@ -3704,14 +3718,30 @@ function renderSuggestResults(results, afterIdx, dayIdx) {
   } catch(e) {}
 
   var html = '';
+  const { fromStop: fSt, toStop: tSt } = _suggestCtx || {};
+  const _minsTo = (a, b) => {
+    if (!a || !b || !a.lat || !b.lat) return null;
+    const m = _haversineMetres(a.lat, a.lng, b.lat, b.lng);
+    const mins = Math.round(m / 83);
+    return mins < 1 ? '< 1 min' : mins + ' min';
+  };
   results.forEach(function(r, i) {
+    const fromMins = fSt ? _minsTo(fSt, r) : null;
+    const toMins   = tSt ? _minsTo(r, tSt)  : null;
+    const walkLine = (fromMins || toMins)
+      ? '<div style="font-size:11px;color:#1a7a3a;margin-top:4px;font-weight:600;">🚶 ' +
+          (fromMins ? fromMins + ' from ' + (fSt.name || 'here') : '') +
+          (fromMins && toMins ? ' · ' : '') +
+          (toMins ? toMins + ' to ' + (tSt.name || 'next stop') : '') +
+        '</div>'
+      : '<div style="font-size:11px;color:#888;margin-top:3px;">⏳ ' + (r.duration || '60 min') + '</div>';
     html += '<div id="suggestResult'+i+'" onclick="highlightSuggestResult('+i+')" style="border:2px solid '+colors[i]+';border-radius:12px;padding:12px;margin-bottom:10px;cursor:pointer;background:#fff;">' +
       '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">' +
         '<div style="flex:1;">' +
           '<div style="font-size:14px;font-weight:700;color:#1a1a1a;">'+(i+1)+'. '+r.name+'</div>' +
           '<div style="font-size:11px;color:#888;margin:2px 0;">'+(r.type||'')+'<br>'+r.address+'</div>' +
           '<div style="font-size:12px;color:#555;margin-top:4px;">'+(r.why||'')+'</div>' +
-          '<div style="font-size:11px;color:#888;margin-top:3px;">⏳ '+(r.duration||'60 min')+'</div>' +
+          walkLine +
         '</div>' +
         '<button onclick="event.stopPropagation();insertSuggestedStop('+i+','+afterIdx+','+dayIdx+')" style="background:#1a1a1a;color:#fff;border:none;border-radius:20px;padding:6px 14px;font-size:13px;font-weight:700;cursor:pointer;flex-shrink:0;">+ Add</button>' +
       '</div>' +
