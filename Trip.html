@@ -5294,7 +5294,7 @@ function getApiKey() {
 // Anthropic key lives server-side); falls back to direct Anthropic API if the
 // user has set a personal key in Settings. Throws on any failure.
 async function callAnthropic({ prompt, maxTokens, model }) {
-  model = model || 'claude-sonnet-4-5';
+  model = model || 'claude-sonnet-4-6';
   maxTokens = maxTokens || 1500;
   const messages = [{ role: 'user', content: prompt }];
 
