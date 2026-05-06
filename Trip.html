@@ -1390,7 +1390,7 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
           <button class="gen-btn" onclick="clearApiKey()" style="background:#fff;color:#c0392b;border:1px solid #c0392b;margin:0;">Clear</button>
         </div>
         <p class="gen-hint" style="margin-top:8px;font-size:11px;color:#888;line-height:1.5;">
-          🔒 <b>Stays in this browser only.</b> Never written to the trip URL, Supabase, or any saved trip — so when you share a trip link, recipients never see your key. If you share the app with someone to make their own trips, they should paste their own key here.
+          🔄 <b>Syncs across all your devices</b> via Supabase — enter once, works everywhere. Never included in trip URLs or exported files. Hit <b>Clear</b> before sharing the app with someone else so they set up their own.
         </p>
       </div>
 
@@ -1616,15 +1616,19 @@ function getSaveData() {
 }
 
 function getTripConfig() {
-  return {
+  const cfg = {
     title: APP_CONFIG.title,
     subtitle: APP_CONFIG.subtitle,
     numDays: APP_CONFIG.numDays,
     dayLabels: APP_CONFIG.dayLabels,
     dayTitles: APP_CONFIG.dayTitles,
     arrivalTime: APP_CONFIG.arrivalTime || '',
-    departureTime: APP_CONFIG.departureTime || ''
+    departureTime: APP_CONFIG.departureTime || '',
+    startDate: APP_CONFIG.startDate || '',
   };
+  // Only include the personal API key if one is set — never write an empty field
+  if (APP_CONFIG.anthropicKey) cfg.anthropicKey = APP_CONFIG.anthropicKey;
+  return cfg;
 }
 
 // Best-effort: what city is this trip about?
@@ -5305,7 +5309,8 @@ function showToast(msg, isError=false) {
 
 // ── API KEY / ANTHROPIC HELPER ────────────────────────────────────
 function getApiKey() {
-  return sessionStorage.getItem('anthropic_key') || localStorage.getItem('anthropic_key') || '';
+  // APP_CONFIG.anthropicKey is synced from Supabase — works across all your devices
+  return APP_CONFIG.anthropicKey || '';
 }
 
 function saveApiKey() {
@@ -5319,18 +5324,20 @@ function saveApiKey() {
     if (status) status.innerHTML = '<span style="color:#c0392b;">Doesn\'t look like an Anthropic key (should start with <code>sk-ant-</code>).</span>';
     return;
   }
-  // Persist across sessions for convenience
-  try { localStorage.setItem('anthropic_key', v); } catch(e) {}
-  try { sessionStorage.setItem('anthropic_key', v); } catch(e) {}
-  if (status) status.innerHTML = '<span style="color:#1a7a3a;">✓ Saved. AI calls will use your key.</span>';
+  APP_CONFIG.anthropicKey = v;
+  cloudSave('Saved API key').then(() => {
+    refreshApiKeyStatus();
+    showToast('API key saved — synced across all your devices ✓');
+  });
   document.getElementById('setApiKey').value = '';
 }
 
 function clearApiKey() {
-  try { localStorage.removeItem('anthropic_key'); } catch(e) {}
-  try { sessionStorage.removeItem('anthropic_key'); } catch(e) {}
-  const status = document.getElementById('apiKeyStatus');
-  if (status) status.innerHTML = '<span style="color:#888;">Key cleared.</span>';
+  delete APP_CONFIG.anthropicKey;
+  cloudSave('Cleared API key').then(() => {
+    refreshApiKeyStatus();
+    showToast('API key cleared');
+  });
   const inp = document.getElementById('setApiKey');
   if (inp) inp.value = '';
 }
