@@ -1407,6 +1407,7 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
 
       <!-- ── SAVE ── -->
       <button class="gen-btn" onclick="saveAllSettings()" style="background:#1a1a1a;margin-top:14px;">💾 Save all settings</button>
+      <button onclick="showFeatureTour()" style="width:100%;margin-top:10px;padding:10px;border-radius:12px;border:1px solid #ddd;background:#fff;font-size:13px;color:#666;cursor:pointer;">❓ Show app feature guide</button>
       <p class="gen-hint">Trip settings &amp; hotel sync to all devices via Supabase.</p>
 
       <!-- ── TRIPS ── -->
@@ -3228,6 +3229,10 @@ async function init() {
   switchDay(0);
   renderPrebook();
   window.addEventListener('resize', updateHeaderHeight);
+  // Show feature highlights to first-time visitors
+  setTimeout(() => {
+    if (!localStorage.getItem('trip_tour_v1')) showFeatureTour();
+  }, 1200);
   startRealtime();
 }
 
@@ -3607,6 +3612,44 @@ function speakText(section, stopIdx, dayIdx) {
   utt.onend = () => {};
 
   window.speechSynthesis.speak(utt);
+}
+
+// ── FEATURE TOUR ─────────────────────────────────────────────────
+function showFeatureTour() {
+  const features = [
+    { icon:'📅', title:'Your days at a glance', desc:'Tap any day tab to see stops, times and travel between them.' },
+    { icon:'✨', title:'Add stops with AI', desc:'Tap "Add here" between any two stops — AI suggests places on your actual route.' },
+    { icon:'🚶 🚗 🚇', title:'Choose how you travel', desc:'Pick walk, car or train between stops. Times update automatically.' },
+    { icon:'🌤️', title:'Live weather', desc:'Today\'s forecast and hourly temperature shown on each stop.' },
+    { icon:'🔊', title:'Listen to history', desc:'Inside any stop, tap 🔊 next to History or Facts to hear them read aloud.' },
+    { icon:'🍽️', title:'Menu & dish ideas', desc:'Restaurants show a menu link and AI-suggested dishes to order.' },
+  ];
+
+  const ov = document.createElement('div');
+  ov.id = 'featureTour';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:20000;display:flex;align-items:flex-end;justify-content:center;padding:0;';
+
+  const cards = features.map(f =>
+    '<div style="display:flex;gap:14px;align-items:flex-start;padding:14px 0;border-bottom:1px solid #f0f0f0;">' +
+      '<div style="font-size:24px;min-width:36px;text-align:center;line-height:1.2;">' + f.icon + '</div>' +
+      '<div><div style="font-size:14px;font-weight:800;color:#1a1a1a;margin-bottom:2px;">' + f.title + '</div>' +
+      '<div style="font-size:13px;color:#555;line-height:1.4;">' + f.desc + '</div></div>' +
+    '</div>'
+  ).join('');
+
+  ov.innerHTML =
+    '<div style="background:#fff;border-radius:24px 24px 0 0;width:100%;max-width:600px;padding:22px 20px 32px;max-height:88vh;overflow-y:auto;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">' +
+        '<h2 style="margin:0;font-size:18px;font-weight:900;">What this app can do</h2>' +
+        '<button onclick="document.getElementById(\'featureTour\').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#888;padding:4px;">✕</button>' +
+      '</div>' +
+      '<p style="font-size:12px;color:#999;margin:0 0 16px 0;">A few things worth knowing</p>' +
+      cards +
+      '<button onclick="localStorage.setItem(\'trip_tour_v1\',\'1\');document.getElementById(\'featureTour\').remove();" style="width:100%;margin-top:20px;padding:14px;border-radius:14px;border:none;background:#1a1a1a;color:#fff;font-size:15px;font-weight:800;cursor:pointer;">Got it →</button>' +
+    '</div>';
+
+  document.body.appendChild(ov);
+  ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
 }
 
 // ── WEATHER ───────────────────────────────────────────────────────
