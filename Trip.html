@@ -3616,7 +3616,244 @@ function speakText(section, stopIdx, dayIdx) {
   window.speechSynthesis.speak(utt);
 }
 
-// ── BOOKING REMINDERS ─────────────────────────────────────────────
+// ── MAGIC LANDMARK TOUR ───────────────────────────────────────────
+let _tourTolerance = 0.3; // default: 30% extra distance allowed
+let _tourRouteLayer = null;
+
+async function runMagicTour(midLat, midLng, afterIdx, dayIdx, beforeIdx) {
+  const listEl = document.getElementById('suggestResultsList');
+  if (!listEl) return;
+
+  // Resolve FROM / TO stops
+  const ctxStops = days[dayIdx] && days[dayIdx].stops || [];
+  const fromStop = afterIdx >= 0 && ctxStops[afterIdx] ? ctxStops[afterIdx] : window.HOTEL_DATA;
+  const toStop   = beforeIdx >= 0 && ctxStops[beforeIdx] ? ctxStops[beforeIdx] : window.HOTEL_DATA;
+  if (!fromStop || !toStop) { listEl.innerHTML = '<p style="color:#c0392b;text-align:center;padding:20px;">Could not resolve start/end locations.</p>'; return; }
+
+  // Show tolerance pills + loading state
+  listEl.innerHTML = renderTourHeader(fromStop, toStop, afterIdx, dayIdx, beforeIdx) +
+    '<div id="tourCards" style="padding:0 16px 16px;"><p style="color:#aaa;font-size:13px;text-align:center;padding:30px 0;">🔍 Scanning for landmarks…</p></div>';
+
+  document.getElementById('suggestPanel').classList.add('has-results');
+
+  try {
+    const tour = await buildGuidedTour(fromStop, toStop, _tourTolerance);
+    renderTourCards(tour, fromStop, toStop, afterIdx, dayIdx, beforeIdx);
+    drawTourRoute(tour, fromStop, toStop);
+  } catch(e) {
+    document.getElementById('tourCards').innerHTML = '<p style="color:#c0392b;font-size:13px;text-align:center;padding:20px;">' + (e.message || 'Could not build tour — try again') + '</p>';
+  }
+}
+
+function renderTourHeader(fromStop, toStop, afterIdx, dayIdx, beforeIdx) {
+  const directM = _haversineMetres(fromStop.lat, fromStop.lng, toStop.lat, toStop.lng);
+  const pills = [
+    { label:'⚡ Direct', val:0.05 },
+    { label:'🚶 Light', val:0.2 },
+    { label:'🌟 Scenic', val:0.5 },
+    { label:'🎩 Full tour', val:1.0 },
+  ];
+  const pillHtml = pills.map(p =>
+    '<button onclick="setTourTolerance(' + p.val + ',' + afterIdx + ',' + dayIdx + ',' + beforeIdx + ')" id="tourPill_' + p.val + '" style="padding:6px 12px;border-radius:20px;border:1px solid #ddd;background:' + (Math.abs(p.val - _tourTolerance) < 0.01 ? '#1a1a1a;color:#fff' : '#fff;color:#333') + ';font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">' + p.label + '</button>'
+  ).join('');
+  return '<div style="padding:12px 16px 0;">' +
+    '<div style="font-size:12px;color:#888;margin-bottom:8px;">How much detour is OK?</div>' +
+    '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">' + pillHtml + '</div>' +
+  '</div>';
+}
+
+function setTourTolerance(val, afterIdx, dayIdx, beforeIdx) {
+  _tourTolerance = val;
+  // Update pill styles
+  document.querySelectorAll('[id^="tourPill_"]').forEach(btn => {
+    const isActive = Math.abs(parseFloat(btn.id.replace('tourPill_','')) - val) < 0.01;
+    btn.style.background = isActive ? '#1a1a1a' : '#fff';
+    btn.style.color = isActive ? '#fff' : '#333';
+  });
+  // Rebuild with new tolerance
+  const ctxStops = days[dayIdx] && days[dayIdx].stops || [];
+  const fromStop = afterIdx >= 0 && ctxStops[afterIdx] ? ctxStops[afterIdx] : window.HOTEL_DATA;
+  const toStop   = beforeIdx >= 0 && ctxStops[beforeIdx] ? ctxStops[beforeIdx] : window.HOTEL_DATA;
+  const cardsEl = document.getElementById('tourCards');
+  if (cardsEl) cardsEl.innerHTML = '<p style="color:#aaa;font-size:13px;text-align:center;padding:30px 0;">🔍 Adjusting route…</p>';
+  buildGuidedTour(fromStop, toStop, val).then(tour => {
+    renderTourCards(tour, fromStop, toStop, afterIdx, dayIdx, beforeIdx);
+    drawTourRoute(tour, fromStop, toStop);
+  }).catch(e => {
+    if (cardsEl) cardsEl.innerHTML = '<p style="color:#c0392b;text-align:center;padding:20px;">' + e.message + '</p>';
+  });
+}
+
+async function buildGuidedTour(fromStop, toStop, tolerance) {
+  const directM = _haversineMetres(fromStop.lat, fromStop.lng, toStop.lat, toStop.lng);
+  const midLat = (fromStop.lat + toStop.lat) / 2;
+  const midLng = (fromStop.lng + toStop.lng) / 2;
+  const searchRadius = Math.min(2000, Math.max(300, directM * 1.2));
+
+  // 1. Fetch Wikipedia GeoSearch candidates
+  const wikiUrl = 'https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=' + midLat + '|' + midLng + '&gsradius=' + Math.round(searchRadius) + '&gslimit=50&format=json&origin=*';
+  const wikiRes = await fetch(wikiUrl);
+  const wikiData = await wikiRes.json();
+  const candidates = (wikiData.query && wikiData.query.geosearch || []).map(p => ({
+    pageid: p.pageid, name: p.title, lat: p.lat, lng: p.lon, wikiDist: p.dist
+  }));
+
+  if (!candidates.length) throw new Error('No landmarks found along this route.');
+
+  // 2. Filter by detour cost
+  const maxDetourM = directM * tolerance;
+  const filtered = candidates.filter(c => {
+    const through = _haversineMetres(fromStop.lat, fromStop.lng, c.lat, c.lng) +
+                    _haversineMetres(c.lat, c.lng, toStop.lat, toStop.lng);
+    c.detourM = Math.max(0, through - directM);
+    c.through = through;
+    return c.detourM <= maxDetourM;
+  });
+
+  if (!filtered.length) throw new Error('No landmarks within the detour limit — try a wider tolerance.');
+
+  // 3. Sort by detour cost (least diversion = best)
+  filtered.sort((a, b) => a.detourM - b.detourM);
+
+  // 4. Greedy selection — pick best until adding more would exceed budget
+  const maxTourM = directM + maxDetourM;
+  const selected = [];
+  let tourM = directM;
+  for (const c of filtered) {
+    if (selected.length >= 8) break;
+    if (tourM + c.detourM <= maxTourM) {
+      selected.push(c);
+      tourM += c.detourM * 0.4; // conservative estimate of cumulative add
+    }
+  }
+
+  // 5. Sort by projection onto A→B vector (walking order)
+  const dx = toStop.lng - fromStop.lng;
+  const dy = toStop.lat - fromStop.lat;
+  const len2 = dx*dx + dy*dy || 1;
+  selected.forEach(c => {
+    c.proj = ((c.lng - fromStop.lng)*dx + (c.lat - fromStop.lat)*dy) / len2;
+  });
+  selected.sort((a, b) => a.proj - b.proj);
+
+  // 6. Fetch extracts + thumbnails in one Wikipedia call
+  const pageIds = selected.map(c => c.pageid).join('|');
+  const extractUrl = 'https://en.wikipedia.org/w/api.php?action=query&pageids=' + pageIds + '&prop=extracts|pageimages&exintro=1&explaintext=1&pithumbsize=400&format=json&origin=*';
+  const extRes = await fetch(extractUrl);
+  const extData = await extRes.json();
+  const pages = (extData.query && extData.query.pages) || {};
+  selected.forEach(c => {
+    const p = pages[c.pageid] || {};
+    c.extract = (p.extract || '').replace(/\n+/g, ' ').trim().slice(0, 600);
+    c.image = p.thumbnail && p.thumbnail.source || null;
+  });
+
+  // 7. Batch TL;DR generation — single Anthropic call for all
+  const withExtract = selected.filter(c => c.extract && c.extract.length > 40);
+  if (withExtract.length) {
+    try {
+      const prompt = 'For each of the following Wikipedia extracts about London landmarks, write ONE punchy sentence that would hook a tourist walking past — like a caption that makes them stop and look. Be specific, vivid, surprising. Return ONLY a JSON array of strings in the same order:\n\n' +
+        withExtract.map((c, i) => (i+1) + '. ' + c.name + ': ' + c.extract.slice(0, 250)).join('\n\n');
+      const text = await callAnthropic({ prompt, maxTokens: 800 });
+      const tldrs = extractJsonArray(text);
+      withExtract.forEach((c, i) => { if (tldrs[i]) c.tldr = tldrs[i]; });
+    } catch(e) {
+      // If Anthropic fails, use first sentence of extract as fallback
+      withExtract.forEach(c => { c.tldr = c.extract.split(/[.!?]/)[0] + '.'; });
+    }
+  }
+
+  // 8. Walk times between consecutive points
+  const pts = [fromStop, ...selected, toStop];
+  pts.forEach((p, i) => {
+    if (i === 0) return;
+    const m = _haversineMetres(pts[i-1].lat, pts[i-1].lng, p.lat, p.lng);
+    p.walkMinsFromPrev = Math.max(1, Math.round(m / 83));
+    p.distFromPrev = m;
+  });
+
+  const totalM = selected.reduce((acc, c) => acc + c.distFromPrev, 0) +
+    _haversineMetres(pts[pts.length-2].lat, pts[pts.length-2].lng, toStop.lat, toStop.lng);
+
+  return { landmarks: selected, totalM: directM + selected.reduce((a,c) => a + c.detourM * 0.4, 0), directM };
+}
+
+function renderTourCards(tour, fromStop, toStop, afterIdx, dayIdx, beforeIdx) {
+  const cardsEl = document.getElementById('tourCards');
+  if (!cardsEl) return;
+  const { landmarks, totalM, directM } = tour;
+
+  if (!landmarks.length) {
+    cardsEl.innerHTML = '<p style="color:#888;font-size:13px;text-align:center;padding:20px;">No landmarks found — try a wider tolerance.</p>';
+    return;
+  }
+
+  const totalMins = Math.round(totalM / 83);
+  const directMins = Math.round(directM / 83);
+  const extraMins = totalMins - directMins;
+
+  let html = '<div style="display:flex;align-items:center;gap:10px;padding:0 0 12px;border-bottom:1px solid #eee;margin-bottom:14px;">'
+    + '<div style="flex:1;">'
+    + '<div style="font-size:13px;font-weight:800;color:#1a1a1a;">' + landmarks.length + ' landmark' + (landmarks.length>1?'s':'') + ' along the way</div>'
+    + '<div style="font-size:11px;color:#888;margin-top:2px;">~' + totalMins + ' min walk · ' + (extraMins > 0 ? '+' + extraMins + ' min vs direct' : 'no extra time') + '</div>'
+    + '</div>'
+    + '</div>';
+
+  landmarks.forEach((lm, i) => {
+    const walkBit = lm.walkMinsFromPrev ? '<span style="font-size:10px;color:#5a7a8a;display:block;margin-bottom:6px;">🚶 ' + lm.walkMinsFromPrev + ' min from ' + (i===0 ? fromStop.name : landmarks[i-1].name) + '</span>' : '';
+    const imgBit = lm.image ? '<img src="' + lm.image + '" style="width:100%;height:130px;object-fit:cover;border-radius:10px;margin-bottom:8px;" loading="lazy">' : '';
+    const tldrBit = lm.tldr ? '<p style="font-size:13px;color:#333;line-height:1.5;margin:0 0 8px;">' + lm.tldr + '</p>' : '';
+    const speakId = 'tour-speak-' + i;
+    html += '<div style="border:1px solid #eee;border-radius:12px;padding:12px;margin-bottom:10px;background:#fff;">'
+      + walkBit
+      + imgBit
+      + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:4px;">'
+      + '<div style="font-size:14px;font-weight:800;color:#1a1a1a;line-height:1.3;">' + (i+1) + '. ' + lm.name + '</div>'
+      + '<button id="' + speakId + '" onclick="speakTourLandmark(' + i + ')" style="background:none;border:none;font-size:16px;cursor:pointer;flex-shrink:0;opacity:0.6;padding:0;" title="Read aloud">🔊</button>'
+      + '</div>'
+      + tldrBit
+      + '</div>';
+  });
+
+  // Walk to destination
+  const lastLm = landmarks[landmarks.length-1];
+  const finalMins = lastLm ? lastLm.walkMinsFromPrev : directMins;
+  html += '<div style="text-align:center;padding:12px 0;color:#1a7a3a;font-size:12px;font-weight:700;">🚶 ' + finalMins + ' min → ' + toStop.name + '</div>';
+
+  cardsEl.innerHTML = html;
+  // Store landmarks in context for speakTourLandmark
+  _tourLandmarks = landmarks;
+}
+
+let _tourLandmarks = [];
+function speakTourLandmark(idx) {
+  const lm = _tourLandmarks[idx];
+  if (!lm) return;
+  if (window.speechSynthesis && window.speechSynthesis.speaking) { window.speechSynthesis.cancel(); return; }
+  const text = lm.name + '. ' + (lm.extract || lm.tldr || '');
+  const utt = new SpeechSynthesisUtterance(text.slice(0, 1000));
+  utt.lang = 'en-GB'; utt.rate = 0.95;
+  window.speechSynthesis && window.speechSynthesis.speak(utt);
+  showToast('🔊 Reading ' + lm.name + '…');
+}
+
+function drawTourRoute(tour, fromStop, toStop) {
+  if (!_suggestMap) return;
+  // Remove previous tour route
+  if (_tourRouteLayer) { _suggestMap.removeLayer(_tourRouteLayer); _tourRouteLayer = null; }
+  const pts = [[fromStop.lat, fromStop.lng],
+    ...tour.landmarks.map(l => [l.lat, l.lng]),
+    [toStop.lat, toStop.lng]];
+  _tourRouteLayer = L.polyline(pts, { color:'#5c4db1', weight:4, opacity:0.8, dashArray:'8,4' }).addTo(_suggestMap);
+  // Numbered landmark markers
+  tour.landmarks.forEach((lm, i) => {
+    const ic = L.divIcon({ className:'', html:'<div style="background:#5c4db1;color:#fff;border:2px solid #fff;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;box-shadow:0 2px 6px rgba(0,0,0,0.4);">' + (i+1) + '</div>', iconSize:[26,26], iconAnchor:[13,13] });
+    L.marker([lm.lat, lm.lng], { icon: ic }).addTo(_suggestMap).bindPopup('<b>' + lm.name + '</b>');
+  });
+  _suggestMap.fitBounds(_tourRouteLayer.getBounds(), { padding:[30,30] });
+}
+
+
 // Schedules browser notifications 10 min before each booked/prebook stop.
 // Works on every device that has the app open — no server needed.
 
@@ -3942,6 +4179,7 @@ function suggestBetween(afterIdx, beforeIdx, dayIdx) {
           onkeydown="if(event.key==='Enter')runSuggest(${midLat},${midLng},${afterIdx},${dayIdx},${beforeIdx})">
 
         <div class="suggest-chips">
+          <button class="suggest-chip" style="background:#1a1a1a;color:#fff;font-weight:800;" onclick="runMagicTour(${midLat},${midLng},${afterIdx},${dayIdx},${beforeIdx})">🗺️ Magic landmark tour</button>
           ${SUGGEST_CATEGORIES.map(c => `<button class="suggest-chip" onclick="document.getElementById('suggestQuery').value='${c.label}';runSuggest(${midLat},${midLng},${afterIdx},${dayIdx},${beforeIdx})">${c.icon} ${c.label}</button>`).join('')}
           <button class="suggest-chip suggest-more-btn" onclick="document.getElementById('suggestPanel').classList.add('show-extra')">⋯ More</button>
           ${SUGGEST_CATEGORIES_MORE.map(c => `<button class="suggest-chip suggest-chip-extra" onclick="document.getElementById('suggestQuery').value='${c.label}';runSuggest(${midLat},${midLng},${afterIdx},${dayIdx},${beforeIdx})">${c.icon} ${c.label}</button>`).join('')}
