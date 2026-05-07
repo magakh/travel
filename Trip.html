@@ -3329,9 +3329,15 @@ function renderStopList() {
   const area = document.getElementById('mainArea');
   const scrollY = area ? area.scrollTop : 0;
 
+  // Inject/update weather banner for this day
+  fetchDayWeather(currentDay);
+
   const hotelEndName = currentDay === 3 ? 'Hotel — Check Out' : 'Hotel — Return for the night';
   const hd = window.HOTEL_DATA;
   const hotelLabel = hd ? hd.name : 'Hotel';
+
+  // Weather banner (populated async by fetchDayWeather)
+  const weatherBanner = `<div id="weather-banner-${currentDay}" style="display:none;"></div>`;
   const hotelBanner = (time, label) => `
     <div onclick="showHotelDetail()" style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:#f5f4f0;border-bottom:1px solid var(--border);cursor:pointer;transition:background 0.1s;" onmouseenter="this.style.background='#ece9e4'" onmouseleave="this.style.background='#f5f4f0'">
       <div style="width:26px;height:26px;border-radius:8px;background:#444;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;">🏨</div>
@@ -3425,6 +3431,7 @@ function renderStopList() {
   }
 
   document.getElementById('stopList').innerHTML =
+    weatherBanner +
     hotelBanner('', currentDay === 0 ? 'Hotel Check-In' : 'Hotel — Morning departure') +
     stopRows + lastConn +
     hotelBanner(hotelReturnTime, hotelEndName);
@@ -5668,7 +5675,89 @@ async function callAnthropic({ prompt, maxTokens, model }) {
 
 // ── AI GEOCODING ────────────────────────────────────────────────
 // Given an address string, ask AI for lat/lng and fill the target inputs.
-// ── COORDINATE HELPERS ────────────────────────────────────────────
+// ── WEATHER ───────────────────────────────────────────────────────
+const _weatherCache = {};
+
+const WMO_ICONS = {
+  0:'☀️',1:'🌤️',2:'⛅',3:'☁️',
+  45:'🌫️',48:'🌫️',
+  51:'🌦️',53:'🌦️',55:'🌦️',
+  61:'🌧️',63:'🌧️',65:'🌧️',
+  71:'❄️',73:'❄️',75:'❄️',77:'🌨️',
+  80:'🌦️',81:'🌦️',82:'🌦️',
+  85:'🌨️',86:'🌨️',
+  95:'⛈️',96:'⛈️',99:'⛈️',
+};
+const WMO_DESC = {
+  0:'Clear sky',1:'Mainly clear',2:'Partly cloudy',3:'Overcast',
+  45:'Foggy',48:'Icy fog',
+  51:'Light drizzle',53:'Drizzle',55:'Heavy drizzle',
+  61:'Light rain',63:'Rain',65:'Heavy rain',
+  71:'Light snow',73:'Snow',75:'Heavy snow',77:'Snow grains',
+  80:'Rain showers',81:'Rain showers',82:'Heavy showers',
+  85:'Snow showers',86:'Heavy snow showers',
+  95:'Thunderstorm',96:'Thunderstorm',99:'Thunderstorm',
+};
+
+async function fetchDayWeather(dayIdx) {
+  // Determine date for this day
+  const startDate = APP_CONFIG.startDate; // 'YYYY-MM-DD'
+  if (!startDate) return;
+  const [sy, smo, sd] = startDate.split('-').map(Number);
+  const dt = new Date(sy, smo - 1, sd + dayIdx);
+  const dateStr = dt.getFullYear() + '-' +
+    String(dt.getMonth()+1).padStart(2,'0') + '-' +
+    String(dt.getDate()).padStart(2,'0');
+
+  const cacheKey = dayIdx + '_' + dateStr;
+  if (_weatherCache[cacheKey]) {
+    renderWeatherBanner(dayIdx, _weatherCache[cacheKey], dateStr);
+    return;
+  }
+
+  // Get coords from hotel or trip center
+  const loc = window.HOTEL_DATA || getTripCenter();
+  if (!loc || !loc.lat) return;
+
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat.toFixed(4)}&longitude=${loc.lng.toFixed(4)}&daily=temperature_2m_max,temperature_2m_min,weathercode,precipitation_probability_max&timezone=auto&start_date=${dateStr}&end_date=${dateStr}&forecast_days=16`;
+    const res = await fetch(url);
+    if (!res.ok) return;
+    const data = await res.json();
+    const d = data.daily;
+    if (!d || !d.temperature_2m_max) return;
+    const w = {
+      tmax: Math.round(d.temperature_2m_max[0]),
+      tmin: Math.round(d.temperature_2m_min[0]),
+      code: d.weathercode[0],
+      precip: d.precipitation_probability_max[0],
+    };
+    _weatherCache[cacheKey] = w;
+    renderWeatherBanner(dayIdx, w, dateStr);
+  } catch(e) { /* silent fail — weather is non-critical */ }
+}
+
+function renderWeatherBanner(dayIdx, w, dateStr) {
+  const el = document.getElementById('weather-banner-' + dayIdx);
+  if (!el) return;
+  const icon = WMO_ICONS[w.code] || '🌡️';
+  const desc = WMO_DESC[w.code] || '';
+  const precipText = w.precip > 0 ? ` · 💧 ${w.precip}% rain` : '';
+  const monthDay = new Date(dateStr + 'T12:00:00').toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short' });
+  el.style.display = 'block';
+  el.innerHTML = `<div style="display:flex;align-items:center;gap:10px;padding:10px 16px 10px;background:linear-gradient(135deg,#e8f4fd,#f0f8ff);border-bottom:1px solid #d0e8f8;">
+    <span style="font-size:28px;line-height:1;">${icon}</span>
+    <div style="flex:1;">
+      <div style="font-size:13px;font-weight:700;color:#1a4a6b;">${desc}${precipText}</div>
+      <div style="font-size:11px;color:#5a7a8a;margin-top:1px;">${monthDay}</div>
+    </div>
+    <div style="text-align:right;">
+      <div style="font-size:18px;font-weight:800;color:#1a4a6b;">${w.tmax}°<span style="font-size:13px;font-weight:400;color:#7a9aaa;">/ ${w.tmin}°C</span></div>
+    </div>
+  </div>`;
+}
+
+
 
 // Pure geocoding — returns {lat, lng} or null. No DOM side-effects.
 async function lookupCoords(query) {
