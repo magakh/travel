@@ -1081,7 +1081,7 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
 /* Viewer mode: soften edit affordances (but don't hide them — user can still read) */
 body.viewer-mode .stop-check { opacity: 0.4; pointer-events: none; }
 body.viewer-mode .drag-h { opacity: 0.3; }
-body.viewer-mode .tc-suggest-btn { opacity: 0.7; }
+body.viewer-mode .tc-suggest-btn { display: none !important; }
 body.viewer-mode #saveBtn { opacity: 0.4; pointer-events: none; }
 body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
 .travel-connector {
@@ -1206,7 +1206,6 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
     <div class="split-layout" id="splitLayout">
       <div class="split-list" id="splitListCol">
         <div class="progress-wrap"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
-        <div id="weatherStrip" style="display:none;align-items:center;gap:8px;padding:7px 16px;background:linear-gradient(135deg,#e8f4fd,#f0f8ff);border-bottom:1px solid #d0e8f8;font-size:12px;"></div>
         <div class="action-bar">
           <button onclick="optimizeRoute()">⚡ Optimize route</button>
           <button class="blue-btn" onclick="showView('search')">+ Add location</button>
@@ -3333,9 +3332,6 @@ function renderStopList() {
   const hotelEndName = currentDay === 3 ? 'Hotel — Check Out' : 'Hotel — Return for the night';
   const hd = window.HOTEL_DATA;
   const hotelLabel = hd ? hd.name : 'Hotel';
-
-  // Weather banner (populated async by fetchDayWeather — lives outside stopList)
-
   const hotelBanner = (time, label) => `
     <div onclick="showHotelDetail()" style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:#f5f4f0;border-bottom:1px solid var(--border);cursor:pointer;transition:background 0.1s;" onmouseenter="this.style.background='#ece9e4'" onmouseleave="this.style.background='#f5f4f0'">
       <div style="width:26px;height:26px;border-radius:8px;background:#444;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;">🏨</div>
@@ -3375,7 +3371,6 @@ function renderStopList() {
           &nbsp;·&nbsp;
           <span onclick="event.stopPropagation(); editDuration(${i});" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;color:var(--muted);" title="Tap to edit duration">⏳ ${s.duration}</span>
           &nbsp;→&nbsp;<span style="color:var(--hint);">${endTime}</span>
-          <span id="wx-${currentDay}-${i}" style="margin-left:6px;font-size:11px;color:#5a7a8a;font-weight:600;"></span>
         </div>
         ${bookingArrivalHtml(currentDay, i)}
         ${getConflict(i) ? '<div class="conflict-banner">⚠️ Time conflict with previous stop</div>' : ''}
@@ -3433,14 +3428,6 @@ function renderStopList() {
     hotelBanner('', currentDay === 0 ? 'Hotel Check-In' : 'Hotel — Morning departure') +
     stopRows + lastConn +
     hotelBanner(hotelReturnTime, hotelEndName);
-
-  // Now DOM exists — fetch weather and paint
-  fetchDayWeather(currentDay);
-  // If already cached, paint per-stop weather immediately (strip already handled by fetchDayWeather)
-  const strip = document.getElementById('weatherStrip');
-  if (strip && !_weatherCache[Object.keys(_weatherCache).find(k => k)]) {
-    strip.style.display = 'none'; // hide stale strip while loading new day
-  }
 
   // Fetch travel times asynchronously (fills in connectors when ready)
   loadWalkTimes();
@@ -3535,21 +3522,6 @@ function renderDetail() {
       <div class="section-label">What to do</div>
       <div class="tip-box">${s.todo || ''}</div>
     </div>
-
-    ${isFoodStop(s) ? `
-    <div class="detail-section">
-      <div class="section-label">Menu & what to order</div>
-      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
-        <a href="https://www.google.com/search?q=${encodeURIComponent(s.name + ' ' + (s.address||'') + ' menu')}" target="_blank" style="display:inline-flex;align-items:center;gap:5px;padding:7px 14px;background:#fff3e0;border:1px solid #ffb74d;border-radius:20px;font-size:12px;font-weight:700;color:#e65100;text-decoration:none;">🍽️ View menu online</a>
-        <a href="https://www.google.com/search?q=${encodeURIComponent(s.name + ' ' + (s.address||'') + ' tripadvisor review')}" target="_blank" style="display:inline-flex;align-items:center;gap:5px;padding:7px 14px;background:#e8f5e9;border:1px solid #81c784;border-radius:20px;font-size:12px;font-weight:700;color:#2e7d32;text-decoration:none;">⭐ Reviews</a>
-      </div>
-      ${s.orderSuggestions && s.orderSuggestions.length ? `
-        <div style="font-size:12px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px;">Suggested dishes</div>
-        <div style="display:flex;flex-direction:column;gap:6px;">
-          ${s.orderSuggestions.map(d => `<div style="display:flex;gap:8px;align-items:flex-start;padding:8px 10px;background:#fff8f0;border-radius:8px;border-left:3px solid #ff9800;font-size:13px;color:#333;line-height:1.4;"><span style="flex-shrink:0;">🍴</span><span>${d}</span></div>`).join('')}
-        </div>` :
-        `<button onclick="suggestDishes(${currentStop}, ${currentDay})" id="dishBtn" style="width:100%;padding:10px;border-radius:10px;border:1px dashed #ffb74d;background:#fff8f0;font-size:13px;font-weight:700;color:#e65100;cursor:pointer;">✨ Suggest what to order</button>`}
-    </div>` : ''}
 
     <div class="detail-section" id="res-section">
       <div class="section-label">Reservation</div>
@@ -3920,7 +3892,6 @@ function highlightSuggestResult(i) {
 }
 
 function insertSuggestedStop(resultIdx, afterIdx, dayIdx) {
-  if (!EDITOR_MODE) { showToast('Unlock edit mode to add stops to this trip', true); return; }
   const r = _suggestResults[resultIdx];
   if (!r) return;
 
@@ -5276,11 +5247,6 @@ CRITICAL: Respond with ONLY valid JSON starting with { and ending with }. No mar
     if (info.type_label) s.type = info.type_label;
     if (imgUrl) s.image = imgUrl;
 
-    // Auto-fetch dish suggestions for food stops
-    if (isFoodStop(s) && !s.orderSuggestions) {
-      suggestDishes(stopIdx, dayIdx).catch(() => {});
-    }
-
     autoSave();
     if (currentView === 'detail' && currentStop === stopIdx && currentDay === dayIdx) renderDetail();
     showToast('Content enriched ✓');
@@ -5701,124 +5667,7 @@ async function callAnthropic({ prompt, maxTokens, model }) {
 
 // ── AI GEOCODING ────────────────────────────────────────────────
 // Given an address string, ask AI for lat/lng and fill the target inputs.
-// ── WEATHER ───────────────────────────────────────────────────────
-const _weatherCache = {};
-
-const WMO_ICONS = {
-  0:'☀️',1:'🌤️',2:'⛅',3:'☁️',
-  45:'🌫️',48:'🌫️',
-  51:'🌦️',53:'🌦️',55:'🌦️',
-  61:'🌧️',63:'🌧️',65:'🌧️',
-  71:'❄️',73:'❄️',75:'❄️',77:'🌨️',
-  80:'🌦️',81:'🌦️',82:'🌦️',
-  85:'🌨️',86:'🌨️',
-  95:'⛈️',96:'⛈️',99:'⛈️',
-};
-const WMO_DESC = {
-  0:'Clear',1:'Mainly clear',2:'Partly cloudy',3:'Overcast',
-  45:'Foggy',48:'Foggy',
-  51:'Light drizzle',53:'Drizzle',55:'Drizzle',
-  61:'Light rain',63:'Rain',65:'Heavy rain',
-  71:'Light snow',73:'Snow',75:'Heavy snow',77:'Snow',
-  80:'Showers',81:'Showers',82:'Heavy showers',
-  85:'Snow showers',86:'Snow showers',
-  95:'Thunderstorm',96:'Thunderstorm',99:'Thunderstorm',
-};
-
-async function fetchDayWeather(dayIdx) {
-  // Derive date: prefer APP_CONFIG.startDate, fall back to parsing dayLabels (e.g. "May 7")
-  let dateStr = '';
-  if (APP_CONFIG.startDate) {
-    const [sy, smo, sd] = APP_CONFIG.startDate.split('-').map(Number);
-    const dt = new Date(sy, smo - 1, sd + dayIdx);
-    dateStr = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0') + '-' + String(dt.getDate()).padStart(2,'0');
-  } else {
-    // Try to parse label like "May 7" → use current year
-    const label = (APP_CONFIG.dayLabels && APP_CONFIG.dayLabels[dayIdx]) || '';
-    const m = label.match(/(\w+)\s+(\d+)/);
-    if (m) {
-      const months = {Jan:1,Feb:2,Mar:3,Apr:4,May:5,Jun:6,Jul:7,Aug:8,Sep:9,Oct:10,Nov:11,Dec:12};
-      const mo = months[m[1]];
-      if (mo) {
-        const yr = new Date().getFullYear();
-        dateStr = yr + '-' + String(mo).padStart(2,'0') + '-' + String(parseInt(m[2])).padStart(2,'0');
-      }
-    }
-  }
-  if (!dateStr) return;
-
-  const cacheKey = dateStr;
-  if (_weatherCache[cacheKey]) {
-    applyWeatherToDay(dayIdx, _weatherCache[cacheKey]);
-    return;
-  }
-
-  const loc = window.HOTEL_DATA || getTripCenter();
-  if (!loc || !loc.lat) return;
-
-  try {
-    const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + loc.lat.toFixed(4) + '&longitude=' + loc.lng.toFixed(4) + '&hourly=temperature_2m,weather_code,precipitation_probability&daily=temperature_2m_max,temperature_2m_min,weather_code&timezone=auto&start_date=' + dateStr + '&end_date=' + dateStr;
-    const res = await fetch(url);
-    if (!res.ok) return;
-    const data = await res.json();
-    const h = data.hourly;
-    const d = data.daily;
-    if (!h || !d) return;
-    const hourly = {};
-    (h.time || []).forEach((t, i) => {
-      const hr = parseInt(t.slice(11, 13));
-      hourly[hr] = {
-        temp: Math.round(h.temperature_2m[i]),
-        code: (h.weather_code || h.weathercode || [])[i] || 0,
-        precip: (h.precipitation_probability || [])[i] || 0
-      };
-    });
-    const weather = {
-      tmax: Math.round(d.temperature_2m_max[0]),
-      tmin: Math.round(d.temperature_2m_min[0]),
-      code: (d.weather_code || d.weathercode || [])[0] || 0,
-      hourly
-    };
-    _weatherCache[cacheKey] = weather;
-    applyWeatherToDay(dayIdx, weather);
-  } catch(e) { console.warn('Weather fetch failed:', e); }
-}
-
-function applyWeatherToDay(dayIdx, w) {
-  // Only paint if this is the currently visible day
-  if (dayIdx !== currentDay) return;
-
-  // 1. Day summary strip (static element, survives re-renders)
-  const strip = document.getElementById('weatherStrip');
-  if (strip) {
-    const icon = WMO_ICONS[w.code] || '🌡️';
-    const desc = WMO_DESC[w.code] || '';
-    strip.style.display = 'flex';
-    strip.innerHTML = `<span style="font-size:18px;">${icon}</span><span style="font-weight:600;color:#1a4a6b;flex:1;">${desc}</span><span style="font-weight:800;color:#1a4a6b;">${w.tmax}°<span style="font-size:11px;font-weight:400;color:#7a9aaa;"> / ${w.tmin}°C</span></span>`;
-  }
-
-  // 2. Per-stop hourly weather
-  const stops = days[dayIdx] && days[dayIdx].stops;
-  if (!stops) return;
-  stops.forEach((s, i) => {
-    const el = document.getElementById('wx-' + dayIdx + '-' + i);
-    if (!el) return;
-    const hrMatch = (s.time || '').match(/(\d+):(\d+)\s*(AM|PM)?/i);
-    if (!hrMatch) return;
-    let hour24 = parseInt(hrMatch[1]);
-    const isPM = (hrMatch[3] || '').toUpperCase() === 'PM';
-    const isAM = (hrMatch[3] || '').toUpperCase() === 'AM';
-    if (isPM && hour24 < 12) hour24 += 12;
-    if (isAM && hour24 === 12) hour24 = 0;
-    const hw = w.hourly[hour24] || w.hourly[Math.max(0, hour24 - 1)] || null;
-    if (!hw) return;
-    const ic = WMO_ICONS[hw.code] || '';
-    const precipBit = hw.precip > 10 ? ` 💧${hw.precip}%` : '';
-    el.textContent = ic + ' ' + hw.temp + '°' + precipBit;
-  });
-}
-
-
+// ── COORDINATE HELPERS ────────────────────────────────────────────
 
 // Pure geocoding — returns {lat, lng} or null. No DOM side-effects.
 async function lookupCoords(query) {
@@ -5839,33 +5688,7 @@ async function lookupCoords(query) {
 }
 
 // Returns true for 0,0 or the known London-centre AI placeholder ~51.515, -0.12
-function isFoodStop(s) {
-  const t = ((s.type || '') + ' ' + (s.type_label || '') + ' ' + (s.name || '')).toLowerCase();
-  return /restaurant|café|cafe|bar|pub|dining|bistro|brasserie|tea|coffee|rooftop.*din|brunch|breakfast|lunch|dinner|grill|kitchen|eatery|food|waffle|cocktail|wine bar|jazz.*club/.test(t);
-}
-
-async function suggestDishes(stopIdx, dayIdx) {
-  const s = days[dayIdx].stops[stopIdx];
-  if (!s) return;
-  const btn = document.getElementById('dishBtn');
-  if (btn) { btn.textContent = '⏳ Looking up dishes…'; btn.disabled = true; }
-  try {
-    const prompt = 'You are a food expert. For the restaurant/café "' + s.name + '" located at "' + (s.address || s.name) + '" in ' + getTripCity() + ', list the 4-5 most recommended dishes or drinks to order. Include the dish name and one short sentence about it. Return ONLY a JSON array of strings: ["Dish name — description", ...]. Be specific to this actual restaurant if you know it.';
-    const text = await callAnthropic({ prompt, maxTokens: 500 });
-    const dishes = extractJsonArray(text);
-    if (dishes.length) {
-      s.orderSuggestions = dishes;
-      autoSave();
-      renderDetail();
-    } else {
-      if (btn) { btn.textContent = '✨ Suggest what to order'; btn.disabled = false; }
-    }
-  } catch(e) {
-    if (btn) { btn.textContent = '✨ Suggest what to order'; btn.disabled = false; }
-  }
-}
-
-
+function isSuspiciousCoords(lat, lng) {
   if (!lat && !lng) return true;
   if (lat === 0 && lng === 0) return true;
   if (Math.abs(lat - 51.515) < 0.003 && Math.abs(lng - (-0.12)) < 0.003) return true;
