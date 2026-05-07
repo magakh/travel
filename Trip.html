@@ -1206,6 +1206,7 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
     <div class="split-layout" id="splitLayout">
       <div class="split-list" id="splitListCol">
         <div class="progress-wrap"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+        <div id="weatherStrip" style="display:none;align-items:center;gap:8px;padding:7px 16px;background:linear-gradient(135deg,#e8f4fd,#f0f8ff);border-bottom:1px solid #d0e8f8;font-size:12px;"></div>
         <div class="action-bar">
           <button onclick="optimizeRoute()">⚡ Optimize route</button>
           <button class="blue-btn" onclick="showView('search')">+ Add location</button>
@@ -3333,8 +3334,8 @@ function renderStopList() {
   const hd = window.HOTEL_DATA;
   const hotelLabel = hd ? hd.name : 'Hotel';
 
-  // Weather banner (populated async by fetchDayWeather)
-  const weatherBanner = `<div id="weather-banner-${currentDay}" style="display:flex;align-items:center;gap:8px;padding:8px 16px;background:linear-gradient(135deg,#e8f4fd,#f0f8ff);border-bottom:1px solid #d0e8f8;min-height:36px;"><span style="font-size:11px;color:#9ab;font-style:italic;">Loading weather…</span></div>`;
+  // Weather banner (populated async by fetchDayWeather — lives outside stopList)
+
   const hotelBanner = (time, label) => `
     <div onclick="showHotelDetail()" style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:#f5f4f0;border-bottom:1px solid var(--border);cursor:pointer;transition:background 0.1s;" onmouseenter="this.style.background='#ece9e4'" onmouseleave="this.style.background='#f5f4f0'">
       <div style="width:26px;height:26px;border-radius:8px;background:#444;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;">🏨</div>
@@ -3429,13 +3430,17 @@ function renderStopList() {
   }
 
   document.getElementById('stopList').innerHTML =
-    weatherBanner +
     hotelBanner('', currentDay === 0 ? 'Hotel Check-In' : 'Hotel — Morning departure') +
     stopRows + lastConn +
     hotelBanner(hotelReturnTime, hotelEndName);
 
   // Now DOM exists — fetch weather and paint
   fetchDayWeather(currentDay);
+  // If already cached, paint per-stop weather immediately (strip already handled by fetchDayWeather)
+  const strip = document.getElementById('weatherStrip');
+  if (strip && !_weatherCache[Object.keys(_weatherCache).find(k => k)]) {
+    strip.style.display = 'none'; // hide stale strip while loading new day
+  }
 
   // Fetch travel times asynchronously (fills in connectors when ready)
   loadWalkTimes();
@@ -5760,14 +5765,16 @@ async function fetchDayWeather(dayIdx) {
 }
 
 function applyWeatherToDay(dayIdx, w) {
-  // 1. Day summary banner
-  const banner = document.getElementById('weather-banner-' + dayIdx);
-  if (banner) {
+  // Only paint if this is the currently visible day
+  if (dayIdx !== currentDay) return;
+
+  // 1. Day summary strip (static element, survives re-renders)
+  const strip = document.getElementById('weatherStrip');
+  if (strip) {
     const icon = WMO_ICONS[w.code] || '🌡️';
     const desc = WMO_DESC[w.code] || '';
-    banner.innerHTML = `<span style="font-size:20px;">${icon}</span>
-      <span style="font-size:12px;font-weight:600;color:#1a4a6b;flex:1;">${desc}</span>
-      <span style="font-size:14px;font-weight:800;color:#1a4a6b;">${w.tmax}° <span style="font-size:11px;font-weight:400;color:#7a9aaa;">/ ${w.tmin}°C</span></span>`;
+    strip.style.display = 'flex';
+    strip.innerHTML = `<span style="font-size:18px;">${icon}</span><span style="font-weight:600;color:#1a4a6b;flex:1;">${desc}</span><span style="font-weight:800;color:#1a4a6b;">${w.tmax}°<span style="font-size:11px;font-weight:400;color:#7a9aaa;"> / ${w.tmin}°C</span></span>`;
   }
 
   // 2. Per-stop hourly weather
