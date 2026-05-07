@@ -1206,6 +1206,7 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
     <div class="split-layout" id="splitLayout">
       <div class="split-list" id="splitListCol">
         <div class="progress-wrap"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+        <div id="weatherStrip" style="display:none;"></div>
         <div class="action-bar">
           <button onclick="optimizeRoute()">⚡ Optimize route</button>
           <button class="blue-btn" onclick="showView('search')">+ Add location</button>
@@ -3371,6 +3372,7 @@ function renderStopList() {
           &nbsp;·&nbsp;
           <span onclick="event.stopPropagation(); editDuration(${i});" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;color:var(--muted);" title="Tap to edit duration">⏳ ${s.duration}</span>
           &nbsp;→&nbsp;<span style="color:var(--hint);">${endTime}</span>
+          <span id="wx-${currentDay}-${i}" style="margin-left:5px;font-size:11px;color:#5a7a8a;"></span>
         </div>
         ${bookingArrivalHtml(currentDay, i)}
         ${getConflict(i) ? '<div class="conflict-banner">⚠️ Time conflict with previous stop</div>' : ''}
@@ -3431,6 +3433,8 @@ function renderStopList() {
 
   // Fetch travel times asynchronously (fills in connectors when ready)
   loadWalkTimes();
+  // Fetch weather for this day (async — updates weatherStrip when done)
+  fetchDayWeather(currentDay);
 
   // Restore scroll position after re-render
   if (area && scrollY) requestAnimationFrame(() => { area.scrollTop = scrollY; });
@@ -3523,6 +3527,8 @@ function renderDetail() {
       <div class="tip-box">${s.todo || ''}</div>
     </div>
 
+    <div id="foodSection"></div>
+
     <div class="detail-section" id="res-section">
       <div class="section-label">Reservation</div>
       ${s.reservation ? `
@@ -3565,6 +3571,107 @@ function renderDetail() {
     </div>
   `;
   updateBottomNav();
+  // Render food section separately (avoids nested template literal issues)
+  renderFoodSection(days[currentDay].stops[currentStop], currentStop, currentDay);
+}
+
+// ── WEATHER ───────────────────────────────────────────────────────
+const _weatherCache = {};
+const WMO_ICONS = {0:'☀️',1:'🌤️',2:'⛅',3:'☁️',45:'🌫️',48:'🌫️',51:'🌦️',53:'🌦️',55:'🌦️',61:'🌧️',63:'🌧️',65:'🌧️',71:'❄️',73:'❄️',75:'❄️',77:'🌨️',80:'🌦️',81:'🌦️',82:'🌦️',85:'🌨️',86:'🌨️',95:'⛈️',96:'⛈️',99:'⛈️'};
+const WMO_DESC = {0:'Clear',1:'Mainly clear',2:'Partly cloudy',3:'Overcast',45:'Foggy',48:'Foggy',51:'Light drizzle',53:'Drizzle',55:'Drizzle',61:'Light rain',63:'Rain',65:'Heavy rain',71:'Light snow',73:'Snow',75:'Heavy snow',77:'Snow',80:'Showers',81:'Showers',82:'Heavy showers',95:'Thunderstorm',96:'Thunderstorm',99:'Thunderstorm'};
+
+async function fetchDayWeather(dayIdx) {
+  const strip = document.getElementById('weatherStrip');
+  if (!strip) return;
+  let dateStr = '';
+  if (APP_CONFIG.startDate) {
+    const [sy, sm, sd] = APP_CONFIG.startDate.split('-').map(Number);
+    const dt = new Date(sy, sm-1, sd+dayIdx);
+    dateStr = dt.getFullYear()+'-'+String(dt.getMonth()+1).padStart(2,'0')+'-'+String(dt.getDate()).padStart(2,'0');
+  } else {
+    const label = (APP_CONFIG.dayLabels && APP_CONFIG.dayLabels[dayIdx]) || '';
+    const m = label.match(/(\w+)\s+(\d+)/);
+    if (m) {
+      const mo = {Jan:1,Feb:2,Mar:3,Apr:4,May:5,Jun:6,Jul:7,Aug:8,Sep:9,Oct:10,Nov:11,Dec:12}[m[1]];
+      if (mo) dateStr = new Date().getFullYear()+'-'+String(mo).padStart(2,'0')+'-'+String(parseInt(m[2])).padStart(2,'0');
+    }
+  }
+  if (!dateStr) return;
+  if (_weatherCache[dateStr]) { paintWeather(dayIdx, _weatherCache[dateStr]); return; }
+  const loc = window.HOTEL_DATA || getTripCenter();
+  if (!loc || !loc.lat) return;
+  try {
+    const r = await fetch('https://api.open-meteo.com/v1/forecast?latitude='+loc.lat.toFixed(4)+'&longitude='+loc.lng.toFixed(4)+'&hourly=temperature_2m,weather_code,precipitation_probability&daily=temperature_2m_max,temperature_2m_min,weather_code&timezone=auto&start_date='+dateStr+'&end_date='+dateStr);
+    if (!r.ok) return;
+    const data = await r.json();
+    const h = data.hourly; const d = data.daily;
+    if (!h || !d) return;
+    const hourly = {};
+    (h.time||[]).forEach((t,i) => { const hr=parseInt(t.slice(11,13)); hourly[hr]={temp:Math.round(h.temperature_2m[i]),code:(h.weather_code||[])[i]||0,precip:(h.precipitation_probability||[])[i]||0}; });
+    const w = {tmax:Math.round(d.temperature_2m_max[0]),tmin:Math.round(d.temperature_2m_min[0]),code:(d.weather_code||[])[0]||0,hourly};
+    _weatherCache[dateStr] = w;
+    paintWeather(dayIdx, w);
+  } catch(e) {}
+}
+
+function paintWeather(dayIdx, w) {
+  if (dayIdx !== currentDay) return;
+  const strip = document.getElementById('weatherStrip');
+  if (!strip) return;
+  const icon = WMO_ICONS[w.code]||'🌡️', desc = WMO_DESC[w.code]||'';
+  strip.style.cssText = 'display:flex;align-items:center;gap:8px;padding:7px 16px;background:linear-gradient(135deg,#e8f4fd,#f0f8ff);border-bottom:1px solid #d0e8f8;font-size:12px;';
+  strip.innerHTML = '<span style="font-size:18px;">'+icon+'</span><span style="font-weight:600;color:#1a4a6b;flex:1;">'+desc+'</span><span style="font-weight:800;color:#1a4a6b;">'+w.tmax+'° <span style="font-size:11px;font-weight:400;color:#7a9aaa;">/ '+w.tmin+'°C</span></span>';
+  // Per-stop hourly weather
+  const stops = days[dayIdx]&&days[dayIdx].stops; if (!stops) return;
+  stops.forEach((s,i) => {
+    const el = document.getElementById('wx-'+dayIdx+'-'+i); if (!el) return;
+    const m = (s.time||'').match(/(\d+):(\d+)\s*(AM|PM)?/i); if (!m) return;
+    let h24 = parseInt(m[1]);
+    if ((m[3]||'').toUpperCase()==='PM' && h24<12) h24+=12;
+    if ((m[3]||'').toUpperCase()==='AM' && h24===12) h24=0;
+    const hw = w.hourly[h24]||w.hourly[Math.max(0,h24-1)]; if (!hw) return;
+    el.textContent = (WMO_ICONS[hw.code]||'')+'  '+hw.temp+'°'+(hw.precip>10?' 💧'+hw.precip+'%':'');
+  });
+}
+
+// ── FOOD STOPS ────────────────────────────────────────────────────
+function isFoodStop(s) {
+  const t = ((s.type||'')+' '+(s.type_label||'')+' '+(s.name||'')).toLowerCase();
+  return /restaurant|caf[eé]|bar|pub|dining|bistro|brasserie|tea|coffee|brunch|breakfast|lunch|dinner|grill|kitchen|eatery|waffle|rooftop.*din/.test(t);
+}
+
+function renderFoodSection(s, stopIdx, dayIdx) {
+  const el = document.getElementById('foodSection');
+  if (!el) return;
+  if (!isFoodStop(s)) { el.innerHTML = ''; return; }
+  const q = encodeURIComponent((s.name||'') + ' ' + (s.address||''));
+  let dishHtml = '';
+  if (s.orderSuggestions && s.orderSuggestions.length) {
+    dishHtml = '<div style="font-size:12px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px;">Suggested dishes</div>';
+    s.orderSuggestions.forEach(function(d) {
+      dishHtml += '<div style="display:flex;gap:8px;align-items:flex-start;padding:8px 10px;background:#fff8f0;border-radius:8px;border-left:3px solid #ff9800;font-size:13px;color:#333;line-height:1.4;margin-bottom:6px;"><span>🍴</span><span>'+d+'</span></div>';
+    });
+  } else {
+    dishHtml = '<button id="dishBtn" onclick="suggestDishes('+stopIdx+','+dayIdx+')" style="width:100%;padding:10px;border-radius:10px;border:1px dashed #ffb74d;background:#fff8f0;font-size:13px;font-weight:700;color:#e65100;cursor:pointer;">✨ Suggest what to order</button>';
+  }
+  el.innerHTML = '<div class="detail-section"><div class="section-label">Menu & what to order</div>'
+    + '<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">'
+    + '<a href="https://www.google.com/search?q='+q+'+menu" target="_blank" style="display:inline-flex;align-items:center;gap:5px;padding:7px 14px;background:#fff3e0;border:1px solid #ffb74d;border-radius:20px;font-size:12px;font-weight:700;color:#e65100;text-decoration:none;">🍽️ View menu</a>'
+    + '<a href="https://www.google.com/search?q='+q+'+reviews" target="_blank" style="display:inline-flex;align-items:center;gap:5px;padding:7px 14px;background:#e8f5e9;border:1px solid #81c784;border-radius:20px;font-size:12px;font-weight:700;color:#2e7d32;text-decoration:none;">⭐ Reviews</a>'
+    + '</div>' + dishHtml + '</div>';
+}
+
+async function suggestDishes(stopIdx, dayIdx) {
+  const s = days[dayIdx] && days[dayIdx].stops[stopIdx]; if (!s) return;
+  const btn = document.getElementById('dishBtn');
+  if (btn) { btn.textContent='⏳ Looking up dishes…'; btn.disabled=true; }
+  try {
+    const prompt = 'You are a food expert. For "'+s.name+'" at "'+( s.address||s.name)+'" in '+getTripCity()+', list the 4-5 best dishes or drinks to order. Return ONLY a JSON array of strings: ["Dish — one sentence description"]. Be specific to this actual restaurant.';
+    const text = await callAnthropic({ prompt, maxTokens:500 });
+    const dishes = extractJsonArray(text);
+    if (dishes.length) { s.orderSuggestions=dishes; autoSave(); renderFoodSection(s,stopIdx,dayIdx); }
+    else if (btn) { btn.textContent='✨ Suggest what to order'; btn.disabled=false; }
+  } catch(e) { if (btn) { btn.textContent='✨ Suggest what to order'; btn.disabled=false; } }
 }
 
 // ── AI SUGGEST BETWEEN STOPS ──────────────────────────────────────
