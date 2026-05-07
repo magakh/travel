@@ -3377,6 +3377,7 @@ function renderStopList() {
           &nbsp;·&nbsp;
           <span onclick="event.stopPropagation(); editDuration(${i});" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;color:var(--muted);" title="Tap to edit duration">⏳ ${s.duration}</span>
           &nbsp;→&nbsp;<span style="color:var(--hint);">${endTime}</span>
+          <span id="wx-${currentDay}-${i}" style="margin-left:6px;font-size:11px;color:#5a7a8a;font-weight:600;"></span>
         </div>
         ${bookingArrivalHtml(currentDay, i)}
         ${getConflict(i) ? '<div class="conflict-banner">⚠️ Time conflict with previous stop</div>' : ''}
@@ -5689,72 +5690,90 @@ const WMO_ICONS = {
   95:'⛈️',96:'⛈️',99:'⛈️',
 };
 const WMO_DESC = {
-  0:'Clear sky',1:'Mainly clear',2:'Partly cloudy',3:'Overcast',
-  45:'Foggy',48:'Icy fog',
-  51:'Light drizzle',53:'Drizzle',55:'Heavy drizzle',
+  0:'Clear',1:'Mainly clear',2:'Partly cloudy',3:'Overcast',
+  45:'Foggy',48:'Foggy',
+  51:'Light drizzle',53:'Drizzle',55:'Drizzle',
   61:'Light rain',63:'Rain',65:'Heavy rain',
-  71:'Light snow',73:'Snow',75:'Heavy snow',77:'Snow grains',
-  80:'Rain showers',81:'Rain showers',82:'Heavy showers',
-  85:'Snow showers',86:'Heavy snow showers',
+  71:'Light snow',73:'Snow',75:'Heavy snow',77:'Snow',
+  80:'Showers',81:'Showers',82:'Heavy showers',
+  85:'Snow showers',86:'Snow showers',
   95:'Thunderstorm',96:'Thunderstorm',99:'Thunderstorm',
 };
 
 async function fetchDayWeather(dayIdx) {
-  // Determine date for this day
-  const startDate = APP_CONFIG.startDate; // 'YYYY-MM-DD'
+  const startDate = APP_CONFIG.startDate;
   if (!startDate) return;
   const [sy, smo, sd] = startDate.split('-').map(Number);
   const dt = new Date(sy, smo - 1, sd + dayIdx);
-  const dateStr = dt.getFullYear() + '-' +
-    String(dt.getMonth()+1).padStart(2,'0') + '-' +
-    String(dt.getDate()).padStart(2,'0');
+  const dateStr = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0') + '-' + String(dt.getDate()).padStart(2,'0');
+  const cacheKey = dateStr;
 
-  const cacheKey = dayIdx + '_' + dateStr;
   if (_weatherCache[cacheKey]) {
-    renderWeatherBanner(dayIdx, _weatherCache[cacheKey], dateStr);
+    applyWeatherToDay(dayIdx, _weatherCache[cacheKey]);
     return;
   }
 
-  // Get coords from hotel or trip center
   const loc = window.HOTEL_DATA || getTripCenter();
   if (!loc || !loc.lat) return;
 
   try {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat.toFixed(4)}&longitude=${loc.lng.toFixed(4)}&daily=temperature_2m_max,temperature_2m_min,weathercode,precipitation_probability_max&timezone=auto&start_date=${dateStr}&end_date=${dateStr}&forecast_days=16`;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat.toFixed(4)}&longitude=${loc.lng.toFixed(4)}&hourly=temperature_2m,weathercode,precipitation_probability&daily=temperature_2m_max,temperature_2m_min,weathercode&timezone=auto&start_date=${dateStr}&end_date=${dateStr}&forecast_days=16`;
     const res = await fetch(url);
     if (!res.ok) return;
     const data = await res.json();
+    const h = data.hourly;
     const d = data.daily;
-    if (!d || !d.temperature_2m_max) return;
-    const w = {
+    if (!h || !d) return;
+    // Build hour→weather map
+    const hourly = {};
+    h.time.forEach((t, i) => {
+      const hr = parseInt(t.slice(11, 13));
+      hourly[hr] = { temp: Math.round(h.temperature_2m[i]), code: h.weathercode[i], precip: h.precipitation_probability[i] };
+    });
+    const weather = {
       tmax: Math.round(d.temperature_2m_max[0]),
       tmin: Math.round(d.temperature_2m_min[0]),
       code: d.weathercode[0],
-      precip: d.precipitation_probability_max[0],
+      hourly
     };
-    _weatherCache[cacheKey] = w;
-    renderWeatherBanner(dayIdx, w, dateStr);
-  } catch(e) { /* silent fail — weather is non-critical */ }
+    _weatherCache[cacheKey] = weather;
+    applyWeatherToDay(dayIdx, weather);
+  } catch(e) {}
 }
 
-function renderWeatherBanner(dayIdx, w, dateStr) {
-  const el = document.getElementById('weather-banner-' + dayIdx);
-  if (!el) return;
-  const icon = WMO_ICONS[w.code] || '🌡️';
-  const desc = WMO_DESC[w.code] || '';
-  const precipText = w.precip > 0 ? ` · 💧 ${w.precip}% rain` : '';
-  const monthDay = new Date(dateStr + 'T12:00:00').toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short' });
-  el.style.display = 'block';
-  el.innerHTML = `<div style="display:flex;align-items:center;gap:10px;padding:10px 16px 10px;background:linear-gradient(135deg,#e8f4fd,#f0f8ff);border-bottom:1px solid #d0e8f8;">
-    <span style="font-size:28px;line-height:1;">${icon}</span>
-    <div style="flex:1;">
-      <div style="font-size:13px;font-weight:700;color:#1a4a6b;">${desc}${precipText}</div>
-      <div style="font-size:11px;color:#5a7a8a;margin-top:1px;">${monthDay}</div>
-    </div>
-    <div style="text-align:right;">
-      <div style="font-size:18px;font-weight:800;color:#1a4a6b;">${w.tmax}°<span style="font-size:13px;font-weight:400;color:#7a9aaa;">/ ${w.tmin}°C</span></div>
-    </div>
-  </div>`;
+function applyWeatherToDay(dayIdx, w) {
+  // 1. Day summary banner
+  const banner = document.getElementById('weather-banner-' + dayIdx);
+  if (banner) {
+    const icon = WMO_ICONS[w.code] || '🌡️';
+    const desc = WMO_DESC[w.code] || '';
+    banner.style.display = 'block';
+    banner.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:8px 16px;background:linear-gradient(135deg,#e8f4fd,#f0f8ff);border-bottom:1px solid #d0e8f8;">
+      <span style="font-size:20px;">${icon}</span>
+      <span style="font-size:12px;font-weight:600;color:#1a4a6b;flex:1;">${desc}</span>
+      <span style="font-size:14px;font-weight:800;color:#1a4a6b;">${w.tmax}° <span style="font-size:11px;font-weight:400;color:#7a9aaa;">/ ${w.tmin}°C</span></span>
+    </div>`;
+  }
+
+  // 2. Per-stop hourly weather
+  const stops = days[dayIdx] && days[dayIdx].stops;
+  if (!stops) return;
+  stops.forEach((s, i) => {
+    const el = document.getElementById('wx-' + dayIdx + '-' + i);
+    if (!el) return;
+    const hrMatch = (s.time || '').match(/(\d+):(\d+)\s*(AM|PM)?/i);
+    if (!hrMatch) return;
+    let hour24 = parseInt(hrMatch[1]);
+    const isPM = (hrMatch[3] || '').toUpperCase() === 'PM';
+    const isAM = (hrMatch[3] || '').toUpperCase() === 'AM';
+    if (isPM && hour24 < 12) hour24 += 12;
+    if (isAM && hour24 === 12) hour24 = 0;
+    const hw = w.hourly[hour24] || w.hourly[Math.max(0, hour24 - 1)] || null;
+    if (!hw) return;
+    const ic = WMO_ICONS[hw.code] || '';
+    const precipBit = hw.precip > 10 ? ` 💧${hw.precip}%` : '';
+    el.textContent = ic + ' ' + hw.temp + '°' + precipBit;
+  });
 }
 
 
