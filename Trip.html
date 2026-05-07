@@ -3536,6 +3536,21 @@ function renderDetail() {
       <div class="tip-box">${s.todo || ''}</div>
     </div>
 
+    ${isFoodStop(s) ? `
+    <div class="detail-section">
+      <div class="section-label">Menu & what to order</div>
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+        <a href="https://www.google.com/search?q=${encodeURIComponent(s.name + ' ' + (s.address||'') + ' menu')}" target="_blank" style="display:inline-flex;align-items:center;gap:5px;padding:7px 14px;background:#fff3e0;border:1px solid #ffb74d;border-radius:20px;font-size:12px;font-weight:700;color:#e65100;text-decoration:none;">🍽️ View menu online</a>
+        <a href="https://www.google.com/search?q=${encodeURIComponent(s.name + ' ' + (s.address||'') + ' tripadvisor review')}" target="_blank" style="display:inline-flex;align-items:center;gap:5px;padding:7px 14px;background:#e8f5e9;border:1px solid #81c784;border-radius:20px;font-size:12px;font-weight:700;color:#2e7d32;text-decoration:none;">⭐ Reviews</a>
+      </div>
+      ${s.orderSuggestions && s.orderSuggestions.length ? `
+        <div style="font-size:12px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:8px;">Suggested dishes</div>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          ${s.orderSuggestions.map(d => `<div style="display:flex;gap:8px;align-items:flex-start;padding:8px 10px;background:#fff8f0;border-radius:8px;border-left:3px solid #ff9800;font-size:13px;color:#333;line-height:1.4;"><span style="flex-shrink:0;">🍴</span><span>${d}</span></div>`).join('')}
+        </div>` :
+        `<button onclick="suggestDishes(${currentStop}, ${currentDay})" id="dishBtn" style="width:100%;padding:10px;border-radius:10px;border:1px dashed #ffb74d;background:#fff8f0;font-size:13px;font-weight:700;color:#e65100;cursor:pointer;">✨ Suggest what to order</button>`}
+    </div>` : ''}
+
     <div class="detail-section" id="res-section">
       <div class="section-label">Reservation</div>
       ${s.reservation ? `
@@ -5261,6 +5276,11 @@ CRITICAL: Respond with ONLY valid JSON starting with { and ending with }. No mar
     if (info.type_label) s.type = info.type_label;
     if (imgUrl) s.image = imgUrl;
 
+    // Auto-fetch dish suggestions for food stops
+    if (isFoodStop(s) && !s.orderSuggestions) {
+      suggestDishes(stopIdx, dayIdx).catch(() => {});
+    }
+
     autoSave();
     if (currentView === 'detail' && currentStop === stopIdx && currentDay === dayIdx) renderDetail();
     showToast('Content enriched ✓');
@@ -5819,7 +5839,33 @@ async function lookupCoords(query) {
 }
 
 // Returns true for 0,0 or the known London-centre AI placeholder ~51.515, -0.12
-function isSuspiciousCoords(lat, lng) {
+function isFoodStop(s) {
+  const t = ((s.type || '') + ' ' + (s.type_label || '') + ' ' + (s.name || '')).toLowerCase();
+  return /restaurant|café|cafe|bar|pub|dining|bistro|brasserie|tea|coffee|rooftop.*din|brunch|breakfast|lunch|dinner|grill|kitchen|eatery|food|waffle|cocktail|wine bar|jazz.*club/.test(t);
+}
+
+async function suggestDishes(stopIdx, dayIdx) {
+  const s = days[dayIdx].stops[stopIdx];
+  if (!s) return;
+  const btn = document.getElementById('dishBtn');
+  if (btn) { btn.textContent = '⏳ Looking up dishes…'; btn.disabled = true; }
+  try {
+    const prompt = 'You are a food expert. For the restaurant/café "' + s.name + '" located at "' + (s.address || s.name) + '" in ' + getTripCity() + ', list the 4-5 most recommended dishes or drinks to order. Include the dish name and one short sentence about it. Return ONLY a JSON array of strings: ["Dish name — description", ...]. Be specific to this actual restaurant if you know it.';
+    const text = await callAnthropic({ prompt, maxTokens: 500 });
+    const dishes = extractJsonArray(text);
+    if (dishes.length) {
+      s.orderSuggestions = dishes;
+      autoSave();
+      renderDetail();
+    } else {
+      if (btn) { btn.textContent = '✨ Suggest what to order'; btn.disabled = false; }
+    }
+  } catch(e) {
+    if (btn) { btn.textContent = '✨ Suggest what to order'; btn.disabled = false; }
+  }
+}
+
+
   if (!lat && !lng) return true;
   if (lat === 0 && lng === 0) return true;
   if (Math.abs(lat - 51.515) < 0.003 && Math.abs(lng - (-0.12)) < 0.003) return true;
