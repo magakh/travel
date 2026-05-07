@@ -1081,7 +1081,7 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
 /* Viewer mode: soften edit affordances (but don't hide them — user can still read) */
 body.viewer-mode .stop-check { opacity: 0.4; pointer-events: none; }
 body.viewer-mode .drag-h { opacity: 0.3; }
-body.viewer-mode .tc-suggest-btn { display: none !important; }
+body.viewer-mode .tc-suggest-btn { opacity: 0.7; }
 body.viewer-mode #saveBtn { opacity: 0.4; pointer-events: none; }
 body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
 .travel-connector {
@@ -3892,6 +3892,7 @@ function highlightSuggestResult(i) {
 }
 
 function insertSuggestedStop(resultIdx, afterIdx, dayIdx) {
+  if (!EDITOR_MODE) { showToast('Unlock edit mode to add stops to this trip', true); return; }
   const r = _suggestResults[resultIdx];
   if (!r) return;
 
