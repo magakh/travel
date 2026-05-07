@@ -3616,36 +3616,58 @@ function speakText(section, stopIdx, dayIdx) {
 
 // ── FEATURE TOUR ─────────────────────────────────────────────────
 function showFeatureTour() {
-  const features = [
-    { icon:'📅', title:'Your days at a glance', desc:'Tap any day tab to see stops, times and travel between them.' },
-    { icon:'✨', title:'Add stops with AI', desc:'Tap "Add here" between any two stops — AI suggests places on your actual route.' },
-    { icon:'🚶 🚗 🚇', title:'Choose how you travel', desc:'Pick walk, car or train between stops. Times update automatically.' },
-    { icon:'🌤️', title:'Live weather', desc:'Today\'s forecast and hourly temperature shown on each stop.' },
-    { icon:'🔊', title:'Listen to history', desc:'Inside any stop, tap 🔊 next to History or Facts to hear them read aloud.' },
-    { icon:'🍽️', title:'Menu & dish ideas', desc:'Restaurants show a menu link and AI-suggested dishes to order.' },
+  const steps = [
+    { icon:'🪄', title:'Start with AI', desc:'Open "+ Add / Search" and tap "Fill empty slots with AI" to generate a full day itinerary instantly.' },
+    { icon:'✏️', title:'Make it yours', desc:'Add, remove or move stops. Tap any stop to edit times, duration, or details.' },
+    { icon:'✨', title:'Fill the gaps', desc:'Tap "Add here" between two stops — AI suggests places actually on your route.' },
+    { icon:'🔍', title:'Find any place', desc:'Search by name or describe what you want ("hidden café near Soho") and AI finds it.' },
+    { icon:'🔊', title:'Read & listen', desc:'Tap any stop to read its history, facts and tips. Hit 🔊 to have it read aloud.' },
   ];
 
-  const ov = document.createElement('div');
-  ov.id = 'featureTour';
-  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:20000;display:flex;align-items:flex-end;justify-content:center;padding:0;';
+  const features = [
+    { icon:'🚶 🚗 🚇', desc:'Switch travel mode between stops — walk, car or train.' },
+    { icon:'🌤️', desc:'Live weather for each day and hour.' },
+    { icon:'🍽️', desc:'Restaurants show menu link and AI dish suggestions.' },
+    { icon:'📸', desc:'Wikipedia photos pulled for each location.' },
+    { icon:'📅', desc:'Booked slots are locked — rest cascades automatically.' },
+  ];
 
-  const cards = features.map(f =>
-    '<div style="display:flex;gap:14px;align-items:flex-start;padding:14px 0;border-bottom:1px solid #f0f0f0;">' +
-      '<div style="font-size:24px;min-width:36px;text-align:center;line-height:1.2;">' + f.icon + '</div>' +
-      '<div><div style="font-size:14px;font-weight:800;color:#1a1a1a;margin-bottom:2px;">' + f.title + '</div>' +
-      '<div style="font-size:13px;color:#555;line-height:1.4;">' + f.desc + '</div></div>' +
+  const stepCards = steps.map((s, i) =>
+    '<div style="display:flex;gap:14px;align-items:flex-start;padding:12px 0;border-bottom:1px solid #f0f0f0;">' +
+      '<div style="background:#1a1a1a;color:#fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;flex-shrink:0;">' + (i+1) + '</div>' +
+      '<div><div style="font-size:14px;font-weight:800;color:#1a1a1a;margin-bottom:2px;">' + s.icon + ' ' + s.title + '</div>' +
+      '<div style="font-size:13px;color:#555;line-height:1.4;">' + s.desc + '</div></div>' +
     '</div>'
   ).join('');
 
+  const featureChips = features.map(f =>
+    '<div style="display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid #f8f8f8;">' +
+      '<span style="font-size:16px;min-width:40px;text-align:center;">' + f.icon + '</span>' +
+      '<span style="font-size:12px;color:#555;">' + f.desc + '</span>' +
+    '</div>'
+  ).join('');
+
+  const ov = document.createElement('div');
+  ov.id = 'featureTour';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:20000;display:flex;align-items:flex-end;justify-content:center;';
+
   ov.innerHTML =
-    '<div style="background:#fff;border-radius:24px 24px 0 0;width:100%;max-width:600px;padding:22px 20px 32px;max-height:88vh;overflow-y:auto;">' +
-      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">' +
-        '<h2 style="margin:0;font-size:18px;font-weight:900;">What this app can do</h2>' +
-        '<button onclick="document.getElementById(\'featureTour\').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#888;padding:4px;">✕</button>' +
+    '<div style="background:#fff;border-radius:24px 24px 0 0;width:100%;max-width:600px;padding:22px 20px 36px;max-height:90vh;overflow-y:auto;">' +
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">' +
+        '<div>' +
+          '<h2 style="margin:0;font-size:20px;font-weight:900;">How to use this app</h2>' +
+          '<p style="font-size:12px;color:#999;margin:4px 0 0 0;">Your trip planner, powered by AI</p>' +
+        '</div>' +
+        '<button onclick="document.getElementById(\'featureTour\').remove()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#bbb;padding:0;">✕</button>' +
       '</div>' +
-      '<p style="font-size:12px;color:#999;margin:0 0 16px 0;">A few things worth knowing</p>' +
-      cards +
-      '<button onclick="localStorage.setItem(\'trip_tour_v1\',\'1\');document.getElementById(\'featureTour\').remove();" style="width:100%;margin-top:20px;padding:14px;border-radius:14px;border:none;background:#1a1a1a;color:#fff;font-size:15px;font-weight:800;cursor:pointer;">Got it →</button>' +
+
+      '<p style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.8px;color:#999;margin:18px 0 4px;">The flow</p>' +
+      stepCards +
+
+      '<p style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.8px;color:#999;margin:18px 0 4px;">Also included</p>' +
+      featureChips +
+
+      '<button onclick="localStorage.setItem(\'trip_tour_v1\',\'1\');document.getElementById(\'featureTour\').remove();" style="width:100%;margin-top:22px;padding:15px;border-radius:14px;border:none;background:#1a1a1a;color:#fff;font-size:15px;font-weight:800;cursor:pointer;">Got it, let\'s go →</button>' +
     '</div>';
 
   document.body.appendChild(ov);
