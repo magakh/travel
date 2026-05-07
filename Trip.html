@@ -3510,13 +3510,13 @@ function renderDetail() {
     </div>
 
     <div class="detail-section">
-      <div class="section-label">History & context</div>
+      <div class="section-label">History & context <button onclick="speakText('history',${currentStop},${currentDay})" style="background:none;border:none;font-size:14px;cursor:pointer;padding:0 4px;opacity:0.6;" title="Read aloud">🔊</button></div>
       ${histParas}
     </div>
 
     ${s.facts && s.facts.length ? `
     <div class="detail-section">
-      <div class="section-label">Interesting facts</div>
+      <div class="section-label">Interesting facts <button onclick="speakText('facts',${currentStop},${currentDay})" style="background:none;border:none;font-size:14px;cursor:pointer;padding:0 4px;opacity:0.6;" title="Read aloud">🔊</button></div>
       <div style="display:flex;flex-direction:column;gap:8px;">
         ${s.facts.map((f, i) => `<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;background:#f8f7ff;border-radius:10px;border-left:3px solid ${s.color||'#5c4db1'};"><span style="font-size:16px;flex-shrink:0;">${['💡','🏛️','⭐','🔍','🎭','📜'][i%6]}</span><span style="font-size:13px;color:#333;line-height:1.5;">${f}</span></div>`).join('')}
       </div>
@@ -3573,6 +3573,40 @@ function renderDetail() {
   updateBottomNav();
   // Render food section separately (avoids nested template literal issues)
   renderFoodSection(days[currentDay].stops[currentStop], currentStop, currentDay);
+}
+
+// ── TEXT TO SPEECH ────────────────────────────────────────────────
+function speakText(section, stopIdx, dayIdx) {
+  if (!window.speechSynthesis) { showToast('Text-to-speech not supported in this browser', true); return; }
+  const s = days[dayIdx] && days[dayIdx].stops[stopIdx];
+  if (!s) return;
+
+  // Build text to speak
+  let text = '';
+  if (section === 'history') {
+    text = (s.history || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!text) { showToast('No history text yet — tap ✨ Refresh to generate', true); return; }
+  } else if (section === 'facts') {
+    if (!s.facts || !s.facts.length) { showToast('No facts yet — tap ✨ Refresh to generate', true); return; }
+    text = s.facts.map((f, i) => 'Fact ' + (i+1) + ': ' + f).join('. ');
+  }
+
+  // Stop any ongoing speech — if same section was speaking, just stop
+  if (window.speechSynthesis.speaking) {
+    window.speechSynthesis.cancel();
+    return;
+  }
+
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.lang = 'en-GB';
+  utt.rate = 0.95;
+  utt.pitch = 1;
+
+  // Show stop button while speaking
+  showToast('🔊 Reading aloud… tap again to stop');
+  utt.onend = () => {};
+
+  window.speechSynthesis.speak(utt);
 }
 
 // ── WEATHER ───────────────────────────────────────────────────────
