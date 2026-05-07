@@ -3329,9 +3329,6 @@ function renderStopList() {
   const area = document.getElementById('mainArea');
   const scrollY = area ? area.scrollTop : 0;
 
-  // Inject/update weather banner for this day
-  fetchDayWeather(currentDay);
-
   const hotelEndName = currentDay === 3 ? 'Hotel — Check Out' : 'Hotel — Return for the night';
   const hd = window.HOTEL_DATA;
   const hotelLabel = hd ? hd.name : 'Hotel';
@@ -3436,6 +3433,9 @@ function renderStopList() {
     hotelBanner('', currentDay === 0 ? 'Hotel Check-In' : 'Hotel — Morning departure') +
     stopRows + lastConn +
     hotelBanner(hotelReturnTime, hotelEndName);
+
+  // Now DOM exists — fetch weather and paint
+  fetchDayWeather(currentDay);
 
   // Fetch travel times asynchronously (fills in connectors when ready)
   loadWalkTimes();
@@ -5701,13 +5701,28 @@ const WMO_DESC = {
 };
 
 async function fetchDayWeather(dayIdx) {
-  const startDate = APP_CONFIG.startDate;
-  if (!startDate) return;
-  const [sy, smo, sd] = startDate.split('-').map(Number);
-  const dt = new Date(sy, smo - 1, sd + dayIdx);
-  const dateStr = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0') + '-' + String(dt.getDate()).padStart(2,'0');
-  const cacheKey = dateStr;
+  // Derive date: prefer APP_CONFIG.startDate, fall back to parsing dayLabels (e.g. "May 7")
+  let dateStr = '';
+  if (APP_CONFIG.startDate) {
+    const [sy, smo, sd] = APP_CONFIG.startDate.split('-').map(Number);
+    const dt = new Date(sy, smo - 1, sd + dayIdx);
+    dateStr = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0') + '-' + String(dt.getDate()).padStart(2,'0');
+  } else {
+    // Try to parse label like "May 7" → use current year
+    const label = (APP_CONFIG.dayLabels && APP_CONFIG.dayLabels[dayIdx]) || '';
+    const m = label.match(/(\w+)\s+(\d+)/);
+    if (m) {
+      const months = {Jan:1,Feb:2,Mar:3,Apr:4,May:5,Jun:6,Jul:7,Aug:8,Sep:9,Oct:10,Nov:11,Dec:12};
+      const mo = months[m[1]];
+      if (mo) {
+        const yr = new Date().getFullYear();
+        dateStr = yr + '-' + String(mo).padStart(2,'0') + '-' + String(parseInt(m[2])).padStart(2,'0');
+      }
+    }
+  }
+  if (!dateStr) return;
 
+  const cacheKey = dateStr;
   if (_weatherCache[cacheKey]) {
     applyWeatherToDay(dayIdx, _weatherCache[cacheKey]);
     return;
