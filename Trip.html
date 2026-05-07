@@ -3334,7 +3334,7 @@ function renderStopList() {
   const hotelLabel = hd ? hd.name : 'Hotel';
 
   // Weather banner (populated async by fetchDayWeather)
-  const weatherBanner = `<div id="weather-banner-${currentDay}" style="display:none;"></div>`;
+  const weatherBanner = `<div id="weather-banner-${currentDay}" style="display:flex;align-items:center;gap:8px;padding:8px 16px;background:linear-gradient(135deg,#e8f4fd,#f0f8ff);border-bottom:1px solid #d0e8f8;min-height:36px;"><span style="font-size:11px;color:#9ab;font-style:italic;">Loading weather…</span></div>`;
   const hotelBanner = (time, label) => `
     <div onclick="showHotelDetail()" style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:#f5f4f0;border-bottom:1px solid var(--border);cursor:pointer;transition:background 0.1s;" onmouseenter="this.style.background='#ece9e4'" onmouseleave="this.style.background='#f5f4f0'">
       <div style="width:26px;height:26px;border-radius:8px;background:#444;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;">🏨</div>
@@ -5732,28 +5732,31 @@ async function fetchDayWeather(dayIdx) {
   if (!loc || !loc.lat) return;
 
   try {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat.toFixed(4)}&longitude=${loc.lng.toFixed(4)}&hourly=temperature_2m,weathercode,precipitation_probability&daily=temperature_2m_max,temperature_2m_min,weathercode&timezone=auto&start_date=${dateStr}&end_date=${dateStr}&forecast_days=16`;
+    const url = 'https://api.open-meteo.com/v1/forecast?latitude=' + loc.lat.toFixed(4) + '&longitude=' + loc.lng.toFixed(4) + '&hourly=temperature_2m,weather_code,precipitation_probability&daily=temperature_2m_max,temperature_2m_min,weather_code&timezone=auto&start_date=' + dateStr + '&end_date=' + dateStr;
     const res = await fetch(url);
     if (!res.ok) return;
     const data = await res.json();
     const h = data.hourly;
     const d = data.daily;
     if (!h || !d) return;
-    // Build hour→weather map
     const hourly = {};
-    h.time.forEach((t, i) => {
+    (h.time || []).forEach((t, i) => {
       const hr = parseInt(t.slice(11, 13));
-      hourly[hr] = { temp: Math.round(h.temperature_2m[i]), code: h.weathercode[i], precip: h.precipitation_probability[i] };
+      hourly[hr] = {
+        temp: Math.round(h.temperature_2m[i]),
+        code: (h.weather_code || h.weathercode || [])[i] || 0,
+        precip: (h.precipitation_probability || [])[i] || 0
+      };
     });
     const weather = {
       tmax: Math.round(d.temperature_2m_max[0]),
       tmin: Math.round(d.temperature_2m_min[0]),
-      code: d.weathercode[0],
+      code: (d.weather_code || d.weathercode || [])[0] || 0,
       hourly
     };
     _weatherCache[cacheKey] = weather;
     applyWeatherToDay(dayIdx, weather);
-  } catch(e) {}
+  } catch(e) { console.warn('Weather fetch failed:', e); }
 }
 
 function applyWeatherToDay(dayIdx, w) {
@@ -5762,12 +5765,9 @@ function applyWeatherToDay(dayIdx, w) {
   if (banner) {
     const icon = WMO_ICONS[w.code] || '🌡️';
     const desc = WMO_DESC[w.code] || '';
-    banner.style.display = 'block';
-    banner.innerHTML = `<div style="display:flex;align-items:center;gap:8px;padding:8px 16px;background:linear-gradient(135deg,#e8f4fd,#f0f8ff);border-bottom:1px solid #d0e8f8;">
-      <span style="font-size:20px;">${icon}</span>
+    banner.innerHTML = `<span style="font-size:20px;">${icon}</span>
       <span style="font-size:12px;font-weight:600;color:#1a4a6b;flex:1;">${desc}</span>
-      <span style="font-size:14px;font-weight:800;color:#1a4a6b;">${w.tmax}° <span style="font-size:11px;font-weight:400;color:#7a9aaa;">/ ${w.tmin}°C</span></span>
-    </div>`;
+      <span style="font-size:14px;font-weight:800;color:#1a4a6b;">${w.tmax}° <span style="font-size:11px;font-weight:400;color:#7a9aaa;">/ ${w.tmin}°C</span></span>`;
   }
 
   // 2. Per-stop hourly weather
