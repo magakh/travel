@@ -4031,7 +4031,7 @@ let _walkTourActive = false;
 let _walkTourWatchId = null;
 let _walkTourVisited = new Set();
 let _walkTourAlertOpen = false;
-const WALK_TRIGGER_METRES = 50;
+const WALK_TRIGGER_METRES = 30;
 
 function toggleWalkingGuide() {
   if (_walkTourActive) {
@@ -4117,14 +4117,14 @@ async function liveWikiSearch(lat, lng, radius) {
       if (_walkLiveCache.has(p.pageid)) return false;
       var d = _haversineMetres(lat, lng, p.lat, p.lon);
       if (d > maxDist) return false;
-      // If we know walking direction, skip landmarks that are clearly off to the side
-      // (more than 60m perpendicular) or already passed (more than 20m behind)
+      // For auto-trigger: require a known walking direction, landmark must be
+      // strictly ahead and within ~one street width (18m) of the walking path.
+      // Without direction we can't tell if it's on the right street — skip it.
       if (radius <= 100) {
         var rp = getLandmarkRelativePos(lat, lng, p.lat, p.lon);
-        if (rp.side !== null) {
-          if (rp.metersAhead < -20) return false; // already passed it
-          if (rp.metersCross > 60) return false; // too far off path
-        }
+        if (rp.side === null) return false;        // no bearing — can't verify street
+        if (rp.metersAhead < 0) return false;      // behind you — don't suggest
+        if (rp.metersCross > 18) return false;     // >18m off path = different street
       }
       return true;
     });
