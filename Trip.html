@@ -3798,13 +3798,13 @@ async function buildGuidedTour(fromStop, toStop, tolerance) {
 
   // Fetch extracts + large thumbnails
   var selIds = selected.map(function(c){return c.pageid;}).join('|');
-  var extRes = await fetch('https://en.wikipedia.org/w/api.php?action=query&pageids='+selIds+'&prop=extracts|pageimages&exintro=1&explaintext=1&pithumbsize=800&format=json&origin=*');
+  var extRes = await fetch('https://en.wikipedia.org/w/api.php?action=query&pageids='+selIds+'&prop=extracts|pageimages&exintro=1&explaintext=1&pithumbsize=2000&piprop=thumbnail|original&format=json&origin=*');
   var extData = await extRes.json();
   var pages = (extData.query&&extData.query.pages)||{};
   selected.forEach(function(c) {
     var p = pages[c.pageid]||{};
     c.extract = (p.extract||'').replace(/\n+/g,' ').trim().slice(0,600);
-    c.image = p.thumbnail&&p.thumbnail.source||null;
+    c.image = (p.original && p.original.source) || (p.thumbnail && p.thumbnail.source) || null;
     c.wikiUrl = 'https://en.wikipedia.org/wiki/'+encodeURIComponent(c.name);
   });
 
@@ -5846,7 +5846,8 @@ async function fetchWikipediaImage(name) {
     const res = await fetch('https://en.wikipedia.org/api/rest_v1/page/summary/' + title, { headers: { 'Accept': 'application/json' } });
     if (!res.ok) return null;
     const data = await res.json();
-    return data.thumbnail?.source || data.originalimage?.source || null;
+    // Prefer full original image, fall back to thumbnail
+    return data.originalimage?.source || data.thumbnail?.source || null;
   } catch(e) { return null; }
 }
 
