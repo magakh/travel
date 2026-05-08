@@ -3670,210 +3670,264 @@ function setTourTolerance(val, afterIdx, dayIdx, beforeIdx) {
 }
 
 function nearestNeighborOrder(start, points, end) {
-  // Greedy nearest-neighbor: always go to the closest unvisited point
-  // This prevents zigzagging and gives a sensible walking order
-  var remaining = points.slice();
-  var ordered = [];
-  var current = start;
+  var remaining = points.slice(), ordered = [], current = start;
   while (remaining.length) {
-    var minDist = Infinity, minIdx = 0;
-    remaining.forEach(function(p, i) {
-      var d = _haversineMetres(current.lat, current.lng, p.lat, p.lng);
-      if (d < minDist) { minDist = d; minIdx = i; }
-    });
-    ordered.push(remaining.splice(minIdx, 1)[0]);
+    var best = 0, bestD = Infinity;
+    remaining.forEach(function(p, i) { var d = _haversineMetres(current.lat, current.lng, p.lat, p.lng); if (d < bestD) { bestD = d; best = i; } });
+    ordered.push(remaining.splice(best, 1)[0]);
     current = ordered[ordered.length - 1];
   }
   return ordered;
 }
 
-async function buildGuidedTour(fromStop, toStop, tolerance) {
-  const directM = _haversineMetres(fromStop.lat, fromStop.lng, toStop.lat, toStop.lng);
+// Remove duplicates that are within minDist metres of each other (keep higher articleLen)
+function dedupByProximity(points, minDist) {
+  var kept = [];
+  points.forEach(function(p) {
+    var clash = kept.findIndex(function(k) { return _haversineMetres(k.lat, k.lng, p.lat, p.lng) < minDist; });
+    if (clash === -1) { kept.push(p); }
+    else if ((p.articleLen || 0) > (kept[clash].articleLen || 0)) { kept[clash] = p; }
+  });
+  return kept;
+}
 
-  // Sample points along A->B to find landmarks along the FULL route
-  const numSamples = Math.max(3, Math.min(10, Math.round(directM / 500)));
-  const samplePts = [];
+// Spread landmarks across equal-length route segments so they aren't all clustered
+function spreadAlongRoute(fromStop, points, toStop, maxPerSegment) {
+  var totalM = _haversineMetres(fromStop.lat, fromStop.lng, toStop.lat, toStop.lng);
+  var numSegments = Math.max(3, Math.round(totalM / 400));
+  var segmentM = totalM / numSegments;
+  var buckets = [];
+  for (var b = 0; b < numSegments; b++) buckets.push([]);
+
+  // Assign each point to the route segment it's closest to
+  points.forEach(function(p) {
+    // Project p onto A->B to find its approximate position along the route
+    var dx = toStop.lng - fromStop.lng, dy = toStop.lat - fromStop.lat;
+    var len2 = dx*dx + dy*dy || 1;
+    var t = Math.max(0, Math.min(1, ((p.lng - fromStop.lng)*dx + (p.lat - fromStop.lat)*dy) / len2));
+    var seg = Math.min(numSegments - 1, Math.floor(t * numSegments));
+    buckets[seg].push(p);
+  });
+
+  // From each bucket keep the top N by articleLen
+  var result = [];
+  buckets.forEach(function(bucket) {
+    bucket.sort(function(a, b) { return (b.articleLen || 0) - (a.articleLen || 0); });
+    result = result.concat(bucket.slice(0, maxPerSegment));
+  });
+  return result;
+}
+
+async function buildGuidedTour(fromStop, toStop, tolerance) {
+  var directM = _haversineMetres(fromStop.lat, fromStop.lng, toStop.lat, toStop.lng);
+
+  // Sample along A->B line
+  var numSamples = Math.max(4, Math.min(12, Math.round(directM / 400)));
+  var samplePts = [];
   for (var si = 0; si <= numSamples; si++) {
-    const t = si / numSamples;
+    var t = si / numSamples;
     samplePts.push({lat: fromStop.lat + t*(toStop.lat-fromStop.lat), lng: fromStop.lng + t*(toStop.lng-fromStop.lng)});
   }
 
-  // Search Wikipedia at each sample point, deduplicate by pageid
-  const searchRadius = Math.min(400, Math.max(150, directM * 0.12));
-  const seenIds = new Set();
-  const candidates = [];
+  var searchRadius = Math.min(350, Math.max(120, directM * 0.1));
+  var seenIds = new Set(), candidates = [];
   await Promise.all(samplePts.map(async function(pt) {
     try {
-      const res = await fetch('https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord='+pt.lat+'|'+pt.lng+'&gsradius='+Math.round(searchRadius)+'&gslimit=20&format=json&origin=*');
-      const data = await res.json();
-      ((data.query&&data.query.geosearch)||[]).forEach(function(p){
-        if(!seenIds.has(p.pageid)){seenIds.add(p.pageid);candidates.push({pageid:p.pageid,name:p.title,lat:p.lat,lng:p.lon});}
+      var res = await fetch('https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord='+pt.lat+'|'+pt.lng+'&gsradius='+Math.round(searchRadius)+'&gslimit=20&format=json&origin=*');
+      var data = await res.json();
+      ((data.query&&data.query.geosearch)||[]).forEach(function(p) {
+        if (!seenIds.has(p.pageid)) { seenIds.add(p.pageid); candidates.push({pageid:p.pageid,name:p.title,lat:p.lat,lng:p.lon}); }
       });
     } catch(e){}
   }));
-  if(!candidates.length) throw new Error('No landmarks found along this route.');
+  if (!candidates.length) throw new Error('No landmarks found along this route.');
 
-  // Compute detour cost and filter by tolerance
-  candidates.forEach(function(c){
-    const through=_haversineMetres(fromStop.lat,fromStop.lng,c.lat,c.lng)+_haversineMetres(c.lat,c.lng,toStop.lat,toStop.lng);
-    c.detourM=Math.max(0,through-directM);
+  // Compute detour and filter
+  candidates.forEach(function(c) {
+    var through = _haversineMetres(fromStop.lat,fromStop.lng,c.lat,c.lng) + _haversineMetres(c.lat,c.lng,toStop.lat,toStop.lng);
+    c.detourM = Math.max(0, through - directM);
   });
-  const filtered=candidates.filter(function(c){return c.detourM<=directM*tolerance;});
-  if(!filtered.length) throw new Error('No landmarks within this detour limit — try wider tolerance.');
+  var filtered = candidates.filter(function(c) { return c.detourM <= directM * tolerance; });
+  if (!filtered.length) throw new Error('No landmarks within detour limit — try wider tolerance.');
 
-  // Article length as importance proxy
-  const ids=filtered.map(function(c){return c.pageid;}).join('|');
-  try{
-    const infoRes=await fetch('https://en.wikipedia.org/w/api.php?action=query&pageids='+ids+'&prop=info&format=json&origin=*');
-    const infoData=await infoRes.json();
-    const infoPages=(infoData.query&&infoData.query.pages)||{};
+  // Fetch article lengths for importance scoring
+  var ids = filtered.map(function(c){return c.pageid;}).join('|');
+  try {
+    var infoRes = await fetch('https://en.wikipedia.org/w/api.php?action=query&pageids='+ids+'&prop=info&format=json&origin=*');
+    var infoData = await infoRes.json();
+    var infoPages = (infoData.query&&infoData.query.pages)||{};
     filtered.forEach(function(c){c.articleLen=(infoPages[c.pageid]&&infoPages[c.pageid].length)||500;});
-  }catch(e){filtered.forEach(function(c){c.articleLen=500;});}
+  } catch(e){filtered.forEach(function(c){c.articleLen=500;});}
 
-  // Nearest-neighbor order from fromStop (no zigzag)
-  const selected=nearestNeighborOrder(fromStop,filtered.slice(0,30),toStop);
+  // 1. Remove geographic duplicates (same building with multiple articles)
+  var deduped = dedupByProximity(filtered, 120);
+
+  // 2. Spread evenly: at most 2 per ~400m segment along route
+  var maxPerSeg = tolerance <= 0.1 ? 1 : tolerance <= 0.35 ? 2 : 3;
+  var spread = spreadAlongRoute(fromStop, deduped, toStop, maxPerSeg);
+
+  // 3. Nearest-neighbor ordering (no zigzag)
+  var selected = nearestNeighborOrder(fromStop, spread.slice(0, 25), toStop);
 
   // Fetch extracts + large thumbnails
-  const selIds=selected.map(function(c){return c.pageid;}).join('|');
-  const extRes=await fetch('https://en.wikipedia.org/w/api.php?action=query&pageids='+selIds+'&prop=extracts|pageimages&exintro=1&explaintext=1&pithumbsize=800&format=json&origin=*');
-  const extData=await extRes.json();
-  const pages=(extData.query&&extData.query.pages)||{};
-  selected.forEach(function(c){
-    const p=pages[c.pageid]||{};
-    c.extract=(p.extract||'').replace(/\n+/g,' ').trim().slice(0,600);
-    c.image=p.thumbnail&&p.thumbnail.source||null;
-    c.wikiUrl='https://en.wikipedia.org/wiki/'+encodeURIComponent(c.name);
+  var selIds = selected.map(function(c){return c.pageid;}).join('|');
+  var extRes = await fetch('https://en.wikipedia.org/w/api.php?action=query&pageids='+selIds+'&prop=extracts|pageimages&exintro=1&explaintext=1&pithumbsize=800&format=json&origin=*');
+  var extData = await extRes.json();
+  var pages = (extData.query&&extData.query.pages)||{};
+  selected.forEach(function(c) {
+    var p = pages[c.pageid]||{};
+    c.extract = (p.extract||'').replace(/\n+/g,' ').trim().slice(0,600);
+    c.image = p.thumbnail&&p.thumbnail.source||null;
+    c.wikiUrl = 'https://en.wikipedia.org/wiki/'+encodeURIComponent(c.name);
   });
 
-  // Batched TL;DR
-  const withExt=selected.filter(function(c){return c.extract&&c.extract.length>40;});
-  if(withExt.length){
-    try{
-      const prompt='For each landmark write ONE punchy hook sentence a tourist walking past would find irresistible. Return ONLY a JSON array of strings:\n\n'+
-        withExt.map(function(c,i){return (i+1)+'. '+c.name+': '+c.extract.slice(0,250);}).join('\n\n');
-      const text=await callAnthropic({prompt:prompt,maxTokens:1000});
-      const tldrs=extractJsonArray(text);
-      withExt.forEach(function(c,i){if(tldrs[i])c.tldr=tldrs[i];});
-    }catch(e){withExt.forEach(function(c){c.tldr=c.extract.split(/[.!?]/)[0]+'.';});}
+  // Batch TL;DR — generate for ALL landmarks, even those with thin content
+  try {
+    var prompt = 'You are a tour guide. For each of these London landmarks, write ONE punchy hook sentence that would make a tourist stop and look. Be specific, vivid, surprising. If you know the place, use real facts. Return ONLY a JSON array of strings in the same order:\n\n' +
+      selected.map(function(c,i){
+        var ctx = c.extract && c.extract.length > 30 ? c.extract.slice(0,200) : '(use your knowledge about this place)';
+        return (i+1)+'. '+c.name+': '+ctx;
+      }).join('\n\n');
+    var text = await callAnthropic({prompt:prompt, maxTokens:1200});
+    var tldrs = extractJsonArray(text);
+    selected.forEach(function(c,i){ c.tldr = tldrs[i] || (c.extract ? c.extract.split(/[.!?]/)[0]+'.' : c.name+' — a notable landmark along this route.'); });
+  } catch(e) {
+    selected.forEach(function(c){ c.tldr = c.extract ? c.extract.split(/[.!?]/)[0]+'.' : c.name+' — worth a look.'; });
   }
 
   // Walk times
-  const pts=[fromStop].concat(selected).concat([toStop]);
-  for(var i=1;i<pts.length;i++){
-    const m=_haversineMetres(pts[i-1].lat,pts[i-1].lng,pts[i].lat,pts[i].lng);
-    pts[i].walkMinsFromPrev=Math.max(1,Math.round(m/83));
-    pts[i].distFromPrev=Math.round(m);
+  var pts = [fromStop].concat(selected).concat([toStop]);
+  for (var i = 1; i < pts.length; i++) {
+    var m = _haversineMetres(pts[i-1].lat,pts[i-1].lng,pts[i].lat,pts[i].lng);
+    pts[i].walkMinsFromPrev = Math.max(1,Math.round(m/83));
+    pts[i].distFromPrev = Math.round(m);
   }
-  const totalM=pts.slice(1).reduce(function(acc,p,i){return acc+_haversineMetres(pts[i].lat,pts[i].lng,p.lat,p.lng);},0);
-  return {landmarks:selected,totalM:totalM,directM:directM};
+  var totalM = pts.slice(1).reduce(function(acc,p,i){return acc+_haversineMetres(pts[i].lat,pts[i].lng,p.lat,p.lng);},0);
+  return {landmarks:selected, totalM:totalM, directM:directM};
 }
 
 function renderTourCards(tour, fromStop, toStop, afterIdx, dayIdx, beforeIdx) {
-  const cardsEl=document.getElementById('tourCards'); if(!cardsEl) return;
-  const landmarks=tour.landmarks,totalM=tour.totalM,directM=tour.directM;
-  if(!landmarks.length){cardsEl.innerHTML='<p style="color:#888;font-size:13px;text-align:center;padding:20px;">No landmarks found — try wider tolerance.</p>';return;}
+  var cardsEl = document.getElementById('tourCards'); if(!cardsEl) return;
+  var landmarks = tour.landmarks, totalM = tour.totalM, directM = tour.directM;
+  if (!landmarks.length) { cardsEl.innerHTML='<p style="color:#888;font-size:13px;text-align:center;padding:20px;">No landmarks found — try wider tolerance.</p>'; return; }
 
-  const totalMins=Math.round(totalM/83),extra=totalMins-Math.round(directM/83);
-  const gmWaypoints=landmarks.map(function(l){return l.lat+','+l.lng;}).join('|');
-  const gmUrl='https://www.google.com/maps/dir/?api=1&origin='+fromStop.lat+','+fromStop.lng+'&destination='+toStop.lat+','+toStop.lng+'&waypoints='+gmWaypoints+'&travelmode=walking';
+  var totalMins = Math.round(totalM/83), extra = totalMins - Math.round(directM/83);
+  var gmWaypoints = landmarks.map(function(l){return l.lat+','+l.lng;}).join('|');
+  var gmUrl = 'https://www.google.com/maps/dir/?api=1&origin='+fromStop.lat+','+fromStop.lng+'&destination='+toStop.lat+','+toStop.lng+'&waypoints='+gmWaypoints+'&travelmode=walking';
 
-  // Header
-  var html='<div style="display:flex;align-items:center;gap:10px;padding:0 0 12px;border-bottom:1px solid #eee;margin-bottom:0;">'
-    +'<div style="flex:1;"><div style="font-size:13px;font-weight:800;">'+landmarks.length+' landmarks on the way</div>'
+  var html = '<div style="display:flex;align-items:center;gap:10px;padding:0 0 12px;border-bottom:1px solid #eee;margin-bottom:0;">'
+    +'<div style="flex:1;"><div style="font-size:13px;font-weight:800;">'+landmarks.length+' landmark'+(landmarks.length>1?'s':'')+' on the way</div>'
     +'<div style="font-size:11px;color:#888;margin-top:2px;">~'+totalMins+' min'+(extra>0?' (+'+extra+' vs direct)':'')+'</div></div>'
     +'<a href="'+gmUrl+'" target="_blank" style="display:inline-flex;align-items:center;gap:4px;padding:7px 12px;background:#4285f4;color:#fff;border-radius:20px;font-size:11px;font-weight:700;text-decoration:none;flex-shrink:0;">&#x1F5FA;&#xFE0F; Google Maps</a>'
     +'</div>';
 
-  // START node
-  html+='<div style="display:flex;align-items:center;gap:12px;padding:14px 0 6px;">'
+  html += '<div style="display:flex;align-items:center;gap:12px;padding:14px 0 6px;">'
     +'<div style="width:14px;height:14px;background:#1a7a3a;border-radius:50%;flex-shrink:0;box-shadow:0 0 0 3px rgba(26,122,58,0.2);"></div>'
-    +'<div style="font-size:13px;font-weight:800;color:#1a7a3a;">&#x1F4CD; '+fromStop.name+'</div>'
-    +'</div>';
+    +'<div style="font-size:13px;font-weight:800;color:#1a7a3a;">&#x1F4CD; '+fromStop.name+'</div></div>';
 
-  landmarks.forEach(function(lm,i){
-    // Walk connector
-    const walkMins=lm.walkMinsFromPrev||'?';
-    const walkDist=lm.distFromPrev&&lm.distFromPrev>=1000?(lm.distFromPrev/1000).toFixed(1)+'km':lm.distFromPrev&&lm.distFromPrev+'m'||'';
-    html+='<div style="display:flex;gap:12px;">'
-      +'<div style="display:flex;flex-direction:column;align-items:center;width:14px;flex-shrink:0;">'
-      +'<div style="width:2px;background:#ddd;flex:1;"></div>'
-      +'</div>'
-      +'<div style="font-size:11px;color:#5a7a8a;padding:3px 0;font-weight:600;">&#x1F6B6; '+walkMins+' min'+(walkDist?' · '+walkDist:'')+'</div>'
-      +'</div>';
+  landmarks.forEach(function(lm, i) {
+    var walkMins = lm.walkMinsFromPrev||'?';
+    var walkDist = lm.distFromPrev ? (lm.distFromPrev>=1000?(lm.distFromPrev/1000).toFixed(1)+'km':lm.distFromPrev+'m') : '';
+    html += '<div style="display:flex;gap:12px;">'
+      +'<div style="display:flex;flex-direction:column;align-items:center;width:14px;flex-shrink:0;"><div style="width:2px;background:#ddd;flex:1;min-height:16px;"></div></div>'
+      +'<div style="font-size:11px;color:#5a7a8a;padding:3px 0;font-weight:600;">&#x1F6B6; '+walkMins+' min'+(walkDist?' · '+walkDist:'')+'</div></div>';
 
-    // Landmark card
-    const imgBit=lm.image
-      ?'<div style="height:220px;overflow:hidden;"><img src="'+lm.image+'" style="width:100%;height:100%;object-fit:cover;object-position:center;display:block;" loading="lazy" onerror="this.parentElement.style.display=\'none\'"></div>'
-      :'';
-    const tldrBit=lm.tldr?'<p style="font-size:13px;color:#333;line-height:1.5;margin:0;">'+lm.tldr+'</p>':'';
+    var imgBit = lm.image
+      ? '<div style="height:200px;overflow:hidden;"><img src="'+lm.image+'" style="width:100%;height:100%;object-fit:cover;object-position:center;display:block;" loading="lazy" onerror="this.parentElement.style.display=\'none\'"></div>'
+      : '';
 
-    html+='<div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:2px;">'
-      +'<div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;padding-top:6px;">'
-      +'<div style="background:#5c4db1;color:#fff;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;box-shadow:0 2px 6px rgba(0,0,0,0.25);">'+(i+1)+'</div>'
-      +'</div>'
-      +'<div style="flex:1;border:1px solid #eee;border-radius:10px;overflow:hidden;background:#fff;">'
+    html += '<div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:2px;">'
+      +'<div class="tour-num" data-idx="'+i+'" style="background:#5c4db1;color:#fff;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;box-shadow:0 2px 6px rgba(0,0,0,0.25);flex-shrink:0;margin-top:8px;cursor:pointer;" onclick="panToTourMarker('+i+')">'+(i+1)+'</div>'
+      +'<div class="tour-card" data-idx="'+i+'" style="flex:1;border:1px solid #eee;border-radius:10px;overflow:hidden;background:#fff;transition:border-color 0.2s;">'
       +imgBit
       +'<div style="padding:10px 12px;">'
-      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px;">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:5px;">'
       +'<div style="font-size:13px;font-weight:800;line-height:1.3;">'+lm.name+'</div>'
       +'<div style="display:flex;gap:5px;flex-shrink:0;">'
       +'<a href="'+lm.wikiUrl+'" target="_blank" style="font-size:11px;color:#1a73e8;text-decoration:none;padding:3px 7px;border:1px solid #d0e8ff;border-radius:8px;white-space:nowrap;">&#x1F4D6; Wiki</a>'
       +'<button onclick="speakTourLandmark('+i+')" style="background:none;border:none;font-size:15px;cursor:pointer;opacity:0.6;padding:2px;">&#x1F50A;</button>'
       +'</div></div>'
-      +tldrBit
+      +'<p style="font-size:13px;color:#333;line-height:1.5;margin:0;">'+lm.tldr+'</p>'
       +'</div></div></div>';
   });
 
-  // Final connector + END node
-  if(toStop.walkMinsFromPrev){
-    html+='<div style="display:flex;gap:12px;">'
-      +'<div style="display:flex;flex-direction:column;align-items:center;width:14px;flex-shrink:0;"><div style="width:2px;background:#ddd;flex:1;"></div></div>'
-      +'<div style="font-size:11px;color:#5a7a8a;padding:3px 0;font-weight:600;">&#x1F6B6; '+toStop.walkMinsFromPrev+' min</div>'
-      +'</div>';
+  if (toStop.walkMinsFromPrev) {
+    html += '<div style="display:flex;gap:12px;"><div style="display:flex;flex-direction:column;align-items:center;width:14px;flex-shrink:0;"><div style="width:2px;background:#ddd;flex:1;min-height:16px;"></div></div>'
+      +'<div style="font-size:11px;color:#5a7a8a;padding:3px 0;font-weight:600;">&#x1F6B6; '+toStop.walkMinsFromPrev+' min</div></div>';
   }
-  html+='<div style="display:flex;align-items:center;gap:12px;padding:6px 0 20px;">'
+  html += '<div style="display:flex;align-items:center;gap:12px;padding:6px 0 20px;">'
     +'<div style="width:14px;height:14px;background:#c0392b;border-radius:50%;flex-shrink:0;box-shadow:0 0 0 3px rgba(192,57,43,0.2);"></div>'
-    +'<div style="font-size:13px;font-weight:800;color:#c0392b;">&#x1F3C1; '+toStop.name+'</div>'
-    +'</div>';
+    +'<div style="font-size:13px;font-weight:800;color:#c0392b;">&#x1F3C1; '+toStop.name+'</div></div>';
 
-  cardsEl.innerHTML=html;
-  _tourLandmarks=landmarks;
+  cardsEl.innerHTML = html;
+  _tourLandmarks = landmarks;
+
+  // Scroll-to-highlight: when a card enters view, highlight its marker on the map
+  if ('IntersectionObserver' in window) {
+    var io = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        if (entry.isIntersecting) {
+          var idx = parseInt(entry.target.getAttribute('data-idx'));
+          highlightTourMarker(idx);
+        }
+      });
+    }, {threshold: 0.6});
+    document.querySelectorAll('.tour-card').forEach(function(el){ io.observe(el); });
+  }
 }
 
+function highlightTourMarker(idx) {
+  _tourMarkers.forEach(function(mk, i) {
+    var active = i === idx;
+    var el = mk.getElement && mk.getElement();
+    if (el) {
+      el.querySelector('div').style.background = active ? '#e67e22' : '#5c4db1';
+      el.querySelector('div').style.transform = active ? 'scale(1.4)' : 'scale(1)';
+      el.style.zIndex = active ? 1000 : 500;
+    }
+  });
+  // Pan map to marker without zooming
+  if (_suggestMap && _tourMarkers[idx]) {
+    _suggestMap.panTo(_tourMarkers[idx].getLatLng(), {animate:true, duration:0.4});
+  }
+}
+
+function panToTourMarker(idx) { highlightTourMarker(idx); }
+
 function speakTourLandmark(idx) {
-  const lm = _tourLandmarks[idx]; if (!lm) return;
+  var lm = _tourLandmarks[idx]; if(!lm) return;
   if (window.speechSynthesis && window.speechSynthesis.speaking) { window.speechSynthesis.cancel(); return; }
-  const utt = new SpeechSynthesisUtterance((lm.name + '. ' + (lm.extract || lm.tldr || '')).slice(0, 1000));
-  utt.lang = 'en-GB'; utt.rate = 0.95;
+  var utt = new SpeechSynthesisUtterance((lm.name+'. '+(lm.extract||lm.tldr||'')).slice(0,1000));
+  utt.lang='en-GB'; utt.rate=0.95;
   window.speechSynthesis && window.speechSynthesis.speak(utt);
-  showToast('Reading ' + lm.name + '...');
+  showToast('Reading '+lm.name+'...');
 }
 
 async function drawTourRoute(tour, fromStop, toStop) {
-  if (!_suggestMap) return;
-  if (_tourRouteLayer) { try { _suggestMap.removeLayer(_tourRouteLayer); } catch(e) {} _tourRouteLayer = null; }
-  _tourMarkers.forEach(function(m) { try { _suggestMap.removeLayer(m); } catch(e) {} });
-  _tourMarkers = [];
+  if(!_suggestMap) return;
+  if(_tourRouteLayer){try{_suggestMap.removeLayer(_tourRouteLayer);}catch(e){} _tourRouteLayer=null;}
+  _tourMarkers.forEach(function(m){try{_suggestMap.removeLayer(m);}catch(e){}});
+  _tourMarkers=[];
 
-  const ordered = [fromStop].concat(tour.landmarks).concat([toStop]);
-  const coordStr = ordered.map(function(p) { return p.lng + ',' + p.lat; }).join(';');
+  var ordered = [fromStop].concat(tour.landmarks).concat([toStop]);
+  var coordStr = ordered.map(function(p){return p.lng+','+p.lat;}).join(';');
   try {
-    const r = await fetch('https://router.project-osrm.org/route/v1/foot/' + coordStr + '?overview=full&geometries=geojson');
-    const d = await r.json();
-    if (d.routes && d.routes[0]) {
-      const coords = d.routes[0].geometry.coordinates.map(function(c) { return [c[1], c[0]]; });
-      _tourRouteLayer = L.polyline(coords, {color: '#5c4db1', weight: 4, opacity: 0.85}).addTo(_suggestMap);
+    var r = await fetch('https://router.project-osrm.org/route/v1/foot/'+coordStr+'?overview=full&geometries=geojson');
+    var d = await r.json();
+    if(d.routes&&d.routes[0]){
+      var coords = d.routes[0].geometry.coordinates.map(function(c){return [c[1],c[0]];});
+      _tourRouteLayer = L.polyline(coords,{color:'#5c4db1',weight:4,opacity:0.85}).addTo(_suggestMap);
     } else throw new Error('no route');
-  } catch(e) {
-    _tourRouteLayer = L.polyline(ordered.map(function(p) { return [p.lat, p.lng]; }), {color: '#5c4db1', weight: 3, opacity: 0.7, dashArray: '8,4'}).addTo(_suggestMap);
+  } catch(e){
+    _tourRouteLayer = L.polyline(ordered.map(function(p){return [p.lat,p.lng];}),{color:'#5c4db1',weight:3,opacity:0.7,dashArray:'8,4'}).addTo(_suggestMap);
   }
 
-  tour.landmarks.forEach(function(lm, i) {
-    const ic = L.divIcon({className:'', html:'<div style="background:#5c4db1;color:#fff;border:2px solid #fff;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;box-shadow:0 2px 6px rgba(0,0,0,0.4);">' + (i+1) + '</div>', iconSize:[26,26], iconAnchor:[13,13]});
-    const mk = L.marker([lm.lat, lm.lng], {icon: ic}).addTo(_suggestMap).bindPopup('<b>' + lm.name + '</b>');
+  tour.landmarks.forEach(function(lm,i){
+    var ic = L.divIcon({className:'', html:'<div style="background:#5c4db1;color:#fff;border:2px solid #fff;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;box-shadow:0 2px 6px rgba(0,0,0,0.4);transition:all 0.2s;">'+(i+1)+'</div>', iconSize:[26,26], iconAnchor:[13,13]});
+    var mk = L.marker([lm.lat,lm.lng],{icon:ic}).addTo(_suggestMap).bindPopup('<b>'+lm.name+'</b><br><small>'+lm.tldr+'</small>');
     _tourMarkers.push(mk);
   });
-  if (_tourRouteLayer) _suggestMap.fitBounds(_tourRouteLayer.getBounds(), {padding: [30, 30]});
+  if(_tourRouteLayer) _suggestMap.fitBounds(_tourRouteLayer.getBounds(),{padding:[30,30]});
 }
 
 
