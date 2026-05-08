@@ -3730,11 +3730,27 @@ function setTourTolerance(val, afterIdx, dayIdx, beforeIdx) {
 
 // ── PHOTO LANDMARK IDENTIFICATION ─────────────────────────────────────────────
 
-function identifyLandmark() {
+async function identifyLandmark() {
+  // Use getUserMedia to guarantee the BACK camera is used
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    try {
+      // Try exact back camera first, fall back to preference
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { exact: 'environment' } } });
+      } catch(e) {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      }
+      _showCameraOverlay(stream);
+      return;
+    } catch(e) {
+      console.warn('getUserMedia failed, falling back to file input:', e.message);
+    }
+  }
+  // Fallback: file input (may open front camera on some devices)
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = 'image/*';
-  // Must be in DOM before click for Android Chrome to respect capture="environment"
   input.setAttribute('capture', 'environment');
   input.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;';
   document.body.appendChild(input);
@@ -3745,8 +3761,68 @@ function identifyLandmark() {
     try { await _processLandmarkPhoto(file); }
     catch(e) { showToast('Error: ' + (e.message || 'Could not identify'), true); }
   };
-  // Small delay lets the DOM settle before triggering camera
   setTimeout(function() { input.click(); }, 50);
+}
+
+function _showCameraOverlay(stream) {
+  const ov = document.createElement('div');
+  ov.id = 'cameraOverlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:#000;z-index:33000;display:flex;flex-direction:column;align-items:center;justify-content:center;';
+
+  const video = document.createElement('video');
+  video.style.cssText = 'width:100%;height:100%;object-fit:cover;position:absolute;inset:0;';
+  video.srcObject = stream;
+  video.autoplay = true;
+  video.playsInline = true;  // critical for iOS
+
+  // Shutter button
+  const shutter = document.createElement('button');
+  shutter.style.cssText = 'position:absolute;bottom:48px;left:50%;transform:translateX(-50%);width:72px;height:72px;border-radius:50%;background:#fff;border:5px solid #ccc;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,0.5);z-index:1;';
+  shutter.innerHTML = '<div style="width:52px;height:52px;border-radius:50%;background:#1a1a1a;margin:4px auto;"></div>';
+
+  // Cancel button
+  const cancel = document.createElement('button');
+  cancel.style.cssText = 'position:absolute;top:24px;right:20px;background:rgba(0,0,0,0.55);border:none;border-radius:24px;padding:10px 18px;color:#fff;font-size:14px;font-weight:800;cursor:pointer;z-index:1;';
+  cancel.textContent = '✕ Cancel';
+
+  // Aim crosshair
+  const aim = document.createElement('div');
+  aim.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-55%);width:180px;height:180px;border:2px solid rgba(255,255,255,0.6);border-radius:12px;z-index:1;pointer-events:none;';
+
+  const label = document.createElement('div');
+  label.style.cssText = 'position:absolute;bottom:130px;left:0;right:0;text-align:center;color:#fff;font-size:13px;font-weight:700;z-index:1;text-shadow:0 1px 4px rgba(0,0,0,0.8);';
+  label.textContent = 'Point at landmark and tap to identify';
+
+  ov.append(video, shutter, cancel, aim, label);
+  document.body.appendChild(ov);
+  video.play();
+
+  function stopStream() {
+    stream.getTracks().forEach(function(t) { t.stop(); });
+    ov.remove();
+  }
+
+  cancel.onclick = stopStream;
+
+  shutter.onclick = function() {
+    // Flash effect
+    ov.style.background = '#fff';
+    setTimeout(function() { ov.style.background = '#000'; }, 80);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 1280;
+    canvas.height = video.videoHeight || 720;
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    stopStream();
+
+    canvas.toBlob(function(blob) {
+      const file = new File([blob], 'landmark.jpg', { type: 'image/jpeg' });
+      _processLandmarkPhoto(file).catch(function(e) {
+        showToast('Error: ' + (e.message || 'Could not identify'), true);
+      });
+    }, 'image/jpeg', 0.9);
+  };
 }
 
 async function _resizeToBase64(file, maxPx) {
