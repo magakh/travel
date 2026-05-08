@@ -4087,6 +4087,12 @@ function startLiveWalkingTour() {
         if (pos2.coords.heading !== null && !isNaN(pos2.coords.heading) && pos2.coords.speed > 0.3) {
           _gpsHeading = pos2.coords.heading;
         }
+        // Keep user's current street name fresh for street-match filtering
+        const _now = Date.now();
+        if (_now - _userStreetTs > 20000) {
+          _userStreetTs = _now;
+          getUserStreet(lat, lng).then(function(s) { _userCurrentStreet = s ? s.split(' ·')[0].trim() : ''; });
+        }
         if (_tourLandmarks && _tourLandmarks.length) checkNearbyLandmarks(lat, lng);
         liveWikiSearch(lat, lng);
       },
@@ -4099,6 +4105,8 @@ function startLiveWalkingTour() {
 
 var _walkLastSearchLat = null, _walkLastSearchLng = null;
 var _walkLiveCache = new Set();
+var _userCurrentStreet = ''; // road name of user's current street
+var _userStreetTs = 0;       // timestamp of last street name refresh
 
 async function liveWikiSearch(lat, lng, radius) {
   if (!_walkTourActive || _walkTourAlertOpen) return;
@@ -4141,6 +4149,29 @@ async function liveWikiSearch(lat, lng, radius) {
     }
     var hit = nearby[0];
     _walkLiveCache.add(hit.pageid);
+
+    // Street-name guard: reverse-geocode the landmark and confirm it's on the
+    // same named street as the user. If not, skip unless it's < 8m off path.
+    if (_userCurrentStreet && radius <= 100) {
+      try {
+        var sgRes = await fetch(
+          'https://nominatim.openstreetmap.org/reverse?format=json&lat=' + hit.lat + '&lon=' + hit.lon + '&zoom=18',
+          {headers: {'Accept-Language': 'en'}}
+        );
+        var sgData = await sgRes.json();
+        var lmRoad = ((sgData.address || {}).road || '').toLowerCase().trim();
+        var myRoad = _userCurrentStreet.toLowerCase();
+        if (lmRoad && myRoad && lmRoad !== myRoad) {
+          var rpCheck = getLandmarkRelativePos(lat, lng, hit.lat, hit.lon);
+          if (rpCheck.metersCross > 8) {
+            // Different street and not literally on our pavement — skip silently
+            // (do NOT add to cache so it can be reconsidered if user turns onto that street)
+            _walkLiveCache.delete(hit.pageid);
+            return;
+          }
+        }
+      } catch(e) {}
+    }
 
     var extRes = await fetch('https://en.wikipedia.org/w/api.php?action=query&pageids=' + hit.pageid + '&prop=extracts|pageimages&exintro=1&explaintext=1&pithumbsize=400&format=json&origin=*');
     var extData = await extRes.json();
