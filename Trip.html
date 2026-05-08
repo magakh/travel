@@ -2710,13 +2710,18 @@ function editReservation(i) {
           <span style="font-size:14px;font-weight:600;color:#1a1a1a;">✅ Paid in advance</span>
         </label>
 
-        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
-          <input type="checkbox" id="resPaidFee" ${r.paidFee?'checked':''} style="width:18px;height:18px;margin-top:2px;accent-color:#e65100;cursor:pointer;">
+        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:8px;">
+          <input type="checkbox" id="resPaidFee" ${r.paidFee?'checked':''} onchange="document.getElementById('resFeeAmountRow').style.display=this.checked?'block':'none'" style="width:18px;height:18px;margin-top:2px;accent-color:#e65100;cursor:pointer;">
           <span>
             <span style="font-size:14px;font-weight:600;color:#1a1a1a;">✅ Paid reservation fee</span><br>
             <span style="font-size:11px;color:#888;">Will be applied towards the bill</span>
           </span>
         </label>
+        <div id="resFeeAmountRow" style="display:${r.paidFee?'block':'none'};padding-left:28px;">
+          <label style="font-size:11px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Amount paid</label>
+          <input type="text" id="resFeeAmount" value="${r.feeAmount||''}" placeholder="e.g. £25 or $50"
+            style="width:100%;padding:9px 12px;border:1px solid #f0c08a;border-radius:8px;font-size:15px;font-weight:700;box-sizing:border-box;background:#fff8f0;">
+        </div>
       </div>
 
       <p style="font-size:11px;color:#e65100;background:#fff3e0;padding:8px 12px;border-radius:8px;margin-bottom:14px;">
@@ -2756,7 +2761,8 @@ function saveReservation(i) {
     notes: document.getElementById('resNotes').value.trim(),
     confirmed: document.getElementById('resConfirmed').checked,
     paidInFull: document.getElementById('resPaidInFull').checked,
-    paidFee: document.getElementById('resPaidFee').checked
+    paidFee: document.getElementById('resPaidFee').checked,
+    feeAmount: document.getElementById('resPaidFee').checked ? (document.getElementById('resFeeAmount').value.trim()) : ''
   };
   // Lock the stop time to the reservation time
   s.time = timeStr;
@@ -3566,7 +3572,7 @@ function renderDetail() {
         <div style="font-size:11px;font-weight:800;color:#155724;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px;">✓ ${s.reservation.confirmed ? 'Confirmed' : 'Reserved'}</div>
         <p style="font-size:13px;color:#155724;margin-bottom:${(s.reservation.paidInFull||s.reservation.paidFee)?'8px':'0'}">${s.reservation.notes || 'Reservation added'}</p>
         ${s.reservation.paidInFull ? '<div style="font-size:12px;font-weight:700;color:#1a73e8;margin-bottom:4px;">✅ Paid in advance</div>' : ''}
-        ${s.reservation.paidFee ? '<div style="font-size:12px;font-weight:700;color:#e65100;">✅ Reservation fee paid <span style="font-weight:400;color:#888;">· applied towards bill</span></div>' : ''}
+        ${s.reservation.paidFee ? `<div style="font-size:12px;font-weight:700;color:#e65100;">✅ Reservation fee paid${s.reservation.feeAmount?' <span style="color:#1a1a1a;">'+s.reservation.feeAmount+'</span>':''} <span style="font-weight:400;color:#888;">· applied towards bill</span></div>` : ''}
       </div>` : ''}
     </div>
 
