@@ -4083,6 +4083,10 @@ function startLiveWalkingTour() {
         var lat = pos2.coords.latitude, lng = pos2.coords.longitude;
         _prevGpsLat = _currentGpsLat; _prevGpsLng = _currentGpsLng;
         _currentGpsLat = lat; _currentGpsLng = lng;
+        // Capture device GPS heading if available (accurate on mobile)
+        if (pos2.coords.heading !== null && !isNaN(pos2.coords.heading) && pos2.coords.speed > 0.3) {
+          _gpsHeading = pos2.coords.heading;
+        }
         if (_tourLandmarks && _tourLandmarks.length) checkNearbyLandmarks(lat, lng);
         liveWikiSearch(lat, lng);
       },
@@ -4110,7 +4114,26 @@ async function liveWikiSearch(lat, lng, radius) {
     // For auto-trigger use WALK_TRIGGER_METRES; for manual use full radius
     var maxDist = radius > 100 ? radius : WALK_TRIGGER_METRES;
     var nearby = ((data.query && data.query.geosearch) || []).filter(function(p) {
-      return !_walkLiveCache.has(p.pageid) && _haversineMetres(lat, lng, p.lat, p.lon) <= maxDist;
+      if (_walkLiveCache.has(p.pageid)) return false;
+      var d = _haversineMetres(lat, lng, p.lat, p.lon);
+      if (d > maxDist) return false;
+      // If we know walking direction, skip landmarks that are clearly off to the side
+      // (more than 60m perpendicular) or already passed (more than 20m behind)
+      if (radius <= 100) {
+        var rp = getLandmarkRelativePos(lat, lng, p.lat, p.lon);
+        if (rp.side !== null) {
+          if (rp.metersAhead < -20) return false; // already passed it
+          if (rp.metersCross > 60) return false; // too far off path
+        }
+      }
+      return true;
+    });
+    // Sort: prefer landmarks most directly ahead (smallest cross distance)
+    nearby.sort(function(a, b) {
+      var rpA = getLandmarkRelativePos(lat, lng, a.lat, a.lon);
+      var rpB = getLandmarkRelativePos(lat, lng, b.lat, b.lon);
+      // Primary: smallest cross distance (closest to path)
+      return rpA.metersCross - rpB.metersCross;
     });
     if (!nearby.length || _walkTourAlertOpen) {
       if (radius > 100) showToast('No new landmarks found within ' + radius + 'm');
@@ -4162,17 +4185,56 @@ function checkNearbyLandmarks(lat, lng) {
 
 let _currentGpsLat = null, _currentGpsLng = null;
 let _prevGpsLat = null, _prevGpsLng = null;
+let _gpsHeading = null; // degrees 0-360 from device GPS, null if unavailable
 
-// Which side of the street is the landmark on?
-function getStreetSide(userLat, userLng, lmLat, lmLng) {
-  if (_prevGpsLat === null || _prevGpsLng === null) return null;
-  const dx = userLng - _prevGpsLng; // walking direction (lng)
-  const dy = userLat - _prevGpsLat; // walking direction (lat)
-  if (Math.abs(dx) < 1e-8 && Math.abs(dy) < 1e-8) return null; // not moving
-  const lx = lmLng - userLng; // vector to landmark
-  const ly = lmLat - userLat;
-  const cross = dx * ly - dy * lx;
-  return cross > 0 ? 'LEFT side 👈' : 'RIGHT side 👉';
+// True bearing (0-360°) from point A to point B
+function bearingBetween(lat1, lng1, lat2, lng2) {
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const lat1R = lat1 * Math.PI / 180;
+  const lat2R = lat2 * Math.PI / 180;
+  const y = Math.sin(dLng) * Math.cos(lat2R);
+  const x = Math.cos(lat1R) * Math.sin(lat2R) - Math.sin(lat1R) * Math.cos(lat2R) * Math.cos(dLng);
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
+
+// Get current walking direction in degrees (0=N, 90=E, 180=S, 270=W)
+// Prefers GPS hardware heading; falls back to computed prev→current bearing
+function getWalkingBearing() {
+  if (_gpsHeading !== null && !isNaN(_gpsHeading)) return _gpsHeading;
+  if (_prevGpsLat === null || _currentGpsLat === null) return null;
+  const moved = _haversineMetres(_prevGpsLat, _prevGpsLng, _currentGpsLat, _currentGpsLng);
+  if (moved < 4) return null; // too close — unreliable
+  return bearingBetween(_prevGpsLat, _prevGpsLng, _currentGpsLat, _currentGpsLng);
+}
+
+// Returns relative position of landmark from current position + walking direction:
+//   { side: 'LEFT'|'RIGHT'|null, metersAhead: n, metersCross: n, totalDist: n }
+function getLandmarkRelativePos(userLat, userLng, lmLat, lmLng) {
+  const totalDist = _haversineMetres(userLat, userLng, lmLat, lmLng);
+  const bearing = getWalkingBearing();
+  if (bearing === null) return { side: null, metersAhead: totalDist, metersCross: 0, totalDist };
+  const lmBearing = bearingBetween(userLat, userLng, lmLat, lmLng);
+  let relAngle = lmBearing - bearing;
+  while (relAngle > 180) relAngle -= 360;
+  while (relAngle < -180) relAngle += 360;
+  const relRad = relAngle * Math.PI / 180;
+  const metersAhead = totalDist * Math.cos(relRad);
+  const metersCross = Math.abs(totalDist * Math.sin(relRad));
+  const side = relAngle >= 0 ? 'RIGHT' : 'LEFT';
+  return { side, metersAhead, metersCross, totalDist, relAngle };
+}
+
+// Build a human-readable distance+direction label like "32m ahead on your LEFT"
+function buildDistLabel(pos) {
+  if (!pos) return '';
+  const { side, metersAhead, metersCross, totalDist } = pos;
+  function fmt(m) { return m < 1000 ? Math.round(m) + 'm' : (m/1000).toFixed(1) + 'km'; }
+  if (side === null) return fmt(totalDist) + ' away';
+  if (metersAhead < -5) return fmt(Math.abs(metersAhead)) + ' behind you'; // passed it
+  // Primarily ahead
+  const aheadStr = metersAhead > 0 ? fmt(metersAhead) + ' ahead' : 'right here';
+  if (metersCross < 15) return aheadStr; // almost exactly ahead — no side needed
+  return aheadStr + ' on your ' + side;
 }
 
 // Reverse geocode via Nominatim (free, no key)
@@ -4215,13 +4277,16 @@ function showLandmarkAlert(lm, idx, dist) {
 
   const distLabel = dist >= 0 ? (dist < 1000 ? Math.round(dist) + 'm' : (dist/1000).toFixed(1) + 'km') : '';
   const idxLabel = idx >= 0 ? '#' + (idx+1) : '';
-  const streetSide = (_currentGpsLat !== null) ? getStreetSide(_currentGpsLat, _currentGpsLng, lm.lat, lm.lng) : null;
+  const relPos = (_currentGpsLat !== null && dist >= 0) ? getLandmarkRelativePos(_currentGpsLat, _currentGpsLng, lm.lat, lm.lng) : null;
+  const distDirectionLabel = relPos ? buildDistLabel(relPos) : (distLabel ? distLabel + ' away' : '');
+  const side = relPos && relPos.side ? relPos.side : null;
+  const sideEmoji = side === 'LEFT' ? '👈' : side === 'RIGHT' ? '👉' : null;
   const imgSrc = lm.image || null;
   const imgHtml = imgSrc
     ? '<div style="background:#f0f0f0;border-radius:20px 20px 0 0;overflow:hidden;"><img src="'+imgSrc+'" style="width:100%;height:auto;display:block;max-height:300px;object-fit:contain;" loading="eager" onerror="this.parentElement.style.display=\'none\'"></div>'
     : '';
 
-  const sideHtml = streetSide ? '<span style="margin-left:auto;background:#fff3cd;padding:3px 8px;border-radius:8px;font-size:12px;font-weight:800;color:#856404;">' + streetSide + '</span>' : '';
+  const sideHtml = sideEmoji ? '<span style="margin-left:auto;background:#fff3cd;padding:3px 8px;border-radius:8px;font-size:12px;font-weight:800;color:#856404;">' + side + ' ' + sideEmoji + '</span>' : '';
   el.innerHTML = imgHtml
     + '<div style="padding:14px 16px 28px;">'
     + '<div style="background:#f0f7ff;border-radius:10px;padding:9px 12px;margin-bottom:12px;font-size:13px;display:flex;align-items:center;gap:8px;">'
@@ -4229,7 +4294,7 @@ function showLandmarkAlert(lm, idx, dist) {
     + sideHtml
     + '</div>'
     + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'
-    + '<div style="font-size:10px;font-weight:700;color:#1a7a3a;text-transform:uppercase;letter-spacing:0.5px;">Landmark' + (idxLabel?' '+idxLabel:'') + (distLabel?' · '+distLabel:'') + '</div>'
+    + '<div style="font-size:10px;font-weight:700;color:#1a7a3a;text-transform:uppercase;letter-spacing:0.5px;">Landmark' + (idxLabel?' '+idxLabel:'') + (distDirectionLabel?' · '+distDirectionLabel:'') + '</div>'
     + '<button onclick="dismissLandmarkAlert()" style="background:#f0f0f0;border:none;border-radius:20px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;">✕</button>'
     + '</div>'
     + '<div style="font-size:18px;font-weight:900;line-height:1.2;margin-bottom:6px;">'+lm.name+'</div>'
@@ -4251,8 +4316,8 @@ function showLandmarkAlert(lm, idx, dist) {
 
     if (window.speechSynthesis) {
       window.speechSynthesis.cancel();
-      const side = streetSide ? streetSide.replace('👈','on the left').replace('👉','on the right') : '';
-      const addrText = addr ? 'Located at ' + addr + (side ? ', ' + side : '') + '. ' : (side ? side + '. ' : '');
+      const sideText = side ? 'on your ' + side.toLowerCase() : '';
+      const addrText = addr ? 'Located at ' + addr + (sideText ? ', ' + sideText : '') + '. ' : (sideText ? sideText + '. ' : '');
       const text = lm.name + '. ' + addrText + (lm.tldr || '');
       const utt = new SpeechSynthesisUtterance(text.slice(0, 1000));
       utt.lang = 'en-GB'; utt.rate = 0.95;
