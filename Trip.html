@@ -3793,8 +3793,40 @@ async function buildGuidedTour(fromStop, toStop, tolerance) {
   var maxPerSeg = tolerance <= 0.1 ? 2 : tolerance <= 0.35 ? 4 : 6;
   var spread = spreadAlongRoute(fromStop, deduped, toStop, maxPerSeg);
 
-  // 3. Nearest-neighbor ordering (no zigzag)
-  var selected = nearestNeighborOrder(fromStop, spread.slice(0, 50), toStop);
+  // 3. Sort by position along actual OSRM walking route — guarantees forward-only order
+  var selected = [];
+  try {
+    var routeRes = await fetch('https://router.project-osrm.org/route/v1/foot/'+fromStop.lng+','+fromStop.lat+';'+toStop.lng+','+toStop.lat+'?overview=full&geometries=geojson');
+    var routeData = await routeRes.json();
+    var rCoords = routeData.routes && routeData.routes[0] && routeData.routes[0].geometry.coordinates;
+    if (rCoords && rCoords.length > 1) {
+      spread.forEach(function(lm) {
+        var minD = Infinity, rPos = 0, cum = 0;
+        for (var ri = 0; ri < rCoords.length - 1; ri++) {
+          var s = rCoords[ri], e = rCoords[ri+1];
+          var sLen = _haversineMetres(s[1],s[0],e[1],e[0]);
+          var dx2 = e[0]-s[0], dy2 = e[1]-s[1], l2 = dx2*dx2+dy2*dy2||1;
+          var t = Math.max(0,Math.min(1,((lm.lng-s[0])*dx2+(lm.lat-s[1])*dy2)/l2));
+          var d = _haversineMetres(lm.lat,lm.lng,s[1]+t*(e[1]-s[1]),s[0]+t*dx2);
+          if (d < minD) { minD = d; rPos = cum + t*sLen; }
+          cum += sLen;
+        }
+        lm.routePos = rPos;
+      });
+      spread.sort(function(a,b){return a.routePos-b.routePos;});
+    } else {
+      // Fallback: project onto A→B straight line
+      var dx=toStop.lng-fromStop.lng, dy=toStop.lat-fromStop.lat, l2=dx*dx+dy*dy||1;
+      spread.forEach(function(lm){lm.routePos=((lm.lng-fromStop.lng)*dx+(lm.lat-fromStop.lat)*dy)/l2;});
+      spread.sort(function(a,b){return a.routePos-b.routePos;});
+    }
+  } catch(e) {
+    // Fallback sort on error
+    var dx=toStop.lng-fromStop.lng, dy=toStop.lat-fromStop.lat, l2=dx*dx+dy*dy||1;
+    spread.forEach(function(lm){lm.routePos=((lm.lng-fromStop.lng)*dx+(lm.lat-fromStop.lat)*dy)/l2;});
+    spread.sort(function(a,b){return a.routePos-b.routePos;});
+  }
+  selected = spread.slice(0, 50);
 
   // Fetch extracts + large thumbnails
   var selIds = selected.map(function(c){return c.pageid;}).join('|');
