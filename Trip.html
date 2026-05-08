@@ -1192,7 +1192,8 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
   </div>
 </div>
 
-<!-- Floating walk guide button removed — now in header -->
+<!-- Persistent Next landmark bar (shown when walking guide is active) -->
+<div id="walkNextBar" style="display:none;position:fixed;bottom:calc(var(--bottom-h, 60px) + 12px);left:50%;transform:translateX(-50%);z-index:9999;background:#1a1a1a;color:#fff;border-radius:30px;padding:10px 20px;font-size:13px;font-weight:800;cursor:pointer;box-shadow:0 3px 16px rgba(0,0,0,0.35);white-space:nowrap;display:none;align-items:center;gap:8px;" onclick="nextLandmark()">🚶 Next landmark →</div>
   </div>
 </div>
 
@@ -4054,6 +4055,8 @@ function setWalkBtnState(active) {
       hdr.style.color = '#1a7a3a';
     }
   }
+  var bar = document.getElementById("walkNextBar");
+  if (bar) bar.style.display = active ? "flex" : "none";
   // In-panel button
   ['startWalkBtn','startWalkBtnTop'].forEach(function(id) {
     var btn = document.getElementById(id);
@@ -4154,6 +4157,7 @@ let _currentGpsLat = null, _currentGpsLng = null;
 function showLandmarkAlert(lm, idx, dist) {
   _walkTourAlertOpen = true;
   _activeLandmark = lm;
+  var bar = document.getElementById('walkNextBar'); if (bar) bar.style.display = 'none';
   const old = document.getElementById('walkAlert'); if (old) { clearTimeout(old._timer); old.remove(); }
 
   const el = document.createElement('div');
@@ -4207,6 +4211,7 @@ function showLandmarkAlert(lm, idx, dist) {
 function dismissLandmarkAlert() {
   _walkTourAlertOpen = false;
   if (window.speechSynthesis) window.speechSynthesis.cancel();
+  var bar = document.getElementById('walkNextBar'); if (bar && _walkTourActive) bar.style.display = 'flex';
   const el = document.getElementById('walkAlert'); if (!el) return;
   clearTimeout(el._timer);
   el.style.transform = 'translateY(100%)';
