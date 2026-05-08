@@ -1170,7 +1170,7 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
     </div>
     <div style="display:flex;gap:6px;flex-shrink:0;">
       <button class="prebook-pill" id="lockBtn" onclick="showLockDialog()" title="Edit access" style="border-color:#aaa;color:#555;">🔒 View</button>
-      <button class="prebook-pill" id="walkGuideBtn" onclick="toggleWalkingGuide()" title="Start/stop live walking guide" style="border-color:#1a7a3a;color:#1a7a3a;display:none;">🚶</button>
+      <button class="prebook-pill" id="walkGuideBtn" onclick="toggleWalkingGuide()" title="Start/stop live walking guide" style="border-color:#1a7a3a;color:#1a7a3a;">🚶 Guide</button>
       <button class="prebook-pill" id="saveBtn" onclick="saveToStorage()" title="Save & sync" style="border-color:#88d8a0;color:#88d8a0;">💾</button>
       <button class="prebook-pill" id="refreshBtn" onclick="manualRefresh()" title="Refresh from sync" style="border-color:#88d8a0;color:#88d8a0;">🔄</button>
       <button class="prebook-pill" onclick="showSaveMenu()" title="More options">⋮</button>
@@ -3938,9 +3938,6 @@ function renderTourCards(tour, fromStop, toStop, afterIdx, dayIdx, beforeIdx) {
   cardsEl.innerHTML = html;
   cardsEl.innerHTML = html;
   _tourLandmarks = landmarks;
-  // Show the persistent header button now that landmarks are loaded
-  var hdrBtn = document.getElementById('walkGuideBtn');
-  if (hdrBtn) hdrBtn.style.display = '';
 
   // Scroll-based highlight: find which card is most visible in the list container
   const listContainer = document.getElementById('suggestResultsList');
