@@ -3508,7 +3508,7 @@ function renderDetail() {
 
   document.getElementById('detailContent').innerHTML = `
     <div class="detail-hero">
-      ${s.image ? `<img src="${s.image}" alt="${s.name}" style="width:100%;max-height:280px;object-fit:contain;border-radius:12px;margin-bottom:12px;display:block;background:#111;">` : ''}
+      ${s.image ? `<img src="${wikiThumb(s.image, 500)}" alt="${s.name}" style="width:100%;max-height:280px;object-fit:contain;border-radius:12px;margin-bottom:12px;display:block;background:#111;">` : ''}
       <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:0;">
         <div class="detail-badge" style="border-left:3px solid ${s.color};padding-left:10px;">
         <span onclick="editStopTime(currentStop)" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;" title="Tap to change start time">⏱ ${s.time}</span> &nbsp;·&nbsp; <span onclick="editDuration(currentStop)" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;" title="Tap to edit duration">⏳ ${s.duration}</span> &nbsp;·&nbsp; ${days[currentDay].title.split('—')[0].trim()}
@@ -4171,7 +4171,7 @@ async function liveWikiSearch(lat, lng, radius) {
       } catch(e) {}
     }
 
-    var extRes = await fetch('https://en.wikipedia.org/w/api.php?action=query&pageids=' + hit.pageid + '&prop=extracts|pageimages&exintro=1&explaintext=1&pithumbsize=800&format=json&origin=*');
+    var extRes = await fetch('https://en.wikipedia.org/w/api.php?action=query&pageids=' + hit.pageid + '&prop=extracts|pageimages&exintro=1&explaintext=1&pithumbsize=400&format=json&origin=*');
     var extData = await extRes.json();
     var page = (extData.query && extData.query.pages && extData.query.pages[hit.pageid]) || {};
     var extract = (page.extract || '').replace(/\n+/g, ' ').trim().slice(0, 600);
