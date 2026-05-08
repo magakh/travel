@@ -4151,7 +4151,8 @@ async function liveWikiSearch(lat, lng, radius) {
     _walkLiveCache.add(hit.pageid);
 
     // Street-name guard: reverse-geocode the landmark and confirm it's on the
-    // same named street as the user. If not, skip unless it's < 8m off path.
+    // same named street as the user. If not, skip in auto-trigger mode — the
+    // user can still find it via the manual Next button.
     if (_userCurrentStreet && radius <= 100) {
       try {
         var sgRes = await fetch(
@@ -4162,18 +4163,15 @@ async function liveWikiSearch(lat, lng, radius) {
         var lmRoad = ((sgData.address || {}).road || '').toLowerCase().trim();
         var myRoad = _userCurrentStreet.toLowerCase();
         if (lmRoad && myRoad && lmRoad !== myRoad) {
-          var rpCheck = getLandmarkRelativePos(lat, lng, hit.lat, hit.lon);
-          if (rpCheck.metersCross > 8) {
-            // Different street and not literally on our pavement — skip silently
-            // (do NOT add to cache so it can be reconsidered if user turns onto that street)
-            _walkLiveCache.delete(hit.pageid);
-            return;
-          }
+          // Different street name — skip silently, don't cache so it's
+          // reconsidered if user turns onto that street
+          _walkLiveCache.delete(hit.pageid);
+          return;
         }
       } catch(e) {}
     }
 
-    var extRes = await fetch('https://en.wikipedia.org/w/api.php?action=query&pageids=' + hit.pageid + '&prop=extracts|pageimages&exintro=1&explaintext=1&pithumbsize=400&format=json&origin=*');
+    var extRes = await fetch('https://en.wikipedia.org/w/api.php?action=query&pageids=' + hit.pageid + '&prop=extracts|pageimages&exintro=1&explaintext=1&pithumbsize=800&format=json&origin=*');
     var extData = await extRes.json();
     var page = (extData.query && extData.query.pages && extData.query.pages[hit.pageid]) || {};
     var extract = (page.extract || '').replace(/\n+/g, ' ').trim().slice(0, 600);
@@ -4344,8 +4342,8 @@ function showLandmarkAlert(lm, idx, dist) {
 
   // Photo + map sit side-by-side at the top of the card
   const photoHtml = imgSrc
-    ? '<div style="flex:1;border-radius:10px;overflow:hidden;background:#f0f0f0;min-height:110px;max-height:110px;">'
-      + '<img src="'+imgSrc+'" style="width:100%;height:110px;object-fit:cover;display:block;" loading="eager" onerror="this.parentElement.style.display=\'none\'">'
+    ? '<div style="flex:1;border-radius:10px;overflow:hidden;background:#111;display:flex;align-items:center;justify-content:center;min-height:110px;max-height:160px;">'
+      + '<img src="'+imgSrc+'" style="width:100%;max-height:160px;object-fit:contain;display:block;" loading="eager" onerror="this.parentElement.style.display=\'none\'">'
       + '</div>'
     : '';
 
