@@ -2697,10 +2697,27 @@ function editReservation(i) {
       <textarea id="resNotes" placeholder="e.g. Window table requested, 2 people"
         style="width:100%;padding:11px 14px;border:1px solid #ddd;border-radius:10px;font-size:14px;margin-bottom:14px;box-sizing:border-box;min-height:70px;resize:vertical;font-family:inherit;">${r.notes||''}</textarea>
 
-      <label style="display:flex;align-items:center;gap:10px;margin-bottom:18px;cursor:pointer;">
+      <label style="display:flex;align-items:center;gap:10px;margin-bottom:12px;cursor:pointer;">
         <input type="checkbox" id="resConfirmed" ${r.confirmed?'checked':''} style="width:18px;height:18px;cursor:pointer;">
         <span style="font-size:14px;font-weight:600;color:#155724;">Mark as confirmed</span>
       </label>
+
+      <div style="background:#f8f9fa;border-radius:10px;padding:12px 14px;margin-bottom:14px;">
+        <p style="font-size:10px;font-weight:800;color:#555;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">Payment</p>
+
+        <label style="display:flex;align-items:center;gap:10px;margin-bottom:10px;cursor:pointer;">
+          <input type="checkbox" id="resPaidInFull" ${r.paidInFull?'checked':''} style="width:18px;height:18px;accent-color:#1a73e8;cursor:pointer;">
+          <span style="font-size:14px;font-weight:600;color:#1a1a1a;">✅ Paid in advance</span>
+        </label>
+
+        <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;">
+          <input type="checkbox" id="resPaidFee" ${r.paidFee?'checked':''} style="width:18px;height:18px;margin-top:2px;accent-color:#e65100;cursor:pointer;">
+          <span>
+            <span style="font-size:14px;font-weight:600;color:#1a1a1a;">✅ Paid reservation fee</span><br>
+            <span style="font-size:11px;color:#888;">Will be applied towards the bill</span>
+          </span>
+        </label>
+      </div>
 
       <p style="font-size:11px;color:#e65100;background:#fff3e0;padding:8px 12px;border-radius:8px;margin-bottom:14px;">
         🔒 Booked time is <strong>fixed</strong> — the schedule will warn if other stops conflict with it.
@@ -2737,7 +2754,9 @@ function saveReservation(i) {
   s.reservation = {
     time: timeStr,
     notes: document.getElementById('resNotes').value.trim(),
-    confirmed: document.getElementById('resConfirmed').checked
+    confirmed: document.getElementById('resConfirmed').checked,
+    paidInFull: document.getElementById('resPaidInFull').checked,
+    paidFee: document.getElementById('resPaidFee').checked
   };
   // Lock the stop time to the reservation time
   s.time = timeStr;
@@ -3544,8 +3563,10 @@ function renderDetail() {
         <p>${s.prebookText} — <a href="${s.prebookUrl}" target="_blank">Book here →</a></p>
       </div>` : s.reservation ? `
       <div style="background:#d4edda;border:1px solid #28a745;border-radius:10px;padding:12px 14px;">
-        <div style="font-size:11px;font-weight:800;color:#155724;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px;">✓ ${s.reservation.confirmed ? 'Confirmed' : 'Reserved'}</div>
-        <p style="font-size:13px;color:#155724;">${s.reservation.notes || 'Reservation added'}</p>
+        <div style="font-size:11px;font-weight:800;color:#155724;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px;">✓ ${s.reservation.confirmed ? 'Confirmed' : 'Reserved'}</div>
+        <p style="font-size:13px;color:#155724;margin-bottom:${(s.reservation.paidInFull||s.reservation.paidFee)?'8px':'0'}">${s.reservation.notes || 'Reservation added'}</p>
+        ${s.reservation.paidInFull ? '<div style="font-size:12px;font-weight:700;color:#1a73e8;margin-bottom:4px;">✅ Paid in advance</div>' : ''}
+        ${s.reservation.paidFee ? '<div style="font-size:12px;font-weight:700;color:#e65100;">✅ Reservation fee paid <span style="font-weight:400;color:#888;">· applied towards bill</span></div>' : ''}
       </div>` : ''}
     </div>
 
