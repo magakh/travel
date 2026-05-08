@@ -3836,13 +3836,13 @@ async function buildGuidedTour(fromStop, toStop, tolerance) {
 
   // Fetch extracts + large thumbnails
   var selIds = selected.map(function(c){return c.pageid;}).join('|');
-  var extRes = await fetch('https://en.wikipedia.org/w/api.php?action=query&pageids='+selIds+'&prop=extracts|pageimages&exintro=1&explaintext=1&pithumbsize=2000&piprop=thumbnail|original&format=json&origin=*');
+  var extRes = await fetch('https://en.wikipedia.org/w/api.php?action=query&pageids='+selIds+'&prop=extracts|pageimages&exintro=1&explaintext=1&pithumbsize=400&format=json&origin=*');
   var extData = await extRes.json();
   var pages = (extData.query&&extData.query.pages)||{};
   selected.forEach(function(c) {
     var p = pages[c.pageid]||{};
     c.extract = (p.extract||'').replace(/\n+/g,' ').trim().slice(0,600);
-    c.image = (p.original && p.original.source) || (p.thumbnail && p.thumbnail.source) || null;
+    c.image = (p.thumbnail && p.thumbnail.source) || null;
     c.wikiUrl = 'https://en.wikipedia.org/wiki/'+encodeURIComponent(c.name);
   });
 
@@ -4112,11 +4112,11 @@ async function liveWikiSearch(lat, lng) {
     var hit = nearby[0];
     _walkLiveCache.add(hit.pageid);
 
-    var extRes = await fetch('https://en.wikipedia.org/w/api.php?action=query&pageids=' + hit.pageid + '&prop=extracts|pageimages&exintro=1&explaintext=1&pithumbsize=800&piprop=thumbnail|original&format=json&origin=*');
+    var extRes = await fetch('https://en.wikipedia.org/w/api.php?action=query&pageids=' + hit.pageid + '&prop=extracts|pageimages&exintro=1&explaintext=1&pithumbsize=400&format=json&origin=*');
     var extData = await extRes.json();
     var page = (extData.query && extData.query.pages && extData.query.pages[hit.pageid]) || {};
     var extract = (page.extract || '').replace(/\n+/g, ' ').trim().slice(0, 600);
-    var image = (page.original && page.original.source) || (page.thumbnail && page.thumbnail.source) || null;
+    var image = (page.thumbnail && page.thumbnail.source) || null;
 
     var tldr = extract ? extract.split(/[.!?]/)[0] + '.' : hit.title;
     try {
@@ -4209,9 +4209,9 @@ function showLandmarkAlert(lm, idx, dist) {
   const distLabel = dist >= 0 ? (dist < 1000 ? Math.round(dist) + 'm' : (dist/1000).toFixed(1) + 'km') : '';
   const idxLabel = idx >= 0 ? '#' + (idx+1) : '';
   const streetSide = (_currentGpsLat !== null) ? getStreetSide(_currentGpsLat, _currentGpsLng, lm.lat, lm.lng) : null;
-  const imgSrc = wikiThumb(lm.image, 400);
+  const imgSrc = lm.image || null;
   const imgHtml = imgSrc
-    ? '<div style="background:#f0f0f0;border-radius:20px 20px 0 0;overflow:hidden;"><img src="'+imgSrc+'" style="width:100%;height:auto;display:block;" loading="eager"></div>'
+    ? '<div style="background:#f0f0f0;border-radius:20px 20px 0 0;overflow:hidden;"><img src="'+imgSrc+'" style="width:100%;height:auto;display:block;max-height:300px;object-fit:contain;" loading="eager" onerror="this.parentElement.style.display=\'none\'"></div>'
     : '';
 
   const sideHtml = streetSide ? '<span style="margin-left:auto;background:#fff3cd;padding:3px 8px;border-radius:8px;font-size:12px;font-weight:800;color:#856404;">' + streetSide + '</span>' : '';
@@ -4237,19 +4237,21 @@ function showLandmarkAlert(lm, idx, dist) {
   document.body.appendChild(el);
   requestAnimationFrame(function() { requestAnimationFrame(function() { el.style.transform = 'translateY(0)'; }); });
 
-  // Fetch address asynchronously and update the card
+  // Fetch address then speak: name → address + side → TL;DR
   reverseGeocode(lm.lat, lm.lng).then(function(addr) {
     const addrEl = document.getElementById('walkAlertAddrText');
     if (addrEl) addrEl.textContent = addr || 'Near ' + lm.name;
-  });
 
-  // Auto-read TL;DR
-  if (lm.tldr && window.speechSynthesis) {
-    window.speechSynthesis.cancel();
-    const utt = new SpeechSynthesisUtterance(lm.name + '. ' + lm.tldr);
-    utt.lang = 'en-GB'; utt.rate = 0.95;
-    window.speechSynthesis.speak(utt);
-  }
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+      const side = streetSide ? streetSide.replace('👈','on the left').replace('👉','on the right') : '';
+      const addrText = addr ? 'Located at ' + addr + (side ? ', ' + side : '') + '. ' : (side ? side + '. ' : '');
+      const text = lm.name + '. ' + addrText + (lm.tldr || '');
+      const utt = new SpeechSynthesisUtterance(text.slice(0, 1000));
+      utt.lang = 'en-GB'; utt.rate = 0.95;
+      window.speechSynthesis.speak(utt);
+    }
+  });
 
   const t = setTimeout(function() { dismissLandmarkAlert(); }, 60000);
   el._timer = t;
