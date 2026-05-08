@@ -3848,22 +3848,36 @@ async function _processLandmarkPhoto(file) {
       wUrl = 'https://en.wikipedia.org/wiki/' + encodeURIComponent(wTitle);
     }
 
-    // Step 3 — AI description + fun fact (text-only, fast)
-    setStatus('Writing description…');
+    // Step 3 — Show card immediately with Wikipedia text
+    ov.remove();
     let tldr = wExtract ? wExtract.split(/[.!?]/)[0] + '.' : identified.name + '.';
-    let funFact = '';
-    try {
-      const aiRaw = await callAnthropic({
+    _showIdentifyCard({ name: wTitle, location: identified.location, type: identified.type, image: wImage, tldr, funFact: '', wikiUrl: wUrl });
+
+    // Step 4 — Enhance with AI description + fun fact in background
+    if (wExtract || identified.name) {
+      callAnthropic({
         prompt: 'Return ONLY valid JSON (no markdown):\n{"tldr":"2-3 vivid sentences a tourist standing in front of it right now would love","funFact":"one surprising little-known fact — one sentence"}\n\nAbout: "' + wTitle + '" — ' + identified.location + '\n' + (wExtract || identified.name),
         maxTokens: 280
-      });
-      const parsed = JSON.parse(aiRaw.replace(/```json|```/g,'').trim());
-      if (parsed.tldr) tldr = parsed.tldr;
-      if (parsed.funFact) funFact = parsed.funFact;
-    } catch(e) {}
-
-    ov.remove();
-    _showIdentifyCard({ name: wTitle, location: identified.location, type: identified.type, image: wImage, tldr, funFact, wikiUrl: wUrl });
+      }).then(function(aiRaw) {
+        try {
+          const parsed = JSON.parse(aiRaw.replace(/```json|```/g,'').trim());
+          const card = document.getElementById('identifyCard');
+          if (!card) return;
+          if (parsed.tldr) {
+            const tldrEl = card.querySelector('#identifyTldr');
+            if (tldrEl) tldrEl.textContent = parsed.tldr;
+            if (window._identifiedLandmark) window._identifiedLandmark.tldr = parsed.tldr;
+          }
+          if (parsed.funFact) {
+            const factWrap = card.querySelector('#identifyFactWrap');
+            const factEl = card.querySelector('#identifyFact');
+            if (factEl) factEl.textContent = parsed.funFact;
+            if (factWrap) factWrap.style.display = '';
+            if (window._identifiedLandmark) window._identifiedLandmark.funFact = parsed.funFact;
+          }
+        } catch(e) {}
+      }).catch(function(){});
+    }
 
   } catch(e) { ov.remove(); throw e; }
 }
@@ -3875,7 +3889,7 @@ function _showIdentifyCard(lm) {
   el.id = 'identifyCard';
   el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:31000;background:#fff;border-radius:20px 20px 0 0;box-shadow:0 -4px 30px rgba(0,0,0,0.3);max-height:84vh;overflow-y:auto;transform:translateY(100%);transition:transform 0.35s ease;';
 
-  const close = 'var c=document.getElementById(\'identifyCard\');if(c){c.style.transform=\'translateY(100%)\';setTimeout(()=>c.remove(),380);}';
+  const close = "var c=document.getElementById('identifyCard');if(c){c.style.transform='translateY(100%)';setTimeout(()=>c.remove(),380);}";
 
   el.innerHTML = '<div style="padding:14px 14px 36px;">'
     + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">'
@@ -3886,10 +3900,10 @@ function _showIdentifyCard(lm) {
     + (lm.image ? '<div style="border-radius:12px;overflow:hidden;background:#f0f0f0;margin-bottom:12px;">'
         + '<img src="'+lm.image+'" style="width:100%;max-height:220px;object-fit:contain;display:block;" loading="eager"></div>' : '')
     + '<div style="font-size:20px;font-weight:900;line-height:1.2;margin-bottom:8px;">'+lm.name+'</div>'
-    + '<p style="font-size:14px;color:#333;line-height:1.6;margin:0 0 12px;">'+lm.tldr+'</p>'
-    + (lm.funFact ? '<div style="background:#fffbeb;border-left:3px solid #f59e0b;border-radius:0 10px 10px 0;padding:10px 12px;margin-bottom:14px;">'
+    + '<p id="identifyTldr" style="font-size:14px;color:#333;line-height:1.6;margin:0 0 12px;">'+lm.tldr+'</p>'
+    + '<div id="identifyFactWrap" style="'+(lm.funFact?'':'display:none;')+'background:#fffbeb;border-left:3px solid #f59e0b;border-radius:0 10px 10px 0;padding:10px 12px;margin-bottom:14px;">'
         + '<span style="font-size:10px;font-weight:800;color:#b45309;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">⭐ Fun fact</span>'
-        + '<span style="font-size:13px;color:#444;line-height:1.5;">'+lm.funFact+'</span></div>' : '')
+        + '<span id="identifyFact" style="font-size:13px;color:#444;line-height:1.5;">'+(lm.funFact||'')+'</span></div>'
     + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">'
     + (lm.wikiUrl
         ? '<a href="'+lm.wikiUrl+'" target="_blank" rel="noopener" style="font-size:13px;font-weight:700;color:#1a73e8;text-decoration:none;">📖 Continue reading on Wikipedia →</a>'
@@ -3900,7 +3914,11 @@ function _showIdentifyCard(lm) {
 
   document.body.appendChild(el);
   window._identifiedLandmark = lm;
-  requestAnimationFrame(() => requestAnimationFrame(() => { el.style.transform = 'translateY(0)'; }));
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    el.style.transform = 'translateY(0)';
+    // Auto-speak name + description when card slides in
+    setTimeout(_speakIdentified, 650);
+  }));
 }
 
 function _speakIdentified() {
