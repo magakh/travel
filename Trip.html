@@ -4195,9 +4195,11 @@ async function liveWikiSearch(lat, lng, radius) {
           {headers: {'Accept-Language': 'en'}}
         );
         var sgData = await sgRes.json();
-        var lmRoad = ((sgData.address || {}).road || '').toLowerCase().trim();
+        var a = sgData.address || {};
+        var lmRoad = (a.road || a.pedestrian || a.path || a.footway || '').toLowerCase().trim();
         var myRoad = _userCurrentStreet.toLowerCase();
-        if (lmRoad && myRoad && lmRoad !== myRoad) {
+        // Block if: streets don't match, OR we couldn't determine landmark's street
+        if (!lmRoad || lmRoad !== myRoad) {
           // Different street name — skip silently, don't cache so it's
           // reconsidered if user turns onto that street
           _walkLiveCache.delete(hit.pageid);
