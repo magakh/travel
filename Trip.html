@@ -4340,11 +4340,12 @@ async function liveWikiSearch(lat, lng, radius) {
         var myRoad = _userCurrentStreet.toLowerCase();
         // Block if: streets don't match, OR we couldn't determine landmark's street
         if (!lmRoad || lmRoad !== myRoad) {
-          // Different street name — skip silently, don't cache so it's
-          // reconsidered if user turns onto that street
           _walkLiveCache.delete(hit.pageid);
           return;
         }
+        // Reuse this geocode result for the address bar — avoids a second call
+        // that could return a different street name for the same coordinates
+        var lmAddressFromGuard = [a.house_number, a.road || a.pedestrian || a.path || a.footway].filter(Boolean).join(' ');
       } catch(e) {}
     }
 
@@ -4374,6 +4375,7 @@ async function liveWikiSearch(lat, lng, radius) {
     showLandmarkAlert({
       name: hit.title, lat: hit.lat, lng: hit.lon,
       image: image, extract: extract, tldr: tldr, funFact: funFact,
+      address: (typeof lmAddressFromGuard !== 'undefined' ? lmAddressFromGuard : null),
       wikiUrl: 'https://en.wikipedia.org/wiki/' + encodeURIComponent(hit.title)
     }, -1, _haversineMetres(lat, lng, hit.lat, hit.lon));
   } catch(e) {}
@@ -4621,7 +4623,9 @@ function showLandmarkAlert(lm, idx, dist) {
 
   // ── Parallel geocoding: user street + landmark address ────────────────────
   const userStreetPromise = hasGps ? getUserStreet(_currentGpsLat, _currentGpsLng) : Promise.resolve('');
-  const lmAddrPromise = reverseGeocode(lm.lat, lm.lng);
+  // Use pre-geocoded address from street guard (same call = same street name guaranteed)
+  // Fall back to a fresh reverseGeocode only for tour landmarks that skip the guard
+  const lmAddrPromise = lm.address != null ? Promise.resolve(lm.address) : reverseGeocode(lm.lat, lm.lng);
 
   userStreetPromise.then(function(street) {
     const el2 = document.getElementById('walkAlertUserStreet');
