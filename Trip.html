@@ -3905,6 +3905,8 @@ async function _processLandmarkPhoto(file) {
       wikiUrl: wUrl,
       gmapsUrl: gmapsUrl,
       isBusiness: isBusiness,
+      menuUrl: isBusiness ? 'https://www.google.com/search?q=' + encodeURIComponent(wTitle + ' ' + identified.location + ' menu') : null,
+      reviewsUrl: isBusiness ? 'https://www.google.com/search?q=' + encodeURIComponent(wTitle + ' ' + identified.location + ' reviews') : null,
       lmLat: wLat,
       lmLng: wLng,
       userLat: snapLat,
@@ -3915,36 +3917,25 @@ async function _processLandmarkPhoto(file) {
       userLngStr: userLocInfo ? userLocInfo.lngStr : (snapLng ? Math.abs(snapLng).toFixed(4)+'°'+(snapLng>=0?'E':'W') : '')
     });
 
-    // Step 5 — AI: vivid description + fun fact + suggestion (background)
+    // Step 5 — AI enrichment (branched: restaurant vs landmark)
     const context = (wExtract || identified.name).slice(0, 600);
-    const locationHint = locationContext ? '\nUser is standing near: ' + locationContext : '';
-    callAnthropic({
-      prompt: 'Return ONLY valid JSON (no markdown):\n{"tldr":"2-3 vivid sentences a tourist standing here right now would love","funFact":"one surprising little-known fact — one sentence","suggestion":"one specific thing to look for or do RIGHT NOW at this exact spot — be concrete and actionable"}\n\nAbout: "' + wTitle + '"' + locationHint + '\n' + context,
-      maxTokens: 320
-    }).then(function(aiRaw) {
+    const locationHint = locationContext ? '\nLocation: ' + locationContext : '';
+    const aiPrompt = isBusiness
+      ? 'Return ONLY valid JSON (no markdown):\n{"tldr":"2-3 sentences about what makes this place special and what to expect when you walk in","whatToDo":"2-3 specific things to do or order here — detailed, concrete, like a knowledgeable friend","whatToOrder":"the 2-3 signature dishes or drinks this place is known for — be specific","funFact":"one surprising fact about this place"}\n\nRestaurant: "' + wTitle + '"' + locationHint + '\n' + context
+      : 'Return ONLY valid JSON (no markdown):\n{"tldr":"2-3 vivid sentences a tourist standing here would love","funFact":"one surprising little-known fact","suggestion":"one specific thing to do RIGHT NOW"}\n\nAbout: "' + wTitle + '"' + locationHint + '\n' + context;
+
+    callAnthropic({ prompt: aiPrompt, maxTokens: 400 }).then(function(aiRaw) {
       try {
         const parsed = JSON.parse(aiRaw.replace(/```json|```/g, '').trim());
         const card = document.getElementById('identifyCard');
         if (!card) return;
-        if (parsed.tldr) {
-          const el = card.querySelector('#identifyTldr');
-          if (el) el.textContent = parsed.tldr;
-          if (window._identifiedLandmark) window._identifiedLandmark.tldr = parsed.tldr;
-        }
-        if (parsed.funFact) {
-          const fw = card.querySelector('#identifyFactWrap');
-          const fe = card.querySelector('#identifyFact');
-          if (fe) fe.textContent = parsed.funFact;
-          if (fw) fw.style.display = '';
-          if (window._identifiedLandmark) window._identifiedLandmark.funFact = parsed.funFact;
-        }
-        if (parsed.suggestion) {
-          const sw = card.querySelector('#identifySuggestWrap');
-          const se = card.querySelector('#identifySuggest');
-          if (se) se.textContent = parsed.suggestion;
-          if (sw) sw.style.display = '';
-          if (window._identifiedLandmark) window._identifiedLandmark.suggestion = parsed.suggestion;
-        }
+        const lm = window._identifiedLandmark;
+        if (parsed.tldr) { const el=card.querySelector('#identifyTldr'); if(el) el.textContent=parsed.tldr; if(lm) lm.tldr=parsed.tldr; }
+        if (parsed.funFact) { const fw=card.querySelector('#identifyFactWrap'),fe=card.querySelector('#identifyFact'); if(fe) fe.textContent=parsed.funFact; if(fw) fw.style.display=''; if(lm) lm.funFact=parsed.funFact; }
+        if (parsed.suggestion) { const sw=card.querySelector('#identifySuggestWrap'),se=card.querySelector('#identifySuggest'); if(se) se.textContent=parsed.suggestion; if(sw) sw.style.display=''; if(lm) lm.suggestion=parsed.suggestion; }
+        // Restaurant-specific fields
+        if (parsed.whatToDo) { const el=card.querySelector('#identifyWhatToDo'); if(el){ el.textContent=parsed.whatToDo; el.closest && el.closest('#identifyWhatToDoWrap') && (el.closest('#identifyWhatToDoWrap').style.display=''); } if(lm) lm.whatToDo=parsed.whatToDo; }
+        if (parsed.whatToOrder) { const el=card.querySelector('#identifyWhatToOrder'); if(el){ el.textContent=parsed.whatToOrder; el.closest && el.closest('#identifyOrderWrap') && (el.closest('#identifyOrderWrap').style.display=''); } if(lm) lm.whatToOrder=parsed.whatToOrder; }
         _speakIdentified();
       } catch(e) { console.warn('Identify AI:', e); }
     }).catch(function() {});
@@ -4020,6 +4011,23 @@ function _showIdentifyCard(lm) {
     + '<div id="identifySuggestWrap" style="'+(lm.suggestion?'':'display:none;')+'background:#e8f5e9;border-left:3px solid #1a7a3a;border-radius:0 10px 10px 0;padding:9px 12px;margin-bottom:12px;">'
         + '<span style="font-size:10px;font-weight:800;color:#1a7a3a;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:3px;">💡 Do this now</span>'
         + '<span id="identifySuggest" style="font-size:13px;color:#1b5e20;line-height:1.5;font-weight:600;">'+(lm.suggestion||'')+'</span></div>'
+    // Restaurant-specific: What to do + What to order sections
+    + (lm.isBusiness
+        ? '<div id="identifyWhatToDoWrap" style="'+(lm.whatToDo?'':'display:none;')+'margin-bottom:8px;">'
+          + '<div style="font-size:10px;font-weight:800;color:#1a1a1a;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">🏛 What to do</div>'
+          + '<p id="identifyWhatToDo" style="font-size:13px;color:#333;line-height:1.6;margin:0;">'+(lm.whatToDo||'')+'</p>'
+          + '</div>'
+          + '<div id="identifyOrderWrap" style="'+(lm.whatToOrder?'':'display:none;')+'background:#fff8f0;border-left:3px solid #e65100;border-radius:0 10px 10px 0;padding:9px 12px;margin-bottom:10px;">'
+          + '<span style="font-size:10px;font-weight:800;color:#e65100;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">🍽 What to order</span>'
+          + '<span id="identifyWhatToOrder" style="font-size:13px;color:#333;line-height:1.5;font-weight:600;">'+(lm.whatToOrder||'')+'</span>'
+          + '</div>'
+          // Menu + Reviews row
+          + '<div style="display:flex;gap:8px;margin-bottom:8px;">'
+          + (lm.menuUrl ? '<a href="'+lm.menuUrl+'" target="_blank" rel="noopener" style="flex:1;padding:9px;text-align:center;background:#fff8f0;border:1px solid #ffccbc;border-radius:12px;font-size:12px;font-weight:700;color:#e65100;text-decoration:none;">🍴 View menu</a>' : '')
+          + (lm.reviewsUrl ? '<a href="'+lm.reviewsUrl+'" target="_blank" rel="noopener" style="flex:1;padding:9px;text-align:center;background:#fffde7;border:1px solid #fff176;border-radius:12px;font-size:12px;font-weight:700;color:#f57f17;text-decoration:none;">⭐ Reviews</a>' : '')
+          + '<button onclick="_suggestWhatToOrder()" style="flex:1;padding:9px;background:#fce4ec;border:1px solid #f48fb1;border-radius:12px;font-size:12px;font-weight:700;color:#c62828;cursor:pointer;white-space:nowrap;">✨ Suggest order</button>'
+          + '</div>'
+        : '')
     // Google Maps + Wikipedia + speak
     + '<div style="display:flex;gap:8px;margin-bottom:10px;">'
     + (lm.gmapsUrl
@@ -4133,16 +4141,45 @@ function _markPassedBy() {
 }
 
 
-function _speakIdentified() {
+function _suggestWhatToOrder() {
   const lm = window._identifiedLandmark;
   if (!lm) return;
-  if (window.speechSynthesis) window.speechSynthesis.cancel();
-  const text = lm.name
-    + (lm.location ? ', ' + lm.location : '')
-    + '. ' + (lm.tldr || '')
-    + (lm.funFact ? ' Fun fact: ' + lm.funFact : '')
-    + (lm.suggestion ? ' What to do: ' + lm.suggestion : '');
-  const utt = new SpeechSynthesisUtterance(text.slice(0, 1800));
+  const btn = document.querySelector('#identifyCard button[onclick="_suggestWhatToOrder()"]');
+  if (btn) btn.textContent = '⏳ Thinking…';
+  callAnthropic({
+    prompt: 'You are a food expert. For "' + lm.name + '" restaurant, suggest the 3-4 must-order dishes or drinks with brief reasons. Be specific and vivid. Return plain text, no JSON.',
+    maxTokens: 200
+  }).then(function(txt) {
+    if (!txt) return;
+    const card = document.getElementById('identifyCard');
+    if (!card) return;
+    const wrap = card.querySelector('#identifyOrderWrap');
+    const el = card.querySelector('#identifyWhatToOrder');
+    if (el) el.textContent = txt.trim();
+    if (wrap) wrap.style.display = '';
+    if (lm) lm.whatToOrder = txt.trim();
+    if (btn) btn.textContent = '✨ Suggest order';
+    // Speak the suggestion
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(new SpeechSynthesisUtterance(('What to order at ' + lm.name + ': ' + txt.trim()).slice(0,600)));
+    }
+  }).catch(function() { if (btn) btn.textContent = '✨ Suggest order'; });
+}
+
+function _speakIdentified() {
+  const lm = window._identifiedLandmark;
+  if (!lm || !window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const parts = [
+    lm.name + (lm.location ? ', ' + lm.location : '') + '.',
+    lm.tldr || '',
+    lm.whatToDo ? 'What to do: ' + lm.whatToDo : '',
+    lm.whatToOrder ? 'What to order: ' + lm.whatToOrder : '',
+    lm.funFact ? 'Fun fact: ' + lm.funFact : '',
+    lm.suggestion ? 'Suggestion: ' + lm.suggestion : ''
+  ].filter(Boolean).join(' ');
+  const utt = new SpeechSynthesisUtterance(parts.slice(0, 1800));
   utt.lang = 'en-GB'; utt.rate = 0.95;
   window.speechSynthesis.speak(utt);
 }
