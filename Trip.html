@@ -4403,7 +4403,7 @@ let _walkTourActive = false;
 let _walkTourWatchId = null;
 let _walkTourVisited = new Set();
 let _walkTourAlertOpen = false;
-const WALK_TRIGGER_METRES = 30;
+const WALK_TRIGGER_METRES = 50;
 
 function toggleWalkingGuide() {
   if (_walkTourActive) {
@@ -4482,54 +4482,60 @@ var _userStreetTs = 0;       // timestamp of last street name refresh
 
 async function liveWikiSearch(lat, lng, radius) {
   if (!_walkTourActive || _walkTourAlertOpen) return;
-  radius = radius || 80; // auto-trigger uses 80m, manual Next uses wider
+  radius = radius || 80;
+
+  // Throttle: re-search after moving 80m (was 150 — too infrequent)
   if (radius <= 100 && _walkLastSearchLat !== null) {
-    if (_haversineMetres(_walkLastSearchLat, _walkLastSearchLng, lat, lng) < 150) return;
+    if (_haversineMetres(_walkLastSearchLat, _walkLastSearchLng, lat, lng) < 80) return;
   }
   _walkLastSearchLat = lat;
   _walkLastSearchLng = lng;
+
   try {
-    var res = await fetch('https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=' + lat + '|' + lng + '&gsradius=' + radius + '&gslimit=20&format=json&origin=*');
+    var res = await fetch('https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=' + lat + '|' + lng + '&gsradius=' + radius + '&gslimit=25&format=json&origin=*');
     var data = await res.json();
-    // For auto-trigger use WALK_TRIGGER_METRES; for manual use full radius
-    var maxDist = radius > 100 ? radius : WALK_TRIGGER_METRES;
+
+    var TRIGGER = radius > 100 ? radius : WALK_TRIGGER_METRES;
+    var hasBearing = getWalkingBearing() !== null;
+
     var nearby = ((data.query && data.query.geosearch) || []).filter(function(p) {
       if (_walkLiveCache.has(p.pageid)) return false;
       var d = _haversineMetres(lat, lng, p.lat, p.lon);
-      if (d > maxDist) return false;
-      // For auto-trigger: require a known walking direction, landmark must be
-      // strictly ahead and within ~one street width (18m) of the walking path.
-      // Without direction we can't tell if it's on the right street — skip it.
+      if (d > TRIGGER) return false;
       if (radius <= 100) {
+        if (!hasBearing) {
+          // No GPS compass — only show if right next to you (< 20m, clearly visible)
+          return d <= 20;
+        }
         var rp = getLandmarkRelativePos(lat, lng, p.lat, p.lon);
-        if (rp.side === null) return false;        // no bearing — can't verify street
-        if (rp.metersAhead < 0) return false;      // behind you — don't suggest
-        if (rp.metersCross > 18) return false;     // >18m off path = different street
+        if (rp.metersAhead < 0) return false;   // already passed
+        if (rp.metersCross > 22) return false;  // more than ~1.5 street widths off path
       }
       return true;
     });
-    // Sort: prefer landmarks most directly ahead (smallest cross distance)
+
+    // Sort: closest-to-path first (or closest overall when no bearing)
     nearby.sort(function(a, b) {
-      var rpA = getLandmarkRelativePos(lat, lng, a.lat, a.lon);
-      var rpB = getLandmarkRelativePos(lat, lng, b.lat, b.lon);
-      // Primary: smallest cross distance (closest to path)
-      return rpA.metersCross - rpB.metersCross;
+      if (!hasBearing) return _haversineMetres(lat, lng, a.lat, a.lon) - _haversineMetres(lat, lng, b.lat, b.lon);
+      return getLandmarkRelativePos(lat, lng, a.lat, a.lon).metersCross
+           - getLandmarkRelativePos(lat, lng, b.lat, b.lon).metersCross;
     });
+
     if (!nearby.length || _walkTourAlertOpen) {
-      if (radius > 100) showToast('No new landmarks found within ' + radius + 'm');
+      if (radius > 100) showToast('No new landmarks found nearby');
       return;
     }
+
     var hit = nearby[0];
     _walkLiveCache.add(hit.pageid);
 
-    // Street-name guard: reverse-geocode the landmark and confirm it's on the
-    // same named street as the user. If not, skip in auto-trigger mode — the
-    // user can still find it via the manual Next button.
-    if (radius <= 100) {
-      // If we don't have the user's street yet, fetch it now (blocks until resolved)
+    // Street-name guard — skip entirely for very close landmarks (< 20m, clearly visible)
+    var hitDist = _haversineMetres(lat, lng, hit.lat, hit.lon);
+    var lmAddressFromGuard = null;
+    if (radius <= 100 && hitDist > 20) {
       if (!_userCurrentStreet) {
         try {
-          const s = await getUserStreet(lat, lng);
+          var s = await getUserStreet(lat, lng);
           _userCurrentStreet = s ? s.split(' ·')[0].trim() : '__unknown__';
           _userStreetTs = Date.now();
         } catch(e) { _userCurrentStreet = '__unknown__'; }
@@ -4540,21 +4546,18 @@ async function liveWikiSearch(lat, lng, radius) {
           {headers: {'Accept-Language': 'en'}}
         );
         var sgData = await sgRes.json();
-        var a = sgData.address || {};
-        var lmRoad = (a.road || a.pedestrian || a.path || a.footway || '').toLowerCase().trim();
-        var myRoad = _userCurrentStreet.toLowerCase();
-        // Block if: streets don't match, OR we couldn't determine landmark's street
-        if (!lmRoad || lmRoad !== myRoad) {
+        var sa = sgData.address || {};
+        var lmRoad = (sa.road || sa.pedestrian || sa.path || sa.footway || '').toLowerCase().trim();
+        var myRoad = (_userCurrentStreet || '').toLowerCase().replace('__unknown__', '');
+        if (lmRoad && myRoad && lmRoad !== myRoad) {
           _walkLiveCache.delete(hit.pageid);
           return;
         }
-        // Reuse this geocode result for the address bar — avoids a second call
-        // that could return a different street name for the same coordinates
-        var lmAddressFromGuard = [a.house_number, a.road || a.pedestrian || a.path || a.footway].filter(Boolean).join(' ');
-      } catch(e) {}
+        lmAddressFromGuard = [sa.house_number, sa.road || sa.pedestrian || sa.path || sa.footway].filter(Boolean).join(' ') || null;
+      } catch(e) {} // geocode failed — proceed, don't hard-block
     }
 
-    // Wikipedia fetch only — no AI in the hot path
+    // Wikipedia content fetch
     var extRes = await fetch('https://en.wikipedia.org/w/api.php?action=query&pageids=' + hit.pageid + '&prop=extracts|pageimages&exintro=1&explaintext=1&pithumbsize=400&format=json&origin=*');
     var extData = await extRes.json();
     var page = (extData.query && extData.query.pages && extData.query.pages[hit.pageid]) || {};
@@ -4562,46 +4565,53 @@ async function liveWikiSearch(lat, lng, radius) {
     var image = (page.thumbnail && page.thumbnail.source) || null;
     var tldr = extract ? extract.split(/[.!?]/)[0] + '.' : hit.title;
 
-    // ── Re-verify position before showing ─────────────────────────
-    // API calls above took time; user may have walked past the landmark.
-    if (_currentGpsLat !== null) {
+    // Re-verify: if we have bearing, abort if already passed during API calls
+    if (_currentGpsLat !== null && hasBearing) {
       var recheck = getLandmarkRelativePos(_currentGpsLat, _currentGpsLng, hit.lat, hit.lon);
-      if (recheck.metersAhead < -5) return;   // already passed — abort
-      if (recheck.totalDist > 60) return;     // drifted too far — abort
+      if (recheck.metersAhead < -5) return;
     }
 
-    // ── Show card immediately with Wikipedia text ──────────────────
+    // Show card immediately with Wikipedia text
+    var currentDist = _haversineMetres(_currentGpsLat || lat, _currentGpsLng || lng, hit.lat, hit.lon);
     var lmObj = {
       name: hit.title, lat: hit.lat, lng: hit.lon,
       image: image, extract: extract, tldr: tldr, funFact: '',
-      address: (typeof lmAddressFromGuard !== 'undefined' ? lmAddressFromGuard : null),
+      address: lmAddressFromGuard,
       wikiUrl: 'https://en.wikipedia.org/wiki/' + encodeURIComponent(hit.title)
     };
-    showLandmarkAlert(lmObj, -1, _haversineMetres(_currentGpsLat||lat, _currentGpsLng||lng, hit.lat, hit.lon));
+    showLandmarkAlert(lmObj, -1, currentDist);
 
-    // ── Enhance with AI blurb in background ───────────────────────
-    // Runs after card is already visible; updates it if still open
+    // AI enrichment in background — updates card text + re-speaks with full content
     callAnthropic({
       prompt: 'Return ONLY valid JSON, no markdown:\n{"tldr":"2-3 vivid specific sentences a tourist walking past right now would love","funFact":"one unexpected little-known fact — one sentence"}\n\nAbout: "' + hit.title + '"\nContext: ' + extract.slice(0, 600),
       maxTokens: 250
     }).then(function(aiText) {
       if (!aiText || !aiText.trim()) return;
-      if (!_activeLandmark || _activeLandmark.name !== hit.title) return; // card already gone
+      if (!_activeLandmark || _activeLandmark.name !== hit.title) return;
       try {
         var clean = aiText.trim().replace(/^```json|^```|```$/g, '').trim();
         var parsed = JSON.parse(clean);
         var tldrEl = document.getElementById('walkAlertTldr');
         var factWrap = document.getElementById('walkAlertFactWrap');
         var factEl = document.getElementById('walkAlertFact');
-        if (parsed.tldr && tldrEl) tldrEl.textContent = parsed.tldr;
+        if (parsed.tldr && tldrEl) { tldrEl.textContent = parsed.tldr; lmObj.tldr = parsed.tldr; }
         if (parsed.funFact && factEl) {
           factEl.textContent = parsed.funFact;
+          lmObj.funFact = parsed.funFact;
           if (factWrap) factWrap.style.display = '';
         }
+        // Re-speak with enriched content if nothing is currently playing
+        if (window.speechSynthesis && !window.speechSynthesis.speaking) {
+          var addr = lmObj.address ? 'at ' + lmObj.address + '. ' : '';
+          var full = lmObj.name + '. ' + addr + (lmObj.tldr || '') + (lmObj.funFact ? ' Fun fact: ' + lmObj.funFact : '');
+          var utt = new SpeechSynthesisUtterance(full.slice(0, 1200));
+          utt.lang = 'en-GB'; utt.rate = 0.95;
+          window.speechSynthesis.speak(utt);
+        }
       } catch(e) {}
-    }).catch(function(){});
+    }).catch(function() {});
 
-  } catch(e) {}
+  } catch(e) { console.warn('liveWikiSearch:', e); }
 }
 
 function stopLiveWalkingTour() {
