@@ -3919,6 +3919,7 @@ function renderTourCards(tour, fromStop, toStop, afterIdx, dayIdx, beforeIdx) {
     +'<div style="font-size:13px;font-weight:800;color:#c0392b;">&#x1F3C1; '+toStop.name+'</div></div>';
 
   cardsEl.innerHTML = html;
+  cardsEl.innerHTML = html;
   _tourLandmarks = landmarks;
 
   // Add Start Live Tour button
@@ -3928,33 +3929,42 @@ function renderTourCards(tour, fromStop, toStop, afterIdx, dayIdx, beforeIdx) {
     + '<p style="font-size:11px;color:#aaa;text-align:center;margin:6px 0 0;">Uses GPS · notifies you when approaching each landmark</p>';
   cardsEl.appendChild(btnWrap);
 
-  // Scroll-to-highlight: when a card enters view, highlight its marker on the map
-  if ('IntersectionObserver' in window) {
-    var io = new IntersectionObserver(function(entries) {
-      entries.forEach(function(entry) {
-        if (entry.isIntersecting) {
-          var idx = parseInt(entry.target.getAttribute('data-idx'));
-          highlightTourMarker(idx);
-        }
+  // Scroll-based highlight: find which card is most visible in the list container
+  const listContainer = document.getElementById('suggestResultsList');
+  if (listContainer) {
+    listContainer.onscroll = function() {
+      const containerRect = listContainer.getBoundingClientRect();
+      const midY = containerRect.top + containerRect.height / 2;
+      let bestIdx = 0, bestDist = Infinity;
+      document.querySelectorAll('.tour-card').forEach(function(el) {
+        const rect = el.getBoundingClientRect();
+        const cardMid = rect.top + rect.height / 2;
+        const dist = Math.abs(cardMid - midY);
+        if (dist < bestDist) { bestDist = dist; bestIdx = parseInt(el.getAttribute('data-idx')); }
       });
-    }, {threshold: 0.6});
-    document.querySelectorAll('.tour-card').forEach(function(el){ io.observe(el); });
+      highlightTourMarker(bestIdx);
+    };
   }
 }
 
 function highlightTourMarker(idx) {
   _tourMarkers.forEach(function(mk, i) {
     var active = i === idx;
-    var el = mk.getElement && mk.getElement();
-    if (el) {
-      el.querySelector('div').style.background = active ? '#e67e22' : '#5c4db1';
-      el.querySelector('div').style.transform = active ? 'scale(1.4)' : 'scale(1)';
-      el.style.zIndex = active ? 1000 : 500;
-    }
+    var bg = active ? '#e67e22' : '#5c4db1';
+    var size = active ? 32 : 26;
+    var fontSize = active ? 13 : 11;
+    mk.setIcon(L.divIcon({
+      className: '',
+      html: '<div style="background:' + bg + ';color:#fff;border:2px solid #fff;border-radius:50%;width:' + size + 'px;height:' + size + 'px;display:flex;align-items:center;justify-content:center;font-size:' + fontSize + 'px;font-weight:900;box-shadow:0 2px 8px rgba(0,0,0,0.4);transition:all 0.2s;">' + (i + 1) + '</div>',
+      iconSize: [size, size],
+      iconAnchor: [size/2, size/2]
+    }));
+    if (active) mk.setZIndexOffset(1000);
+    else mk.setZIndexOffset(0);
   });
-  // Pan map to marker without zooming
+  // Pan map to active marker smoothly
   if (_suggestMap && _tourMarkers[idx]) {
-    _suggestMap.panTo(_tourMarkers[idx].getLatLng(), {animate:true, duration:0.4});
+    _suggestMap.panTo(_tourMarkers[idx].getLatLng(), {animate: true, duration: 0.3});
   }
 }
 
