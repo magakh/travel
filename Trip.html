@@ -2045,7 +2045,7 @@ function optimizeRouteForDay(di) {
   const stops = days[di].stops;
   if (stops.length < 3) return;
 
-  // Haversine distance in metres (accurate at city scale)
+  // haversine distance helper (metres)
   function dist(a, b) {
     const R = 6371000;
     const p1 = a.lat * Math.PI/180, p2 = b.lat * Math.PI/180;
@@ -2062,37 +2062,35 @@ function optimizeRouteForDay(di) {
       || (s.badges && s.badges.includes('food'));
   }
 
-  // Step 1: Keep first stop fixed (morning anchor), greedy nearest-neighbour for rest
+  // Step 1: Lock reserved/fixed stops in place; collect free stops.
+  // First stop always stays first (morning anchor).
   const first = stops[0];
-  const pool = stops.slice(1);
-  const ordered = [first];
-  while (pool.length) {
-    const last = ordered[ordered.length - 1];
-    let bestIdx = 0, bestD = Infinity;
-    pool.forEach((s, i) => { const d = dist(last, s); if (d < bestD) { bestD = d; bestIdx = i; } });
-    ordered.push(pool.splice(bestIdx, 1)[0]);
-  }
+  const freeStops = stops.slice(1).filter(s => !s.fixed && !(s.reservation && s.reservation.time));
+  const fixedStops = stops.slice(1).filter(s => s.fixed || (s.reservation && s.reservation.time));
 
-  // Step 2: 2-opt improvement to shorten total walking distance (first stop fixed)
-  let improved = true;
-  while (improved) {
-    improved = false;
-    for (let i = 1; i < ordered.length - 1; i++) {
-      for (let j = i + 1; j < ordered.length; j++) {
-        const nextJ = j + 1 < ordered.length ? ordered[j + 1] : null;
-        const before = dist(ordered[i-1], ordered[i]) + (nextJ ? dist(ordered[j], nextJ) : 0);
-        const after  = dist(ordered[i-1], ordered[j]) + (nextJ ? dist(ordered[i], nextJ) : 0);
-        if (after < before - 1) { // 1 metre threshold to avoid float noise
-          ordered.splice(i, j - i + 1, ...ordered.slice(i, j + 1).reverse());
-          improved = true;
-        }
-      }
+  // Use a virtual "end" centroid of fixed stops (or last fixed stop) so Held-Karp
+  // routes towards the later part of the day.  Fall back to last free stop.
+  const anchor = fixedStops.length ? fixedStops[fixedStops.length - 1] : (freeStops[freeStops.length - 1] || first);
+
+  // Step 2: Optimally order free stops (Held-Karp ≤13, else NN+2opt+or-opt)
+  const orderedFree = optimalPath(first, freeStops, anchor,
+    (a, b) => dist(a, b));
+
+  // Step 3: Re-interleave fixed stops at their natural time position
+  // Build final array: fixed stops slot in by original index order, free fills gaps
+  const ordered = [first, ...orderedFree];
+  // Re-insert fixed stops near their best position
+  fixedStops.forEach(fs => {
+    let bestIdx = 1, bestCost = Infinity;
+    for (let i = 1; i <= ordered.length; i++) {
+      const prev = ordered[i - 1], next = ordered[i];
+      const cost = dist(prev, fs) + (next ? dist(fs, next) : 0) - (next ? dist(prev, next) : 0);
+      if (cost < bestCost) { bestCost = cost; bestIdx = i; }
     }
-  }
+    ordered.splice(bestIdx, 0, fs);
+  });
 
-  // Step 3: Spread food stops — no two food stops should be adjacent
-  // Iteratively swap an adjacent food pair: move the second one to the nearest
-  // non-adjacent position, preferring a swap that keeps proximity good.
+  // Step 4: Spread food stops — no two food stops should be adjacent
   let swapped = true, passes = 0;
   while (swapped && passes < 30) {
     swapped = false; passes++;
@@ -3729,15 +3727,143 @@ function setTourTolerance(val, afterIdx, dayIdx, beforeIdx) {
   }).catch(function(e) { if (c) c.innerHTML = '<p style="color:#c0392b;text-align:center;padding:20px;">' + e.message + '</p>'; });
 }
 
-function nearestNeighborOrder(start, points, end) {
-  var remaining = points.slice(), ordered = [], current = start;
-  while (remaining.length) {
-    var best = 0, bestD = Infinity;
-    remaining.forEach(function(p, i) { var d = _haversineMetres(current.lat, current.lng, p.lat, p.lng); if (d < bestD) { bestD = d; best = i; } });
-    ordered.push(remaining.splice(best, 1)[0]);
-    current = ordered[ordered.length - 1];
+// ── Shortest-path route optimisation ─────────────────────────────────────────
+//
+// heldKarpPath: EXACT optimal path through `mid` nodes with fixed start & end.
+// Uses bitmask DP (Held-Karp).  Time O(n²·2ⁿ), Space O(n·2ⁿ).
+// Practical limit: n ≤ 13 (≈100 K states, <5 ms in browser).
+//
+function heldKarpPath(start, mid, end, distFn) {
+  const n = mid.length;
+  if (n === 0) return [];
+  if (n === 1) return [mid[0]];
+
+  // Build flat distance table: index 0=start, 1..n=mid, n+1=end
+  const nodes = [start, ...mid, end];
+  const N = nodes.length;
+  const D = Array.from({length: N}, (_, i) =>
+    Array.from({length: N}, (_, j) => distFn(nodes[i], nodes[j]))
+  );
+
+  const FULL = (1 << n) - 1;
+  const INF  = 1e15;
+  // dp[mask][i] = min cost to have visited exactly nodes in `mask`, ending at mid[i]
+  const dp  = Array.from({length: FULL + 1}, () => new Float64Array(n).fill(INF));
+  const par = Array.from({length: FULL + 1}, () => new Int16Array(n).fill(-1));
+
+  // Seed: start → each mid node
+  for (let i = 0; i < n; i++) {
+    dp[1 << i][i] = D[0][i + 1];
   }
+
+  for (let mask = 1; mask <= FULL; mask++) {
+    for (let u = 0; u < n; u++) {
+      if (!(mask & (1 << u)) || dp[mask][u] === INF) continue;
+      for (let v = 0; v < n; v++) {
+        if (mask & (1 << v)) continue;
+        const nmask = mask | (1 << v);
+        const nd    = dp[mask][u] + D[u + 1][v + 1];
+        if (nd < dp[nmask][v]) { dp[nmask][v] = nd; par[nmask][v] = u; }
+      }
+    }
+  }
+
+  // Best last mid node (add cost to reach end)
+  let last = 0, best = INF;
+  for (let i = 0; i < n; i++) {
+    const c = dp[FULL][i] + D[i + 1][N - 1];
+    if (c < best) { best = c; last = i; }
+  }
+
+  // Reconstruct
+  const path = [];
+  let mask = FULL, cur = last;
+  while (cur !== -1) {
+    path.unshift(mid[cur]);
+    const prev = par[mask][cur];
+    mask ^= (1 << cur);
+    cur = prev;
+  }
+  return path;
+}
+
+// 2-opt: reverse any sub-segment that reduces total path length (fixed ends)
+function twoOpt(arr, distFn) {
+  let improved = true;
+  while (improved) {
+    improved = false;
+    for (let i = 0; i < arr.length - 1; i++) {
+      for (let j = i + 2; j < arr.length; j++) {
+        const after  = (j + 1 < arr.length) ? arr[j + 1] : null;
+        const before = distFn(arr[i], arr[i + 1]) + (after ? distFn(arr[j], after) : 0);
+        const swap   = distFn(arr[i], arr[j])     + (after ? distFn(arr[i + 1], after) : 0);
+        if (swap < before - 0.5) {
+          arr.splice(i + 1, j - i, ...arr.slice(i + 1, j + 1).reverse());
+          improved = true;
+        }
+      }
+    }
+  }
+}
+
+// Or-opt: relocate each single node to its cheapest insertion point
+function orOpt(arr, distFn) {
+  let improved = true;
+  while (improved) {
+    improved = false;
+    for (let i = 0; i < arr.length; i++) {
+      const prev = i > 0 ? arr[i - 1] : null;
+      const next = i < arr.length - 1 ? arr[i + 1] : null;
+      const p    = arr[i];
+      const removeSaving = (prev && next ? distFn(prev, next) : 0)
+                         - (prev ? distFn(prev, p) : 0)
+                         - (next ? distFn(p, next) : 0);
+      let bestGain = 0.5, bestJ = -1;
+      for (let j = 0; j < arr.length - 1; j++) {
+        if (j === i - 1 || j === i) continue;
+        const gain = removeSaving
+                   - distFn(arr[j], p)
+                   - distFn(p, arr[j + 1])
+                   + distFn(arr[j], arr[j + 1]);
+        if (gain > bestGain) { bestGain = gain; bestJ = j; }
+      }
+      if (bestJ !== -1) {
+        arr.splice(i, 1);
+        arr.splice(bestJ >= i ? bestJ : bestJ + 1, 0, p);
+        improved = true;
+        break; // restart after any relocation
+      }
+    }
+  }
+}
+
+// Main entry: exact Held-Karp for ≤13 mid-points, else NN + 2-opt + or-opt
+function optimalPath(start, mid, end, distFn) {
+  if (mid.length === 0) return [];
+  if (mid.length === 1) return [mid[0]];
+
+  if (mid.length <= 13) {
+    return heldKarpPath(start, mid, end, distFn);
+  }
+
+  // Greedy nearest-neighbour seed
+  const remaining = mid.slice(), ordered = [];
+  let cur = start;
+  while (remaining.length) {
+    let bi = 0, bd = Infinity;
+    remaining.forEach((p, i) => { const d = distFn(cur, p); if (d < bd) { bd = d; bi = i; } });
+    ordered.push(remaining.splice(bi, 1)[0]);
+    cur = ordered[ordered.length - 1];
+  }
+  twoOpt(ordered, distFn);
+  orOpt(ordered, distFn);
   return ordered;
+}
+
+// Legacy alias (kept in case any external code references it)
+function nearestNeighborOrder(start, points, end) {
+  return optimalPath(start, points, end,
+    (a, b) => _haversineMetres(a.lat, a.lng, b.lat, b.lng));
 }
 
 // Remove duplicates that are within minDist metres of each other (keep higher articleLen)
