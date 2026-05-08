@@ -3669,6 +3669,24 @@ function setTourTolerance(val, afterIdx, dayIdx, beforeIdx) {
   }).catch(function(e) { if (c) c.innerHTML = '<p style="color:#c0392b;text-align:center;padding:20px;">' + e.message + '</p>'; });
 }
 
+function nearestNeighborOrder(start, points, end) {
+  // Greedy nearest-neighbor: always go to the closest unvisited point
+  // This prevents zigzagging and gives a sensible walking order
+  var remaining = points.slice();
+  var ordered = [];
+  var current = start;
+  while (remaining.length) {
+    var minDist = Infinity, minIdx = 0;
+    remaining.forEach(function(p, i) {
+      var d = _haversineMetres(current.lat, current.lng, p.lat, p.lng);
+      if (d < minDist) { minDist = d; minIdx = i; }
+    });
+    ordered.push(remaining.splice(minIdx, 1)[0]);
+    current = ordered[ordered.length - 1];
+  }
+  return ordered;
+}
+
 async function buildGuidedTour(fromStop, toStop, tolerance) {
   const directM = _haversineMetres(fromStop.lat, fromStop.lng, toStop.lat, toStop.lng);
   const midLat = (fromStop.lat + toStop.lat) / 2;
@@ -3700,17 +3718,14 @@ async function buildGuidedTour(fromStop, toStop, tolerance) {
     filtered.forEach(function(c) { c.articleLen = (infoPages[c.pageid] && infoPages[c.pageid].length) || 500; });
   } catch(e) { filtered.forEach(function(c) { c.articleLen = 500; }); }
 
-  // Score: importance / (detour+1) — wider tolerance unlocks further notable landmarks
+  // Score: importance / (detour+1)
   filtered.forEach(function(c) { c.score = c.articleLen / (c.detourM + 50); });
   filtered.sort(function(a, b) { return b.score - a.score; });
 
-  const maxCount = tolerance <= 0.1 ? 3 : tolerance <= 0.35 ? 5 : tolerance <= 0.7 ? 7 : 10;
-  const selected = filtered.slice(0, maxCount);
-
-  // Sort into walking order via projection onto A->B vector
-  const dx = toStop.lng - fromStop.lng, dy = toStop.lat - fromStop.lat, len2 = dx*dx + dy*dy || 1;
-  selected.forEach(function(c) { c.proj = ((c.lng - fromStop.lng)*dx + (c.lat - fromStop.lat)*dy) / len2; });
-  selected.sort(function(a, b) { return a.proj - b.proj; });
+  // Include ALL landmarks within the detour budget (no arbitrary cap)
+  // Nearest-neighbor ordering from fromStop to prevent zigzag
+  const pool = filtered.slice(0, 30); // cap at 30 to avoid too many API calls
+  const selected = nearestNeighborOrder(fromStop, pool, toStop);
 
   // Fetch extracts + large thumbnails
   const selIds = selected.map(function(c) { return c.pageid; }).join('|');
