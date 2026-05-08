@@ -3943,6 +3943,7 @@ function renderTourCards(tour, fromStop, toStop, afterIdx, dayIdx, beforeIdx) {
   cardsEl.innerHTML = html;
   cardsEl.innerHTML = html;
   _tourLandmarks = landmarks;
+  _nextLandmarkIdx = 0;
 
   // Scroll-based highlight: find which card is most visible in the list container
   const listContainer = document.getElementById('suggestResultsList');
@@ -4278,33 +4279,40 @@ function dismissLandmarkAlert() {
   }, 400);
 }
 
+let _nextLandmarkIdx = 0; // tracks position for manual Next cycling
+
 async function nextLandmark() {
-  // Close current card immediately without animation delay
+  // Close current card
   _walkTourAlertOpen = false;
   if (window.speechSynthesis) window.speechSynthesis.cancel();
   const el = document.getElementById('walkAlert');
-  if (el) { clearTimeout(el._timer); el.remove(); }
-
-  // Try magic tour landmarks first (next unvisited in sequence)
-  if (_tourLandmarks && _tourLandmarks.length) {
-    for (let i = 0; i < _tourLandmarks.length; i++) {
-      if (!_walkTourVisited.has(i)) {
-        _walkTourVisited.add(i);
-        const lm = _tourLandmarks[i];
-        const dist = (_currentGpsLat !== null) ? _haversineMetres(_currentGpsLat, _currentGpsLng, lm.lat, lm.lng) : -1;
-        showLandmarkAlert(lm, i, dist);
-        return;
-      }
-    }
+  if (el) {
+    clearTimeout(el._timer);
+    el.style.transform = 'translateY(100%)';
+    setTimeout(function() { if (el.parentNode) el.remove(); }, 380);
   }
 
-  // Fallback: wide-radius Wikipedia search at current GPS position
+  // Small delay so old card finishes sliding out before new one appears
+  await new Promise(function(r) { setTimeout(r, 420); });
+
+  // Use magic tour landmarks if available — cycle through ALL of them in order
+  if (_tourLandmarks && _tourLandmarks.length) {
+    // Find next landmark starting from _nextLandmarkIdx
+    var startIdx = _nextLandmarkIdx % _tourLandmarks.length;
+    var lm = _tourLandmarks[startIdx];
+    _nextLandmarkIdx = (startIdx + 1) % _tourLandmarks.length;
+    var dist = (_currentGpsLat !== null) ? _haversineMetres(_currentGpsLat, _currentGpsLng, lm.lat, lm.lng) : -1;
+    showLandmarkAlert(lm, startIdx, dist);
+    return;
+  }
+
+  // No magic tour — live GPS search with wide radius
   if (_currentGpsLat !== null) {
-    showToast('🔍 Searching for nearby landmarks…');
-    _walkLastSearchLat = null; // bypass distance throttle
-    await liveWikiSearch(_currentGpsLat, _currentGpsLng, 600); // 600m radius for manual Next
+    showToast('🔍 Looking for landmarks nearby…');
+    _walkLastSearchLat = null;
+    await liveWikiSearch(_currentGpsLat, _currentGpsLng, 800);
   } else {
-    showToast('No GPS position yet — walk a few steps and try again');
+    showToast('Walking guide is active — landmarks appear as you approach them');
   }
 }
 
