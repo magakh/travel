@@ -4307,21 +4307,26 @@ function showLandmarkAlert(lm, idx, dist) {
   const side = relPos && relPos.side ? relPos.side : null;
   const sideEmoji = side === 'LEFT' ? '👈' : side === 'RIGHT' ? '👉' : null;
   const imgSrc = lm.image || null;
-  const imgHtml = imgSrc
-    ? '<div style="background:#f0f0f0;border-radius:20px 20px 0 0;overflow:hidden;"><img src="'+imgSrc+'" style="width:100%;height:auto;display:block;max-height:180px;object-fit:cover;" loading="eager" onerror="this.parentElement.style.display=\'none\'"></div>'
-    : '';
-
   const sideHtml = sideEmoji
     ? '<span style="margin-left:auto;background:#fff3cd;padding:3px 8px;border-radius:8px;font-size:12px;font-weight:800;color:#856404;">' + side + ' ' + sideEmoji + '</span>'
     : '';
 
-  el.innerHTML = imgHtml
-    + '<div style="padding:12px 14px 28px;">'
-    // Mini map
-    + '<div id="walkAlertMap" style="height:155px;border-radius:12px;overflow:hidden;margin-bottom:10px;background:#dde8cc;"></div>'
+  // Photo + map sit side-by-side at the top of the card
+  const photoHtml = imgSrc
+    ? '<div style="flex:1;border-radius:10px;overflow:hidden;background:#f0f0f0;min-height:110px;max-height:110px;">'
+      + '<img src="'+imgSrc+'" style="width:100%;height:110px;object-fit:cover;display:block;" loading="eager" onerror="this.parentElement.style.display=\'none\'">'
+      + '</div>'
+    : '';
+
+  el.innerHTML = '<div style="padding:12px 14px 28px;">'
+    // Photo + map row
+    + '<div style="display:flex;gap:8px;margin-bottom:10px;">'
+    + photoHtml
+    + '<div id="walkAlertMap" style="flex:1;height:110px;border-radius:10px;overflow:hidden;background:#dce8d0;"></div>'
+    + '</div>'
     // Your street bar (green)
     + '<div style="background:#e8f5e9;border-radius:10px;padding:8px 12px;margin-bottom:8px;font-size:12px;display:flex;align-items:center;gap:7px;">'
-    + '<span style="font-size:15px;">🚶</span><span id="walkAlertUserStreet" style="font-weight:700;color:#2e7d32;flex:1;">Locating your street…</span>'
+    + '<span style="font-size:14px;">🚶</span><span id="walkAlertUserStreet" style="font-weight:700;color:#2e7d32;flex:1;">Locating your street…</span>'
     + '</div>'
     // Landmark address bar (blue)
     + '<div style="background:#f0f7ff;border-radius:10px;padding:8px 12px;margin-bottom:12px;font-size:13px;display:flex;align-items:center;gap:8px;">'
@@ -4350,38 +4355,36 @@ function showLandmarkAlert(lm, idx, dist) {
       const mapEl = document.getElementById('walkAlertMap');
       _walkAlertMap = L.map(mapEl, {
         zoomControl: false, attributionControl: false,
-        dragging: true, scrollWheelZoom: false,
-        doubleClickZoom: false, touchZoom: true,
+        dragging: false, scrollWheelZoom: false,
+        doubleClickZoom: false, touchZoom: false,
         center: [lm.lat, lm.lng], zoom: 17
       });
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 19}).addTo(_walkAlertMap);
 
-      // Landmark — red pin
-      const lmIcon = L.divIcon({
-        html: '<div style="width:16px;height:16px;background:#c0392b;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.45);"></div>',
-        className: '', iconSize: [16,16], iconAnchor: [8,8]
-      });
-      L.marker([lm.lat, lm.lng], {icon: lmIcon}).addTo(_walkAlertMap)
-        .bindTooltip(lm.name, {permanent: true, direction: 'top', offset: [0,-12]});
+      // Landmark marker — wiki photo thumbnail if available, else red dot
+      const lmIconHtml = imgSrc
+        ? '<div style="width:34px;height:34px;border-radius:50%;overflow:hidden;border:2.5px solid #c0392b;box-shadow:0 2px 6px rgba(0,0,0,0.4);background:#f0f0f0;">'
+          + '<img src="'+imgSrc+'" style="width:100%;height:100%;object-fit:cover;" onerror="this.parentElement.style.background=\'#c0392b\'">'
+          + '</div>'
+        : '<div style="width:14px;height:14px;background:#c0392b;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>';
+      const lmIconSize = imgSrc ? [34,34] : [14,14];
+      const lmIconAnchor = imgSrc ? [17,17] : [7,7];
+      const lmIcon = L.divIcon({ html: lmIconHtml, className: '', iconSize: lmIconSize, iconAnchor: lmIconAnchor });
+      L.marker([lm.lat, lm.lng], {icon: lmIcon}).addTo(_walkAlertMap);
 
       if (hasGps) {
-        // You — blue dot with halo
+        // User — blue dot, no tooltip
         const meIcon = L.divIcon({
-          html: '<div style="width:16px;height:16px;background:#1a73e8;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 5px rgba(26,115,232,0.25);"></div>',
-          className: '', iconSize: [16,16], iconAnchor: [8,8]
+          html: '<div style="width:14px;height:14px;background:#1a73e8;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 4px rgba(26,115,232,0.25);"></div>',
+          className: '', iconSize: [14,14], iconAnchor: [7,7]
         });
-        L.marker([_currentGpsLat, _currentGpsLng], {icon: meIcon}).addTo(_walkAlertMap)
-          .bindTooltip('You', {permanent: true, direction: 'bottom', offset: [0, 10]});
-
-        // Dashed line connecting the two
+        L.marker([_currentGpsLat, _currentGpsLng], {icon: meIcon}).addTo(_walkAlertMap);
         L.polyline([[_currentGpsLat, _currentGpsLng], [lm.lat, lm.lng]], {
-          color: '#1a73e8', weight: 2.5, dashArray: '6,7', opacity: 0.75
+          color: '#1a73e8', weight: 2, dashArray: '5,7', opacity: 0.65
         }).addTo(_walkAlertMap);
-
-        // Fit both points with padding
         _walkAlertMap.fitBounds(
           [[_currentGpsLat, _currentGpsLng], [lm.lat, lm.lng]],
-          {padding: [32, 32]}
+          {padding: [24, 24]}
         );
       }
     } catch(mapErr) { console.warn('Walk map error:', mapErr); }
