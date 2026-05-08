@@ -4123,31 +4123,6 @@ async function liveWikiSearch(lat, lng) {
   } catch(e) {}
 }
 
-function startLiveWalkingTour() {
-  if (!('geolocation' in navigator)) { showToast('GPS not available on this device', true); return; }
-  if (!_tourLandmarks || !_tourLandmarks.length) { showToast('Run the magic tour first', true); return; }
-
-  if (_walkTourActive) {
-    stopLiveWalkingTour();
-    setWalkBtnState(false);
-    return;
-  }
-
-  navigator.geolocation.getCurrentPosition(function() {
-    _walkTourActive = true;
-    _walkTourVisited = new Set();
-    _walkTourAlertOpen = false;
-    setWalkBtnState(true);
-    showToast('&#x1F6B6; Live tour started — walk towards your landmarks!');
-    _walkTourWatchId = navigator.geolocation.watchPosition(
-      function(pos) { checkNearbyLandmarks(pos.coords.latitude, pos.coords.longitude); },
-      function(err) { console.warn('GPS:', err); },
-      { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
-    );
-  }, function() { showToast('Location permission denied — enable in browser settings', true); },
-  { enableHighAccuracy: true, timeout: 8000 });
-}
-
 function stopLiveWalkingTour() {
   _walkTourActive = false;
   if (_walkTourWatchId !== null) { navigator.geolocation.clearWatch(_walkTourWatchId); _walkTourWatchId = null; }
