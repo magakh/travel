@@ -4061,6 +4061,70 @@ function setWalkBtnState(active) {
 
 function startLiveWalkingTour() {
   if (!('geolocation' in navigator)) { showToast('GPS not available on this device', true); return; }
+
+  navigator.geolocation.getCurrentPosition(function(pos) {
+    _walkTourActive = true;
+    _walkTourVisited = new Set();
+    _walkTourAlertOpen = false;
+    _walkLastSearchLat = null;
+    _walkLastSearchLng = null;
+    setWalkBtnState(true);
+    showToast('Walking guide active — landmarks will pop up as you walk');
+    _walkTourWatchId = navigator.geolocation.watchPosition(
+      function(pos2) {
+        var lat = pos2.coords.latitude, lng = pos2.coords.longitude;
+        if (_tourLandmarks && _tourLandmarks.length) checkNearbyLandmarks(lat, lng);
+        liveWikiSearch(lat, lng);
+      },
+      function(err) { console.warn('GPS:', err); },
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+    );
+  }, function() { showToast('Location permission denied — enable in browser settings', true); },
+  { enableHighAccuracy: true, timeout: 8000 });
+}
+
+var _walkLastSearchLat = null, _walkLastSearchLng = null;
+var _walkLiveCache = new Set();
+
+async function liveWikiSearch(lat, lng) {
+  if (!_walkTourActive || _walkTourAlertOpen) return;
+  if (_walkLastSearchLat !== null) {
+    if (_haversineMetres(_walkLastSearchLat, _walkLastSearchLng, lat, lng) < 150) return;
+  }
+  _walkLastSearchLat = lat;
+  _walkLastSearchLng = lng;
+  try {
+    var res = await fetch('https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=' + lat + '|' + lng + '&gsradius=80&gslimit=10&format=json&origin=*');
+    var data = await res.json();
+    var nearby = ((data.query && data.query.geosearch) || []).filter(function(p) {
+      return !_walkLiveCache.has(p.pageid) && _haversineMetres(lat, lng, p.lat, p.lon) <= WALK_TRIGGER_METRES;
+    });
+    if (!nearby.length || _walkTourAlertOpen) return;
+    var hit = nearby[0];
+    _walkLiveCache.add(hit.pageid);
+
+    var extRes = await fetch('https://en.wikipedia.org/w/api.php?action=query&pageids=' + hit.pageid + '&prop=extracts|pageimages&exintro=1&explaintext=1&pithumbsize=800&piprop=thumbnail|original&format=json&origin=*');
+    var extData = await extRes.json();
+    var page = (extData.query && extData.query.pages && extData.query.pages[hit.pageid]) || {};
+    var extract = (page.extract || '').replace(/\n+/g, ' ').trim().slice(0, 600);
+    var image = (page.original && page.original.source) || (page.thumbnail && page.thumbnail.source) || null;
+
+    var tldr = extract ? extract.split(/[.!?]/)[0] + '.' : hit.title;
+    try {
+      var aiText = await callAnthropic({ prompt: 'Write ONE punchy hook sentence about "' + hit.title + '" that makes a tourist stop and look. Specific, surprising, vivid. Just the sentence, no quotes.', maxTokens: 80 });
+      if (aiText && aiText.trim()) tldr = aiText.trim();
+    } catch(e) {}
+
+    showLandmarkAlert({
+      name: hit.title, lat: hit.lat, lng: hit.lon,
+      image: image, extract: extract, tldr: tldr,
+      wikiUrl: 'https://en.wikipedia.org/wiki/' + encodeURIComponent(hit.title)
+    }, -1, _haversineMetres(lat, lng, hit.lat, hit.lon));
+  } catch(e) {}
+}
+
+function startLiveWalkingTour() {
+  if (!('geolocation' in navigator)) { showToast('GPS not available on this device', true); return; }
   if (!_tourLandmarks || !_tourLandmarks.length) { showToast('Run the magic tour first', true); return; }
 
   if (_walkTourActive) {
