@@ -1170,7 +1170,6 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
     </div>
     <div style="display:flex;gap:6px;flex-shrink:0;">
       <button class="prebook-pill" id="lockBtn" onclick="showLockDialog()" title="Edit access" style="border-color:#aaa;color:#555;">🔒 View</button>
-      <button class="prebook-pill" id="walkGuideBtn" onclick="toggleWalkingGuide()" title="Start/stop live walking guide" style="border-color:#1a7a3a;color:#1a7a3a;">🚶 Guide</button>
       <button class="prebook-pill" id="saveBtn" onclick="saveToStorage()" title="Save & sync" style="border-color:#88d8a0;color:#88d8a0;">💾</button>
       <button class="prebook-pill" id="refreshBtn" onclick="manualRefresh()" title="Refresh from sync" style="border-color:#88d8a0;color:#88d8a0;">🔄</button>
       <button class="prebook-pill" onclick="showSaveMenu()" title="More options">⋮</button>
@@ -1189,6 +1188,7 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
     <button class="day-tab green-tab" onclick="showAllMap()" id="dtabAll">All Days Map</button>
     <button class="day-tab" onclick="showView('search')" id="dtabSearch" style="border-color:#1a73e8;color:#1a73e8;">+ Add / Search</button>
     <button class="day-tab" onclick="showView('settings')" id="dtabSettings" style="border-color:#555;color:#555;">⚙ Settings</button>
+    <button class="day-tab" id="walkGuideBtn" onclick="toggleWalkingGuide()" style="border-color:#1a7a3a;color:#1a7a3a;font-weight:800;background:rgba(26,122,58,0.08);">🚶 Guide</button>
   </div>
 </div>
 
