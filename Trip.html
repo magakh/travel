@@ -4158,6 +4158,21 @@ async function drawTourRoute(tour, fromStop, toStop) {
   _tourMarkers.forEach(function(m){try{_suggestMap.removeLayer(m);}catch(e){}});
   _tourMarkers=[];
 
+  // 1. Focus map on landmarks immediately — don't wait for OSRM
+  var allPts = [fromStop].concat(tour.landmarks).concat([toStop]).filter(function(p){return p&&p.lat&&p.lng;});
+  if (allPts.length) {
+    _suggestMap.invalidateSize();
+    _suggestMap.fitBounds(allPts.map(function(p){return [p.lat,p.lng];}), {padding:[36,36],maxZoom:16});
+  }
+
+  // 2. Add numbered landmark markers right away
+  tour.landmarks.forEach(function(lm,i){
+    var ic = L.divIcon({className:'', html:'<div style="background:#5c4db1;color:#fff;border:2px solid #fff;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;box-shadow:0 2px 6px rgba(0,0,0,0.4);transition:all 0.2s;">'+(i+1)+'</div>', iconSize:[26,26], iconAnchor:[13,13]});
+    var mk = L.marker([lm.lat,lm.lng],{icon:ic}).addTo(_suggestMap).bindPopup('<b>'+lm.name+'</b><br><small>'+lm.tldr+'</small>');
+    _tourMarkers.push(mk);
+  });
+
+  // 3. Fetch OSRM walking route and draw polyline
   var ordered = [fromStop].concat(tour.landmarks).concat([toStop]);
   var coordStr = ordered.map(function(p){return p.lng+','+p.lat;}).join(';');
   try {
@@ -4171,12 +4186,11 @@ async function drawTourRoute(tour, fromStop, toStop) {
     _tourRouteLayer = L.polyline(ordered.map(function(p){return [p.lat,p.lng];}),{color:'#5c4db1',weight:3,opacity:0.7,dashArray:'8,4'}).addTo(_suggestMap);
   }
 
-  tour.landmarks.forEach(function(lm,i){
-    var ic = L.divIcon({className:'', html:'<div style="background:#5c4db1;color:#fff;border:2px solid #fff;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;box-shadow:0 2px 6px rgba(0,0,0,0.4);transition:all 0.2s;">'+(i+1)+'</div>', iconSize:[26,26], iconAnchor:[13,13]});
-    var mk = L.marker([lm.lat,lm.lng],{icon:ic}).addTo(_suggestMap).bindPopup('<b>'+lm.name+'</b><br><small>'+lm.tldr+'</small>');
-    _tourMarkers.push(mk);
-  });
-  if(_tourRouteLayer) _suggestMap.fitBounds(_tourRouteLayer.getBounds(),{padding:[30,30]});
+  // 4. Re-fit to include the full route line
+  if(_tourRouteLayer){
+    _suggestMap.invalidateSize();
+    _suggestMap.fitBounds(_tourRouteLayer.getBounds(),{padding:[36,36],maxZoom:16});
+  }
 }
 
 // ── LIVE WALKING TOUR ─────────────────────────────────────────────
