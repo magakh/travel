@@ -3533,7 +3533,7 @@ function renderDetail() {
 
   document.getElementById('detailContent').innerHTML = `
     <div class="detail-hero">
-      ${s.image ? `<img src="${wikiThumb(s.image, 500)}" alt="${s.name}" style="width:100%;max-height:280px;object-fit:contain;border-radius:12px;margin-bottom:12px;display:block;background:#111;">` : ''}
+      ${s.image ? `<img src="${wikiThumb(s.image, 500)}" alt="${s.name}" style="width:100%;max-height:280px;object-fit:contain;border-radius:12px;margin-bottom:12px;display:block;background:#f0f0f0;">` : ''}
       <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:0;">
         <div class="detail-badge" style="border-left:3px solid ${s.color};padding-left:10px;">
         <span onclick="editStopTime(currentStop)" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;" title="Tap to change start time">⏱ ${s.time}</span> &nbsp;·&nbsp; <span onclick="editDuration(currentStop)" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;" title="Tap to edit duration">⏳ ${s.duration}</span> &nbsp;·&nbsp; ${days[currentDay].title.split('—')[0].trim()}
@@ -4180,7 +4180,15 @@ async function liveWikiSearch(lat, lng, radius) {
     // Street-name guard: reverse-geocode the landmark and confirm it's on the
     // same named street as the user. If not, skip in auto-trigger mode — the
     // user can still find it via the manual Next button.
-    if (_userCurrentStreet && radius <= 100) {
+    if (radius <= 100) {
+      // If we don't have the user's street yet, fetch it now (blocks until resolved)
+      if (!_userCurrentStreet) {
+        try {
+          const s = await getUserStreet(lat, lng);
+          _userCurrentStreet = s ? s.split(' ·')[0].trim() : '__unknown__';
+          _userStreetTs = Date.now();
+        } catch(e) { _userCurrentStreet = '__unknown__'; }
+      }
       try {
         var sgRes = await fetch(
           'https://nominatim.openstreetmap.org/reverse?format=json&lat=' + hit.lat + '&lon=' + hit.lon + '&zoom=18',
@@ -4369,7 +4377,7 @@ function showLandmarkAlert(lm, idx, dist) {
 
   // Photo + map sit side-by-side at the top of the card
   const photoHtml = imgSrc
-    ? '<div style="flex:1;border-radius:10px;overflow:hidden;background:#111;display:flex;align-items:center;justify-content:center;min-height:110px;max-height:160px;">'
+    ? '<div style="flex:1;border-radius:10px;overflow:hidden;background:#f0f0f0;display:flex;align-items:center;justify-content:center;min-height:110px;max-height:160px;">'
       + '<img src="'+imgSrc+'" style="width:100%;max-height:160px;object-fit:contain;display:block;" loading="eager" onerror="this.parentElement.style.display=\'none\'">'
       + '</div>'
     : '';
