@@ -3790,7 +3790,7 @@ async function buildGuidedTour(fromStop, toStop, tolerance) {
   var deduped = dedupByProximity(filtered, 120);
 
   // 2. Spread evenly: at most 2 per ~400m segment along route
-  var maxPerSeg = tolerance <= 0.1 ? 2 : tolerance <= 0.35 ? 4 : 6;
+  var maxPerSeg = tolerance <= 0.1 ? 1 : tolerance <= 0.35 ? 2 : tolerance <= 0.7 ? 3 : 4;
   var spread = spreadAlongRoute(fromStop, deduped, toStop, maxPerSeg);
 
   // 3. Sort by position along actual OSRM walking route — guarantees forward-only order
@@ -3871,13 +3871,26 @@ function renderTourCards(tour, fromStop, toStop, afterIdx, dayIdx, beforeIdx) {
   if (!landmarks.length) { cardsEl.innerHTML='<p style="color:#888;font-size:13px;text-align:center;padding:20px;">No landmarks found — try wider tolerance.</p>'; return; }
 
   var totalMins = Math.round(totalM/83), extra = totalMins - Math.round(directM/83);
-  var gmWaypoints = landmarks.map(function(l){return l.lat+','+l.lng;}).join('|');
-  var gmUrl = 'https://www.google.com/maps/dir/?api=1&origin='+fromStop.lat+','+fromStop.lng+'&destination='+toStop.lat+','+toStop.lng+'&waypoints='+gmWaypoints+'&travelmode=walking';
+  // Google Maps max is 9 waypoints — chunk into parts
+  var gmParts = [];
+  var chunkSize = 9;
+  for (var gi = 0; gi < landmarks.length; gi += chunkSize) {
+    var chunk = landmarks.slice(gi, gi + chunkSize);
+    var origin = gi === 0 ? fromStop.lat+','+fromStop.lng : landmarks[gi-1].lat+','+landmarks[gi-1].lng;
+    var dest = (gi + chunkSize >= landmarks.length) ? toStop.lat+','+toStop.lng : landmarks[gi+chunkSize-1].lat+','+landmarks[gi+chunkSize-1].lng;
+    var wpts = chunk.slice(0, chunk.length-1).map(function(l){return l.lat+','+l.lng;}).join('|');
+    var url = 'https://www.google.com/maps/dir/?api=1&origin='+origin+'&destination='+dest+(wpts?'&waypoints='+wpts:'')+'&travelmode=walking';
+    gmParts.push({url: url, label: gmParts.length === 0 ? 'Google Maps' : 'Part '+(gmParts.length+1), from: gi+1, to: Math.min(gi+chunkSize, landmarks.length)});
+  }
+  var gmLinksHtml = gmParts.map(function(p, pi) {
+    var label = pi === 0 ? '&#x1F5FA;&#xFE0F; Google Maps' : ('&#x27A1; Part '+(pi+1)+' ('+p.from+'–'+p.to+')');
+    return '<a href="'+p.url+'" target="_blank" style="display:inline-flex;align-items:center;gap:4px;padding:7px 11px;background:#4285f4;color:#fff;border-radius:20px;font-size:11px;font-weight:700;text-decoration:none;flex-shrink:0;">'+label+'</a>';
+  }).join('');
 
-  var html = '<div style="display:flex;align-items:center;gap:10px;padding:0 0 12px;border-bottom:1px solid #eee;margin-bottom:0;">'
+  var html = '<div style="display:flex;align-items:flex-start;gap:10px;padding:0 0 12px;border-bottom:1px solid #eee;margin-bottom:0;">'
     +'<div style="flex:1;"><div style="font-size:13px;font-weight:800;">'+landmarks.length+' landmark'+(landmarks.length>1?'s':'')+' on the way</div>'
     +'<div style="font-size:11px;color:#888;margin-top:2px;">~'+totalMins+' min'+(extra>0?' (+'+extra+' vs direct)':'')+'</div></div>'
-    +'<a href="'+gmUrl+'" target="_blank" style="display:inline-flex;align-items:center;gap:4px;padding:7px 12px;background:#4285f4;color:#fff;border-radius:20px;font-size:11px;font-weight:700;text-decoration:none;flex-shrink:0;">&#x1F5FA;&#xFE0F; Google Maps</a>'
+    +'<div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0;">'+gmLinksHtml+'</div>'
     +'</div>';
 
   html += '<div style="display:flex;align-items:center;gap:12px;padding:14px 0 6px;">'
