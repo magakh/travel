@@ -4779,7 +4779,10 @@ async function liveWikiSearch(lat, lng, radius) {
     });
 
     if (!nearby.length || _walkTourAlertOpen) {
-      if (radius > 100) showToast('No new landmarks found nearby');
+      if (radius > 100) {
+        // Show a proper slide-up notice instead of a tiny toast
+        _showNoLandmarksCard();
+      }
       return;
     }
 
@@ -4897,6 +4900,38 @@ async function liveWikiSearch(lat, lng, radius) {
     }).catch(function() {});
 
   } catch(e) { console.warn('liveWikiSearch:', e); }
+}
+
+function _showNoLandmarksCard() {
+  // Don't stack on top of an open landmark alert
+  if (document.getElementById('walkAlert')) return;
+  const old = document.getElementById('noLandmarksCard');
+  if (old) old.remove();
+
+  const el = document.createElement('div');
+  el.id = 'noLandmarksCard';
+  el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:30000;background:#fff;border-radius:20px 20px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,0.2);padding:22px 20px 36px;transform:translateY(100%);transition:transform 0.3s ease;';
+
+  el.innerHTML =
+    '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">'
+    + '<span style="font-size:32px;">🗺️</span>'
+    + '<div style="flex:1;">'
+    +   '<div style="font-size:16px;font-weight:900;color:#1a1a1a;margin-bottom:2px;">No landmarks found nearby</div>'
+    +   '<div style="font-size:13px;color:#888;">Nothing new within 1.5 km of your location</div>'
+    + '</div>'
+    + '<button onclick="document.getElementById(\'noLandmarksCard\').remove()" style="background:#f0f0f0;border:none;border-radius:20px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;">✕</button>'
+    + '</div>'
+    + '<div style="background:#f8f8f8;border-radius:12px;padding:14px;font-size:13px;color:#555;line-height:1.6;margin-bottom:16px;">'
+    + '💡 Try walking a little further — landmarks auto-appear as you approach them, or tap <b>Next →</b> again once you\'ve moved.'
+    + '</div>'
+    + '<button onclick="document.getElementById(\'noLandmarksCard\').remove()" style="width:100%;padding:13px;border-radius:12px;border:none;background:#1a1a1a;color:#fff;font-size:14px;font-weight:800;cursor:pointer;">Keep walking →</button>';
+
+  document.body.appendChild(el);
+  requestAnimationFrame(function() { requestAnimationFrame(function() {
+    el.style.transform = 'translateY(0)';
+  }); });
+  // Auto-dismiss after 8 seconds
+  setTimeout(function() { if (el.parentNode) { el.style.transform = 'translateY(100%)'; setTimeout(function(){ el.remove(); }, 320); } }, 8000);
 }
 
 function stopLiveWalkingTour() {
@@ -5247,7 +5282,9 @@ async function nextLandmark() {
   if (_currentGpsLat !== null) {
     showToast('🔍 Looking for landmarks nearby…');
     _walkLastSearchLat = null;
-    await liveWikiSearch(_currentGpsLat, _currentGpsLng, 800);
+    // Clear cache so manual Next can rediscover previously seen landmarks
+    _walkLiveCache.clear();
+    await liveWikiSearch(_currentGpsLat, _currentGpsLng, 1500);
   } else {
     showToast('Walking guide is active — landmarks appear as you approach them');
   }
