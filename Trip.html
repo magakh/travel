@@ -4700,6 +4700,9 @@ function startLiveWalkingTour() {
   if (!('geolocation' in navigator)) { showToast('GPS not available on this device', true); return; }
 
   navigator.geolocation.getCurrentPosition(function(pos) {
+    // Store position immediately so Next button works right away
+    _currentGpsLat = pos.coords.latitude;
+    _currentGpsLng = pos.coords.longitude;
     _walkTourActive = true;
     _walkTourVisited = new Set();
     _walkTourAlertOpen = false;
@@ -4707,6 +4710,8 @@ function startLiveWalkingTour() {
     _walkLastSearchLng = null;
     setWalkBtnState(true);
     showToast('Walking guide active — landmarks will pop up as you walk');
+    // Immediate first search from this position
+    liveWikiSearch(_currentGpsLat, _currentGpsLng);
     _walkTourWatchId = navigator.geolocation.watchPosition(
       function(pos2) {
         var lat = pos2.coords.latitude, lng = pos2.coords.longitude;
@@ -5286,7 +5291,27 @@ async function nextLandmark() {
     _walkLiveCache.clear();
     await liveWikiSearch(_currentGpsLat, _currentGpsLng, 1500);
   } else {
-    showToast('Walking guide is active — landmarks appear as you approach them');
+    // GPS not ready — wait up to 8s for a fix rather than silently failing
+    showToast('📍 Getting your location…');
+    try {
+      await new Promise(function(resolve, reject) {
+        navigator.geolocation.getCurrentPosition(
+          function(pos) {
+            _currentGpsLat = pos.coords.latitude;
+            _currentGpsLng = pos.coords.longitude;
+            resolve();
+          },
+          reject,
+          { enableHighAccuracy: true, timeout: 8000 }
+        );
+      });
+      showToast('🔍 Looking for landmarks nearby…');
+      _walkLastSearchLat = null;
+      _walkLiveCache.clear();
+      await liveWikiSearch(_currentGpsLat, _currentGpsLng, 1500);
+    } catch(e) {
+      showToast('📍 Could not get location — check GPS permissions', true);
+    }
   }
 
   // If search found nothing and no card is open, restore the Next bar
