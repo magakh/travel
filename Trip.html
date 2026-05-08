@@ -4154,6 +4154,23 @@ function checkNearbyLandmarks(lat, lng) {
 
 let _currentGpsLat = null, _currentGpsLng = null;
 
+// Convert any Wikimedia Commons image URL to a sized thumbnail for fast loading
+// Works on both original URLs and existing thumbnail URLs
+function wikiThumb(url, size) {
+  if (!url) return null;
+  size = size || 400;
+  // Already a thumbnail URL — just swap the size
+  if (url.includes('/thumb/')) {
+    return url.replace(/\/\d+px-([^/]+)$/, '/' + size + 'px-$1');
+  }
+  // Original commons URL — convert to thumb format
+  // e.g. https://upload.wikimedia.org/wikipedia/commons/a/ab/File.jpg
+  //  -> https://upload.wikimedia.org/wikipedia/commons/thumb/a/ab/File.jpg/400px-File.jpg
+  const m = url.match(/(https:\/\/upload\.wikimedia\.org\/wikipedia\/[^/]+)\/([a-f0-9])\/([a-f0-9]{2})\/(.+)$/);
+  if (m) return m[1] + '/thumb/' + m[2] + '/' + m[3] + '/' + m[4] + '/' + size + 'px-' + m[4];
+  return url; // fallback: use as-is
+}
+
 function showLandmarkAlert(lm, idx, dist) {
   _walkTourAlertOpen = true;
   _activeLandmark = lm;
@@ -4166,10 +4183,9 @@ function showLandmarkAlert(lm, idx, dist) {
 
   const distLabel = dist >= 0 ? (dist < 1000 ? Math.round(dist) + 'm' : (dist/1000).toFixed(1) + 'km') : '';
   const idxLabel = idx >= 0 ? '#' + (idx+1) : '';
-  // Use 400px thumbnail for decent quality without huge file size
-  const imgSrc = lm.image ? lm.image.replace(/\/\d+px-/, '/400px-') : null;
+  const imgSrc = wikiThumb(lm.image, 400);
   const imgHtml = imgSrc
-    ? '<div style="border-radius:20px 20px 0 0;overflow:hidden;background:#f0f0f0;"><img src="'+imgSrc+'" style="width:100%;height:auto;display:block;max-height:300px;object-fit:contain;" loading="eager"></div>'
+    ? '<div style="background:#f0f0f0;border-radius:20px 20px 0 0;overflow:hidden;"><img src="'+imgSrc+'" style="width:100%;height:auto;display:block;" loading="eager"></div>'
     : '';
 
   el.innerHTML = imgHtml
