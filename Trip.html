@@ -1172,6 +1172,7 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
       <button class="prebook-pill" id="lockBtn" onclick="showLockDialog()" title="Edit access" style="border-color:#aaa;color:#555;">🔒 View</button>
       <button class="prebook-pill" id="saveBtn" onclick="saveToStorage()" title="Save & sync" style="border-color:#88d8a0;color:#88d8a0;">💾</button>
       <button class="prebook-pill" id="refreshBtn" onclick="manualRefresh()" title="Refresh from sync" style="border-color:#88d8a0;color:#88d8a0;">🔄</button>
+      <button class="prebook-pill" id="walkGuideBtn" onclick="toggleWalkingGuide()" title="Live walking guide" style="border-color:#1a7a3a;color:#1a7a3a;font-size:16px;padding:4px 8px;">🚶</button>
       <button class="prebook-pill" onclick="showSaveMenu()" title="More options">⋮</button>
       <button class="prebook-pill" onclick="showView('prebook')">Book list</button>
     </div>
@@ -1191,8 +1192,7 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
   </div>
 </div>
 
-<!-- Floating walk guide button — always visible -->
-<button id="walkGuideBtn" onclick="toggleWalkingGuide()" style="position:fixed;bottom:90px;right:16px;z-index:1000;background:#1a7a3a;color:#fff;border:none;border-radius:30px;padding:10px 16px;font-size:13px;font-weight:800;box-shadow:0 3px 12px rgba(0,0,0,0.3);cursor:pointer;display:flex;align-items:center;gap:6px;">🚶 Guide</button>
+<!-- Floating walk guide button removed — now in header -->
   </div>
 </div>
 
@@ -4041,11 +4041,13 @@ function setWalkBtnState(active) {
   var hdr = document.getElementById('walkGuideBtn');
   if (hdr) {
     if (active) {
-      hdr.innerHTML = '⏹ Stop';
-      hdr.style.background = '#c0392b';
+      hdr.innerHTML = '⏹';
+      hdr.style.borderColor = '#c0392b';
+      hdr.style.color = '#c0392b';
     } else {
-      hdr.innerHTML = '🚶 Guide';
-      hdr.style.background = '#1a7a3a';
+      hdr.innerHTML = '🚶';
+      hdr.style.borderColor = '#1a7a3a';
+      hdr.style.color = '#1a7a3a';
     }
   }
   // In-panel button
