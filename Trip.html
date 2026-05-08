@@ -3734,15 +3734,19 @@ function identifyLandmark() {
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = 'image/*';
-  input.setAttribute('capture', 'environment'); // back camera on Android/iOS
-  input.capture = 'environment';                // belt-and-suspenders for older WebKit
+  // Must be in DOM before click for Android Chrome to respect capture="environment"
+  input.setAttribute('capture', 'environment');
+  input.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0;';
+  document.body.appendChild(input);
   input.onchange = async function() {
+    document.body.removeChild(input);
     const file = input.files && input.files[0];
     if (!file) return;
     try { await _processLandmarkPhoto(file); }
     catch(e) { showToast('Error: ' + (e.message || 'Could not identify'), true); }
   };
-  input.click();
+  // Small delay lets the DOM settle before triggering camera
+  setTimeout(function() { input.click(); }, 50);
 }
 
 async function _resizeToBase64(file, maxPx) {
