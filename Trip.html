@@ -4265,34 +4265,70 @@ function wikiThumb(url, size) {
   return url; // fallback: use as-is
 }
 
+let _walkAlertMap = null; // Leaflet mini-map instance inside the landmark alert
+
+// Returns "Baker Street (100–199 block)" — just the street the user is currently on
+async function getUserStreet(lat, lng) {
+  try {
+    const res = await fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat=' + lat + '&lon=' + lng + '&zoom=18', {headers: {'Accept-Language': 'en'}});
+    const data = await res.json();
+    const a = data.address || {};
+    const road = a.road || a.pedestrian || a.path || a.footway || '';
+    const houseNum = a.house_number ? parseInt(a.house_number) : null;
+    let blockStr = '';
+    if (houseNum && !isNaN(houseNum) && houseNum > 0) {
+      const blk = Math.floor(houseNum / 100) * 100;
+      blockStr = ' · ' + blk + '–' + (blk + 99) + ' block';
+    }
+    return road ? road + blockStr : (a.neighbourhood || a.suburb || '');
+  } catch(e) { return ''; }
+}
+
 function showLandmarkAlert(lm, idx, dist) {
   _walkTourAlertOpen = true;
   _activeLandmark = lm;
   var bar = document.getElementById('walkNextBar'); if (bar) bar.style.display = 'none';
-  const old = document.getElementById('walkAlert'); if (old) { clearTimeout(old._timer); old.remove(); }
+  const old = document.getElementById('walkAlert');
+  if (old) {
+    clearTimeout(old._timer);
+    if (_walkAlertMap) { try { _walkAlertMap.remove(); } catch(e) {} _walkAlertMap = null; }
+    old.remove();
+  }
 
   const el = document.createElement('div');
   el.id = 'walkAlert';
-  el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:30000;background:#fff;border-radius:20px 20px 0 0;box-shadow:0 -4px 30px rgba(0,0,0,0.3);max-height:75vh;overflow-y:auto;transform:translateY(100%);transition:transform 0.35s ease;';
+  el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:30000;background:#fff;border-radius:20px 20px 0 0;box-shadow:0 -4px 30px rgba(0,0,0,0.3);max-height:82vh;overflow-y:auto;transform:translateY(100%);transition:transform 0.35s ease;';
 
   const distLabel = dist >= 0 ? (dist < 1000 ? Math.round(dist) + 'm' : (dist/1000).toFixed(1) + 'km') : '';
   const idxLabel = idx >= 0 ? '#' + (idx+1) : '';
-  const relPos = (_currentGpsLat !== null && dist >= 0) ? getLandmarkRelativePos(_currentGpsLat, _currentGpsLng, lm.lat, lm.lng) : null;
+  const hasGps = _currentGpsLat !== null;
+  const relPos = (hasGps && dist >= 0) ? getLandmarkRelativePos(_currentGpsLat, _currentGpsLng, lm.lat, lm.lng) : null;
   const distDirectionLabel = relPos ? buildDistLabel(relPos) : (distLabel ? distLabel + ' away' : '');
   const side = relPos && relPos.side ? relPos.side : null;
   const sideEmoji = side === 'LEFT' ? '👈' : side === 'RIGHT' ? '👉' : null;
   const imgSrc = lm.image || null;
   const imgHtml = imgSrc
-    ? '<div style="background:#f0f0f0;border-radius:20px 20px 0 0;overflow:hidden;"><img src="'+imgSrc+'" style="width:100%;height:auto;display:block;max-height:300px;object-fit:contain;" loading="eager" onerror="this.parentElement.style.display=\'none\'"></div>'
+    ? '<div style="background:#f0f0f0;border-radius:20px 20px 0 0;overflow:hidden;"><img src="'+imgSrc+'" style="width:100%;height:auto;display:block;max-height:180px;object-fit:cover;" loading="eager" onerror="this.parentElement.style.display=\'none\'"></div>'
     : '';
 
-  const sideHtml = sideEmoji ? '<span style="margin-left:auto;background:#fff3cd;padding:3px 8px;border-radius:8px;font-size:12px;font-weight:800;color:#856404;">' + side + ' ' + sideEmoji + '</span>' : '';
+  const sideHtml = sideEmoji
+    ? '<span style="margin-left:auto;background:#fff3cd;padding:3px 8px;border-radius:8px;font-size:12px;font-weight:800;color:#856404;">' + side + ' ' + sideEmoji + '</span>'
+    : '';
+
   el.innerHTML = imgHtml
-    + '<div style="padding:14px 16px 28px;">'
-    + '<div style="background:#f0f7ff;border-radius:10px;padding:9px 12px;margin-bottom:12px;font-size:13px;display:flex;align-items:center;gap:8px;">'
-    + '<span>&#x1F4CD;</span><span id="walkAlertAddrText" style="font-weight:700;color:#1a4a8a;flex:1;">Getting address…</span>'
+    + '<div style="padding:12px 14px 28px;">'
+    // Mini map
+    + '<div id="walkAlertMap" style="height:155px;border-radius:12px;overflow:hidden;margin-bottom:10px;background:#dde8cc;"></div>'
+    // Your street bar (green)
+    + '<div style="background:#e8f5e9;border-radius:10px;padding:8px 12px;margin-bottom:8px;font-size:12px;display:flex;align-items:center;gap:7px;">'
+    + '<span style="font-size:15px;">🚶</span><span id="walkAlertUserStreet" style="font-weight:700;color:#2e7d32;flex:1;">Locating your street…</span>'
+    + '</div>'
+    // Landmark address bar (blue)
+    + '<div style="background:#f0f7ff;border-radius:10px;padding:8px 12px;margin-bottom:12px;font-size:13px;display:flex;align-items:center;gap:8px;">'
+    + '<span>📍</span><span id="walkAlertAddrText" style="font-weight:700;color:#1a4a8a;flex:1;">Getting landmark address…</span>'
     + sideHtml
     + '</div>'
+    // Header row
     + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'
     + '<div style="font-size:10px;font-weight:700;color:#1a7a3a;text-transform:uppercase;letter-spacing:0.5px;">Landmark' + (idxLabel?' '+idxLabel:'') + (distDirectionLabel?' · '+distDirectionLabel:'') + '</div>'
     + '<button onclick="dismissLandmarkAlert()" style="background:#f0f0f0;border:none;border-radius:20px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;">✕</button>'
@@ -4300,17 +4336,75 @@ function showLandmarkAlert(lm, idx, dist) {
     + '<div style="font-size:18px;font-weight:900;line-height:1.2;margin-bottom:6px;">'+lm.name+'</div>'
     + '<p style="font-size:14px;color:#444;line-height:1.5;margin:0 0 14px;">'+(lm.tldr||'')+'</p>'
     + '<div style="display:flex;gap:8px;margin-bottom:10px;">'
-    + '<a href="'+lm.wikiUrl+'" target="_blank" rel="noopener" style="flex:1;padding:10px;text-align:center;background:#f0f7ff;border:1px solid #d0e8ff;border-radius:12px;font-size:13px;font-weight:700;color:#1a73e8;text-decoration:none;">&#x1F4D6; Wikipedia</a>'
-    + '<button onclick="speakTourLandmark('+idx+')" style="padding:10px 14px;background:#f5f5f5;border:none;border-radius:12px;font-size:18px;cursor:pointer;">&#x1F50A;</button>'
+    + '<a href="'+lm.wikiUrl+'" target="_blank" rel="noopener" style="flex:1;padding:10px;text-align:center;background:#f0f7ff;border:1px solid #d0e8ff;border-radius:12px;font-size:13px;font-weight:700;color:#1a73e8;text-decoration:none;">📖 Wikipedia</a>'
+    + '<button onclick="speakTourLandmark('+idx+')" style="padding:10px 14px;background:#f5f5f5;border:none;border-radius:12px;font-size:18px;cursor:pointer;">🔊</button>'
     + '</div>'
     + '<button onclick="nextLandmark()" style="width:100%;padding:12px;border-radius:12px;border:none;background:#1a1a1a;color:#fff;font-size:14px;font-weight:800;cursor:pointer;">Next landmark ➡</button>'
     + '</div>';
 
   document.body.appendChild(el);
-  requestAnimationFrame(function() { requestAnimationFrame(function() { el.style.transform = 'translateY(0)'; }); });
 
-  // Fetch address then speak: name → address + side → TL;DR
-  reverseGeocode(lm.lat, lm.lng).then(function(addr) {
+  // ── Init mini Leaflet map ──────────────────────────────────────────────────
+  if (typeof L !== 'undefined') {
+    try {
+      const mapEl = document.getElementById('walkAlertMap');
+      _walkAlertMap = L.map(mapEl, {
+        zoomControl: false, attributionControl: false,
+        dragging: true, scrollWheelZoom: false,
+        doubleClickZoom: false, touchZoom: true,
+        center: [lm.lat, lm.lng], zoom: 17
+      });
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 19}).addTo(_walkAlertMap);
+
+      // Landmark — red pin
+      const lmIcon = L.divIcon({
+        html: '<div style="width:16px;height:16px;background:#c0392b;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.45);"></div>',
+        className: '', iconSize: [16,16], iconAnchor: [8,8]
+      });
+      L.marker([lm.lat, lm.lng], {icon: lmIcon}).addTo(_walkAlertMap)
+        .bindTooltip(lm.name, {permanent: true, direction: 'top', offset: [0,-12]});
+
+      if (hasGps) {
+        // You — blue dot with halo
+        const meIcon = L.divIcon({
+          html: '<div style="width:16px;height:16px;background:#1a73e8;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 5px rgba(26,115,232,0.25);"></div>',
+          className: '', iconSize: [16,16], iconAnchor: [8,8]
+        });
+        L.marker([_currentGpsLat, _currentGpsLng], {icon: meIcon}).addTo(_walkAlertMap)
+          .bindTooltip('You', {permanent: true, direction: 'bottom', offset: [0, 10]});
+
+        // Dashed line connecting the two
+        L.polyline([[_currentGpsLat, _currentGpsLng], [lm.lat, lm.lng]], {
+          color: '#1a73e8', weight: 2.5, dashArray: '6,7', opacity: 0.75
+        }).addTo(_walkAlertMap);
+
+        // Fit both points with padding
+        _walkAlertMap.fitBounds(
+          [[_currentGpsLat, _currentGpsLng], [lm.lat, lm.lng]],
+          {padding: [32, 32]}
+        );
+      }
+    } catch(mapErr) { console.warn('Walk map error:', mapErr); }
+  }
+
+  // Slide in, then fix map tile rendering
+  requestAnimationFrame(function() {
+    requestAnimationFrame(function() {
+      el.style.transform = 'translateY(0)';
+      setTimeout(function() { if (_walkAlertMap) _walkAlertMap.invalidateSize(); }, 390);
+    });
+  });
+
+  // ── Parallel geocoding: user street + landmark address ────────────────────
+  const userStreetPromise = hasGps ? getUserStreet(_currentGpsLat, _currentGpsLng) : Promise.resolve('');
+  const lmAddrPromise = reverseGeocode(lm.lat, lm.lng);
+
+  userStreetPromise.then(function(street) {
+    const el2 = document.getElementById('walkAlertUserStreet');
+    if (el2) el2.textContent = street ? 'You\'re on ' + street : 'Your current location';
+  });
+
+  lmAddrPromise.then(function(addr) {
     const addrEl = document.getElementById('walkAlertAddrText');
     if (addrEl) addrEl.textContent = addr || 'Near ' + lm.name;
 
@@ -4333,6 +4427,7 @@ function showLandmarkAlert(lm, idx, dist) {
 function dismissLandmarkAlert() {
   _walkTourAlertOpen = false;
   if (window.speechSynthesis) window.speechSynthesis.cancel();
+  if (_walkAlertMap) { try { _walkAlertMap.remove(); } catch(e) {} _walkAlertMap = null; }
   const el = document.getElementById('walkAlert'); if (!el) return;
   clearTimeout(el._timer);
   el.style.transform = 'translateY(100%)';
