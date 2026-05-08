@@ -3454,6 +3454,7 @@ function renderStopList() {
             ${days.map((d,di) => di !== currentDay ? `<option value="${di}">${d.title.split('—')[0].trim()}</option>` : '').join('')}
           </select>
         </div>
+        ${stopPhotosHtml(i, currentDay)}
       </div>
       ${s.isHotel ? '<span style="font-size:16px;padding:4px 8px;color:#aaa;" title="Hotel anchor">🏨</span>' : `
       <button onclick="event.stopPropagation(); confirmDeleteStop(${i});"
@@ -3522,6 +3523,75 @@ function goBackToList() {
 }
 
 // ── DETAIL RENDER ─────────────────────────────────────────────────
+// ── STOP PHOTOS ──────────────────────────────────────────────────
+async function resizeStopPhoto(file, maxPx) {
+  return new Promise(function(resolve, reject) {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = function() {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * scale);
+      c.height = Math.round(img.height * scale);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      resolve(c.toDataURL('image/jpeg', 0.72));
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+function addStopPhotos(stopIdx, dayIdx) {
+  const input = document.createElement('input');
+  input.type = 'file'; input.accept = 'image/*'; input.multiple = true;
+  input.style.cssText = 'position:fixed;top:-9999px;opacity:0;';
+  document.body.appendChild(input);
+  input.onchange = async function() {
+    document.body.removeChild(input);
+    const files = Array.from(input.files || []);
+    if (!files.length) return;
+    const s = days[dayIdx].stops[stopIdx];
+    if (!s.userPhotos) s.userPhotos = [];
+    showToast('⏳ Resizing ' + files.length + ' photo' + (files.length>1?'s':'') + '…');
+    for (const file of files) {
+      try { s.userPhotos.push(await resizeStopPhoto(file, 600)); } catch(e) {}
+    }
+    saveToStorage(); renderStopList(); renderDetail();
+    showToast('📷 ' + files.length + ' photo' + (files.length>1?'s':'') + ' added ✓');
+  };
+  setTimeout(function(){ input.click(); }, 30);
+}
+
+function deleteStopPhoto(stopIdx, dayIdx, photoIdx) {
+  const s = days[dayIdx].stops[stopIdx];
+  if (s.userPhotos) { s.userPhotos.splice(photoIdx, 1); saveToStorage(); renderStopList(); renderDetail(); }
+}
+
+function viewStopPhoto(src) {
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.95);z-index:40000;display:flex;align-items:center;justify-content:center;';
+  ov.innerHTML = '<img src="'+src+'" style="max-width:100%;max-height:100%;object-fit:contain;">'
+    + '<button onclick="this.parentElement.remove()" style="position:absolute;top:16px;right:16px;background:rgba(255,255,255,0.15);border:none;color:#fff;font-size:22px;width:40px;height:40px;border-radius:50%;cursor:pointer;">✕</button>';
+  ov.onclick = function(e){ if(e.target===ov) ov.remove(); };
+  document.body.appendChild(ov);
+}
+
+function stopPhotosHtml(stopIdx, dayIdx) {
+  const s = days[dayIdx].stops[stopIdx];
+  const photos = s.userPhotos || [];
+  const thumbs = photos.map(function(p, pi) {
+    return '<img src="'+p+'" onclick="event.stopPropagation();viewStopPhoto(\''+p.replace(/'/g,"\\'")+'\')" '
+      + 'style="width:48px;height:48px;border-radius:8px;object-fit:cover;flex-shrink:0;cursor:pointer;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.2);">';
+  }).join('');
+  return '<div onclick="event.stopPropagation();" style="display:flex;align-items:center;gap:6px;padding:6px 8px 6px 0;overflow-x:auto;-webkit-overflow-scrolling:touch;">'
+    + '<button onclick="addStopPhotos('+stopIdx+','+dayIdx+')" style="flex-shrink:0;display:flex;align-items:center;gap:5px;padding:6px 10px;background:#f5f5f5;border:1.5px dashed #ccc;border-radius:10px;font-size:12px;font-weight:700;color:#555;cursor:pointer;white-space:nowrap;">'
+    + (photos.length ? '📷 '+photos.length : '📷 Add photos')
+    + '</button>'
+    + thumbs
+    + '</div>';
+}
+
 function renderDetail() {
   const s = days[currentDay].stops[currentStop];
   const badgeLabels = { free:'Free entry', prebook:'Pre-book', paid:'Paid', food:'Healthy food', walk:'Walking', weekend:'Weekend only', weekday:'Weekday only' };
@@ -3548,8 +3618,22 @@ function renderDetail() {
       <div class="badge-row">${badges}</div>
     </div>
 
-    <div class="detail-section">
-      <div class="section-label">Getting there</div>
+    <!-- Your photos gallery -->
+    <div class="detail-section" style="padding:12px 16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <div class="section-label" style="margin:0;">📷 Your photos</div>
+        <button onclick="addStopPhotos(${currentStop},${currentDay})" style="background:#1a1a1a;color:#fff;border:none;border-radius:20px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;">+ Add</button>
+      </div>
+      ${(s.userPhotos && s.userPhotos.length)
+        ? '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">'
+          + s.userPhotos.map(function(p,pi){ return '<div style="position:relative;aspect-ratio:1;">'
+            + '<img src="'+p+'" onclick="viewStopPhoto(\''+p.replace(/'/g,"\\'")+'\'+\'\')" style="width:100%;height:100%;object-fit:cover;border-radius:8px;cursor:pointer;">'
+            + '<button onclick="event.stopPropagation();deleteStopPhoto('+currentStop+','+currentDay+','+pi+')" style="position:absolute;top:3px;right:3px;background:rgba(0,0,0,0.6);border:none;color:#fff;border-radius:50%;width:22px;height:22px;font-size:11px;cursor:pointer;line-height:1;">✕</button>'
+            + '</div>'; }).join('')
+          + '</div>'
+        : '<div style="text-align:center;padding:16px;color:#aaa;font-size:13px;border:1.5px dashed #ddd;border-radius:10px;">No photos yet — tap + Add to upload</div>'
+      }
+    </div>
       <div class="travel-box">
         <div class="travel-icon">🗺️</div>
         <div class="travel-text">${s.travel || ''}</div>
