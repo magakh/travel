@@ -3689,116 +3689,155 @@ function nearestNeighborOrder(start, points, end) {
 
 async function buildGuidedTour(fromStop, toStop, tolerance) {
   const directM = _haversineMetres(fromStop.lat, fromStop.lng, toStop.lat, toStop.lng);
-  const midLat = (fromStop.lat + toStop.lat) / 2;
-  const midLng = (fromStop.lng + toStop.lng) / 2;
-  const searchRadius = Math.min(3000, Math.max(400, directM * (1 + tolerance)));
 
-  const wRes = await fetch('https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=' + midLat + '|' + midLng + '&gsradius=' + Math.round(searchRadius) + '&gslimit=80&format=json&origin=*');
-  const wData = await wRes.json();
-  const candidates = ((wData.query && wData.query.geosearch) || []).map(function(p) {
-    return {pageid: p.pageid, name: p.title, lat: p.lat, lng: p.lon};
+  // Sample points along A->B to find landmarks along the FULL route
+  const numSamples = Math.max(3, Math.min(10, Math.round(directM / 500)));
+  const samplePts = [];
+  for (var si = 0; si <= numSamples; si++) {
+    const t = si / numSamples;
+    samplePts.push({lat: fromStop.lat + t*(toStop.lat-fromStop.lat), lng: fromStop.lng + t*(toStop.lng-fromStop.lng)});
+  }
+
+  // Search Wikipedia at each sample point, deduplicate by pageid
+  const searchRadius = Math.min(400, Math.max(150, directM * 0.12));
+  const seenIds = new Set();
+  const candidates = [];
+  await Promise.all(samplePts.map(async function(pt) {
+    try {
+      const res = await fetch('https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord='+pt.lat+'|'+pt.lng+'&gsradius='+Math.round(searchRadius)+'&gslimit=20&format=json&origin=*');
+      const data = await res.json();
+      ((data.query&&data.query.geosearch)||[]).forEach(function(p){
+        if(!seenIds.has(p.pageid)){seenIds.add(p.pageid);candidates.push({pageid:p.pageid,name:p.title,lat:p.lat,lng:p.lon});}
+      });
+    } catch(e){}
+  }));
+  if(!candidates.length) throw new Error('No landmarks found along this route.');
+
+  // Compute detour cost and filter by tolerance
+  candidates.forEach(function(c){
+    const through=_haversineMetres(fromStop.lat,fromStop.lng,c.lat,c.lng)+_haversineMetres(c.lat,c.lng,toStop.lat,toStop.lng);
+    c.detourM=Math.max(0,through-directM);
   });
-  if (!candidates.length) throw new Error('No landmarks found along this route.');
+  const filtered=candidates.filter(function(c){return c.detourM<=directM*tolerance;});
+  if(!filtered.length) throw new Error('No landmarks within this detour limit — try wider tolerance.');
 
-  candidates.forEach(function(c) {
-    const through = _haversineMetres(fromStop.lat, fromStop.lng, c.lat, c.lng) + _haversineMetres(c.lat, c.lng, toStop.lat, toStop.lng);
-    c.detourM = Math.max(0, through - directM);
-  });
+  // Article length as importance proxy
+  const ids=filtered.map(function(c){return c.pageid;}).join('|');
+  try{
+    const infoRes=await fetch('https://en.wikipedia.org/w/api.php?action=query&pageids='+ids+'&prop=info&format=json&origin=*');
+    const infoData=await infoRes.json();
+    const infoPages=(infoData.query&&infoData.query.pages)||{};
+    filtered.forEach(function(c){c.articleLen=(infoPages[c.pageid]&&infoPages[c.pageid].length)||500;});
+  }catch(e){filtered.forEach(function(c){c.articleLen=500;});}
 
-  const maxDetourM = directM * tolerance;
-  const filtered = candidates.filter(function(c) { return c.detourM <= maxDetourM; });
-  if (!filtered.length) throw new Error('No landmarks within this detour limit — try wider tolerance.');
-
-  // Fetch article sizes as importance proxy
-  const ids = filtered.map(function(c) { return c.pageid; }).join('|');
-  try {
-    const infoRes = await fetch('https://en.wikipedia.org/w/api.php?action=query&pageids=' + ids + '&prop=info&format=json&origin=*');
-    const infoData = await infoRes.json();
-    const infoPages = (infoData.query && infoData.query.pages) || {};
-    filtered.forEach(function(c) { c.articleLen = (infoPages[c.pageid] && infoPages[c.pageid].length) || 500; });
-  } catch(e) { filtered.forEach(function(c) { c.articleLen = 500; }); }
-
-  // Score: importance / (detour+1)
-  filtered.forEach(function(c) { c.score = c.articleLen / (c.detourM + 50); });
-  filtered.sort(function(a, b) { return b.score - a.score; });
-
-  // Include ALL landmarks within the detour budget (no arbitrary cap)
-  // Nearest-neighbor ordering from fromStop to prevent zigzag
-  const pool = filtered.slice(0, 30); // cap at 30 to avoid too many API calls
-  const selected = nearestNeighborOrder(fromStop, pool, toStop);
+  // Nearest-neighbor order from fromStop (no zigzag)
+  const selected=nearestNeighborOrder(fromStop,filtered.slice(0,30),toStop);
 
   // Fetch extracts + large thumbnails
-  const selIds = selected.map(function(c) { return c.pageid; }).join('|');
-  const extRes = await fetch('https://en.wikipedia.org/w/api.php?action=query&pageids=' + selIds + '&prop=extracts|pageimages&exintro=1&explaintext=1&pithumbsize=800&format=json&origin=*');
-  const extData = await extRes.json();
-  const pages = (extData.query && extData.query.pages) || {};
-  selected.forEach(function(c) {
-    const p = pages[c.pageid] || {};
-    c.extract = (p.extract || '').replace(/\n+/g, ' ').trim().slice(0, 600);
-    c.image = p.thumbnail && p.thumbnail.source || null;
-    c.wikiUrl = 'https://en.wikipedia.org/wiki/' + encodeURIComponent(c.name);
+  const selIds=selected.map(function(c){return c.pageid;}).join('|');
+  const extRes=await fetch('https://en.wikipedia.org/w/api.php?action=query&pageids='+selIds+'&prop=extracts|pageimages&exintro=1&explaintext=1&pithumbsize=800&format=json&origin=*');
+  const extData=await extRes.json();
+  const pages=(extData.query&&extData.query.pages)||{};
+  selected.forEach(function(c){
+    const p=pages[c.pageid]||{};
+    c.extract=(p.extract||'').replace(/\n+/g,' ').trim().slice(0,600);
+    c.image=p.thumbnail&&p.thumbnail.source||null;
+    c.wikiUrl='https://en.wikipedia.org/wiki/'+encodeURIComponent(c.name);
   });
 
-  // Single batched TL;DR Anthropic call
-  const withExt = selected.filter(function(c) { return c.extract && c.extract.length > 40; });
-  if (withExt.length) {
-    try {
-      const prompt = 'For each landmark write ONE punchy hook sentence a tourist walking past would find irresistible — surprising, specific, vivid. Return ONLY a JSON array of strings in the same order:\n\n' +
-        withExt.map(function(c, i) { return (i+1) + '. ' + c.name + ': ' + c.extract.slice(0, 250); }).join('\n\n');
-      const text = await callAnthropic({prompt: prompt, maxTokens: 800});
-      const tldrs = extractJsonArray(text);
-      withExt.forEach(function(c, i) { if (tldrs[i]) c.tldr = tldrs[i]; });
-    } catch(e) {
-      withExt.forEach(function(c) { c.tldr = c.extract.split(/[.!?]/)[0] + '.'; });
-    }
+  // Batched TL;DR
+  const withExt=selected.filter(function(c){return c.extract&&c.extract.length>40;});
+  if(withExt.length){
+    try{
+      const prompt='For each landmark write ONE punchy hook sentence a tourist walking past would find irresistible. Return ONLY a JSON array of strings:\n\n'+
+        withExt.map(function(c,i){return (i+1)+'. '+c.name+': '+c.extract.slice(0,250);}).join('\n\n');
+      const text=await callAnthropic({prompt:prompt,maxTokens:1000});
+      const tldrs=extractJsonArray(text);
+      withExt.forEach(function(c,i){if(tldrs[i])c.tldr=tldrs[i];});
+    }catch(e){withExt.forEach(function(c){c.tldr=c.extract.split(/[.!?]/)[0]+'.';});}
   }
 
-  // Walk times between consecutive points
-  const pts = [fromStop].concat(selected).concat([toStop]);
-  for (var i = 1; i < pts.length; i++) {
-    const m = _haversineMetres(pts[i-1].lat, pts[i-1].lng, pts[i].lat, pts[i].lng);
-    pts[i].walkMinsFromPrev = Math.max(1, Math.round(m / 83));
+  // Walk times
+  const pts=[fromStop].concat(selected).concat([toStop]);
+  for(var i=1;i<pts.length;i++){
+    const m=_haversineMetres(pts[i-1].lat,pts[i-1].lng,pts[i].lat,pts[i].lng);
+    pts[i].walkMinsFromPrev=Math.max(1,Math.round(m/83));
+    pts[i].distFromPrev=Math.round(m);
   }
-  const totalM = pts.slice(1).reduce(function(acc, p, i) { return acc + _haversineMetres(pts[i].lat, pts[i].lng, p.lat, p.lng); }, 0);
-  return {landmarks: selected, totalM: totalM, directM: directM};
+  const totalM=pts.slice(1).reduce(function(acc,p,i){return acc+_haversineMetres(pts[i].lat,pts[i].lng,p.lat,p.lng);},0);
+  return {landmarks:selected,totalM:totalM,directM:directM};
 }
 
 function renderTourCards(tour, fromStop, toStop, afterIdx, dayIdx, beforeIdx) {
-  const cardsEl = document.getElementById('tourCards');
-  if (!cardsEl) return;
-  const landmarks = tour.landmarks, totalM = tour.totalM, directM = tour.directM;
-  if (!landmarks.length) { cardsEl.innerHTML = '<p style="color:#888;font-size:13px;text-align:center;padding:20px;">No landmarks found — try wider tolerance.</p>'; return; }
+  const cardsEl=document.getElementById('tourCards'); if(!cardsEl) return;
+  const landmarks=tour.landmarks,totalM=tour.totalM,directM=tour.directM;
+  if(!landmarks.length){cardsEl.innerHTML='<p style="color:#888;font-size:13px;text-align:center;padding:20px;">No landmarks found — try wider tolerance.</p>';return;}
 
-  const totalMins = Math.round(totalM / 83), extra = Math.round(totalM / 83) - Math.round(directM / 83);
-  const gmWaypoints = landmarks.map(function(l) { return l.lat + ',' + l.lng; }).join('|');
-  const gmUrl = 'https://www.google.com/maps/dir/?api=1&origin=' + fromStop.lat + ',' + fromStop.lng + '&destination=' + toStop.lat + ',' + toStop.lng + '&waypoints=' + gmWaypoints + '&travelmode=walking';
+  const totalMins=Math.round(totalM/83),extra=totalMins-Math.round(directM/83);
+  const gmWaypoints=landmarks.map(function(l){return l.lat+','+l.lng;}).join('|');
+  const gmUrl='https://www.google.com/maps/dir/?api=1&origin='+fromStop.lat+','+fromStop.lng+'&destination='+toStop.lat+','+toStop.lng+'&waypoints='+gmWaypoints+'&travelmode=walking';
 
-  var html = '<div style="display:flex;align-items:center;gap:10px;padding:0 0 12px;border-bottom:1px solid #eee;margin-bottom:14px;">'
-    + '<div style="flex:1;"><div style="font-size:13px;font-weight:800;">' + landmarks.length + ' landmark' + (landmarks.length > 1 ? 's' : '') + ' on the way</div>'
-    + '<div style="font-size:11px;color:#888;margin-top:2px;">~' + totalMins + ' min' + (extra > 0 ? ' (+' + extra + ' vs direct)' : '') + '</div></div>'
-    + '<a href="' + gmUrl + '" target="_blank" style="display:inline-flex;align-items:center;gap:4px;padding:7px 12px;background:#4285f4;color:#fff;border-radius:20px;font-size:11px;font-weight:700;text-decoration:none;flex-shrink:0;">&#x1F5FA;&#xFE0F; Google Maps</a>'
-    + '</div>';
+  // Header
+  var html='<div style="display:flex;align-items:center;gap:10px;padding:0 0 12px;border-bottom:1px solid #eee;margin-bottom:0;">'
+    +'<div style="flex:1;"><div style="font-size:13px;font-weight:800;">'+landmarks.length+' landmarks on the way</div>'
+    +'<div style="font-size:11px;color:#888;margin-top:2px;">~'+totalMins+' min'+(extra>0?' (+'+extra+' vs direct)':'')+'</div></div>'
+    +'<a href="'+gmUrl+'" target="_blank" style="display:inline-flex;align-items:center;gap:4px;padding:7px 12px;background:#4285f4;color:#fff;border-radius:20px;font-size:11px;font-weight:700;text-decoration:none;flex-shrink:0;">&#x1F5FA;&#xFE0F; Google Maps</a>'
+    +'</div>';
 
-  landmarks.forEach(function(lm, i) {
-    const prev = i === 0 ? fromStop : landmarks[i-1];
-    const walkBit = lm.walkMinsFromPrev ? '<div style="font-size:10px;color:#5a7a8a;margin-bottom:8px;">&#x1F6B6; ' + lm.walkMinsFromPrev + ' min from ' + prev.name + '</div>' : '';
-    const imgBit = lm.image ? '<div style="width:calc(100% + 24px);margin:-12px -12px 12px -12px;height:200px;overflow:hidden;border-radius:10px 10px 0 0;"><img src="' + lm.image + '" style="width:100%;height:100%;object-fit:cover;display:block;" loading="lazy" onerror="this.parentElement.style.display=\'none\'"></div>' : '';
-    const tldrBit = lm.tldr ? '<p style="font-size:13px;color:#333;line-height:1.5;margin:0 0 8px;">' + lm.tldr + '</p>' : '';
-    html += '<div style="border:1px solid #eee;border-radius:10px;padding:12px;margin-bottom:10px;background:#fff;overflow:hidden;">'
-      + imgBit + walkBit
-      + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px;">'
-      + '<div style="font-size:14px;font-weight:800;line-height:1.3;">' + (i+1) + '. ' + lm.name + '</div>'
-      + '<div style="display:flex;gap:5px;flex-shrink:0;">'
-      + '<a href="' + lm.wikiUrl + '" target="_blank" style="font-size:11px;color:#1a73e8;text-decoration:none;padding:3px 7px;border:1px solid #d0e8ff;border-radius:8px;white-space:nowrap;">&#x1F4D6; Wiki</a>'
-      + '<button onclick="speakTourLandmark(' + i + ')" style="background:none;border:none;font-size:15px;cursor:pointer;opacity:0.6;padding:2px;" title="Read aloud">&#x1F50A;</button>'
-      + '</div></div>'
-      + tldrBit + '</div>';
+  // START node
+  html+='<div style="display:flex;align-items:center;gap:12px;padding:14px 0 6px;">'
+    +'<div style="width:14px;height:14px;background:#1a7a3a;border-radius:50%;flex-shrink:0;box-shadow:0 0 0 3px rgba(26,122,58,0.2);"></div>'
+    +'<div style="font-size:13px;font-weight:800;color:#1a7a3a;">&#x1F4CD; '+fromStop.name+'</div>'
+    +'</div>';
+
+  landmarks.forEach(function(lm,i){
+    // Walk connector
+    const walkMins=lm.walkMinsFromPrev||'?';
+    const walkDist=lm.distFromPrev&&lm.distFromPrev>=1000?(lm.distFromPrev/1000).toFixed(1)+'km':lm.distFromPrev&&lm.distFromPrev+'m'||'';
+    html+='<div style="display:flex;gap:12px;">'
+      +'<div style="display:flex;flex-direction:column;align-items:center;width:14px;flex-shrink:0;">'
+      +'<div style="width:2px;background:#ddd;flex:1;"></div>'
+      +'</div>'
+      +'<div style="font-size:11px;color:#5a7a8a;padding:3px 0;font-weight:600;">&#x1F6B6; '+walkMins+' min'+(walkDist?' · '+walkDist:'')+'</div>'
+      +'</div>';
+
+    // Landmark card
+    const imgBit=lm.image
+      ?'<div style="height:220px;overflow:hidden;"><img src="'+lm.image+'" style="width:100%;height:100%;object-fit:cover;object-position:center;display:block;" loading="lazy" onerror="this.parentElement.style.display=\'none\'"></div>'
+      :'';
+    const tldrBit=lm.tldr?'<p style="font-size:13px;color:#333;line-height:1.5;margin:0;">'+lm.tldr+'</p>':'';
+
+    html+='<div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:2px;">'
+      +'<div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;padding-top:6px;">'
+      +'<div style="background:#5c4db1;color:#fff;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;box-shadow:0 2px 6px rgba(0,0,0,0.25);">'+(i+1)+'</div>'
+      +'</div>'
+      +'<div style="flex:1;border:1px solid #eee;border-radius:10px;overflow:hidden;background:#fff;">'
+      +imgBit
+      +'<div style="padding:10px 12px;">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px;">'
+      +'<div style="font-size:13px;font-weight:800;line-height:1.3;">'+lm.name+'</div>'
+      +'<div style="display:flex;gap:5px;flex-shrink:0;">'
+      +'<a href="'+lm.wikiUrl+'" target="_blank" style="font-size:11px;color:#1a73e8;text-decoration:none;padding:3px 7px;border:1px solid #d0e8ff;border-radius:8px;white-space:nowrap;">&#x1F4D6; Wiki</a>'
+      +'<button onclick="speakTourLandmark('+i+')" style="background:none;border:none;font-size:15px;cursor:pointer;opacity:0.6;padding:2px;">&#x1F50A;</button>'
+      +'</div></div>'
+      +tldrBit
+      +'</div></div></div>';
   });
 
-  const lastLm = landmarks[landmarks.length - 1];
-  html += '<div style="text-align:center;padding:10px 0 4px;color:#1a7a3a;font-size:12px;font-weight:700;">&#x1F6B6; ' + (lastLm && lastLm.walkMinsFromPrev || '?') + ' min to ' + toStop.name + '</div>';
-  cardsEl.innerHTML = html;
-  _tourLandmarks = landmarks;
+  // Final connector + END node
+  if(toStop.walkMinsFromPrev){
+    html+='<div style="display:flex;gap:12px;">'
+      +'<div style="display:flex;flex-direction:column;align-items:center;width:14px;flex-shrink:0;"><div style="width:2px;background:#ddd;flex:1;"></div></div>'
+      +'<div style="font-size:11px;color:#5a7a8a;padding:3px 0;font-weight:600;">&#x1F6B6; '+toStop.walkMinsFromPrev+' min</div>'
+      +'</div>';
+  }
+  html+='<div style="display:flex;align-items:center;gap:12px;padding:6px 0 20px;">'
+    +'<div style="width:14px;height:14px;background:#c0392b;border-radius:50%;flex-shrink:0;box-shadow:0 0 0 3px rgba(192,57,43,0.2);"></div>'
+    +'<div style="font-size:13px;font-weight:800;color:#c0392b;">&#x1F3C1; '+toStop.name+'</div>'
+    +'</div>';
+
+  cardsEl.innerHTML=html;
+  _tourLandmarks=landmarks;
 }
 
 function speakTourLandmark(idx) {
