@@ -3226,7 +3226,7 @@ async function init() {
     }
   }
 
-  switchDay(0);
+  switchDay(getTodayDayIndex());
   renderPrebook();
   window.addEventListener('resize', updateHeaderHeight);
   // Show feature highlights to first-time visitors
@@ -3238,7 +3238,34 @@ async function init() {
   startRealtime();
 }
 
-function updateHeaderHeight() {
+function getTodayDayIndex() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Try APP_CONFIG.startDate first (most accurate)
+  if (APP_CONFIG.startDate) {
+    const [sy, sm, sd] = APP_CONFIG.startDate.split('-').map(Number);
+    const start = new Date(sy, sm - 1, sd);
+    const diffDays = Math.round((today - start) / 86400000);
+    if (diffDays >= 0 && diffDays < days.length) return diffDays;
+    if (diffDays < 0) return 0; // before trip starts
+    if (diffDays >= days.length) return days.length - 1; // after trip ends
+  }
+
+  // Fallback: parse dayLabels like "May 7 · Day 1"
+  const monthMap = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+  for (let i = 0; i < days.length; i++) {
+    const label = (APP_CONFIG.dayLabels && APP_CONFIG.dayLabels[i]) || (days[i] && days[i].title) || '';
+    const m = label.match(/(\w{3})\s+(\d+)/);
+    if (m && monthMap[m[1]] !== undefined) {
+      const dayDate = new Date(today.getFullYear(), monthMap[m[1]], parseInt(m[2]));
+      if (dayDate.getTime() === today.getTime()) return i;
+    }
+  }
+  return 0; // default to day 1 if no match
+}
+
+
   const h = document.getElementById('appHeader').offsetHeight;
   const bh = document.getElementById('bottomNav').offsetHeight;
   document.documentElement.style.setProperty('--header-h', h + 'px');
