@@ -3938,67 +3938,132 @@ async function _processLandmarkPhoto(file) {
 }
 
 
+let _identifyMap = null; // Leaflet map for the identify card
+
 function _showIdentifyCard(lm) {
   const old = document.getElementById('identifyCard');
-  if (old) old.remove();
+  if (old) {
+    if (_identifyMap) { try { _identifyMap.remove(); } catch(e) {} _identifyMap = null; }
+    old.remove();
+  }
   const el = document.createElement('div');
   el.id = 'identifyCard';
-  el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:31000;background:#fff;border-radius:20px 20px 0 0;box-shadow:0 -4px 30px rgba(0,0,0,0.3);max-height:86vh;overflow-y:auto;transform:translateY(100%);transition:transform 0.35s ease;';
+  el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:31000;background:#fff;border-radius:20px 20px 0 0;box-shadow:0 -4px 30px rgba(0,0,0,0.3);max-height:88vh;overflow-y:auto;transform:translateY(100%);transition:transform 0.35s ease;';
 
-  const close = "var c=document.getElementById('identifyCard');if(c){c.style.transform='translateY(100%)';setTimeout(function(){c.remove();},380);}";
-
-  // Distance from user to landmark
-  let distStr = '';
-  if (lm.userLat && lm.lmLat) {
-    const d = _haversineMetres(lm.userLat, lm.userLng, lm.lmLat, lm.lmLng);
-    distStr = d < 1000 ? Math.round(d) + 'm' : (d/1000).toFixed(1) + 'km';
+  function closeCard() {
+    if (_identifyMap) { try { _identifyMap.remove(); } catch(e) {} _identifyMap = null; }
+    el.style.transform = 'translateY(100%)';
+    setTimeout(function() { if (el.parentNode) el.remove(); }, 380);
   }
 
   // User location block
   const hasUserLoc = lm.userStreet || lm.userLatStr;
   const userLocHtml = hasUserLoc
-    ? '<div style="background:#e8f5e9;border-radius:10px;padding:10px 14px;margin-bottom:10px;">'
-        + '<div style="font-size:10px;font-weight:800;color:#1a7a3a;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px;">📍 Your location when photo was taken</div>'
-        + (lm.userStreet ? '<div style="font-size:14px;font-weight:800;color:#1a1a1a;margin-bottom:2px;">'+lm.userStreet+'</div>' : '')
-        + (lm.userArea ? '<div style="font-size:12px;color:#555;margin-bottom:4px;">'+lm.userArea+'</div>' : '')
-        + '<div style="font-size:11px;color:#888;font-family:monospace;">'+[lm.userLatStr, lm.userLngStr].filter(Boolean).join(' · ')+'</div>'
-        + (distStr ? '<div style="font-size:11px;color:#1a7a3a;font-weight:700;margin-top:3px;">Landmark approx. '+distStr+' from here</div>' : '')
+    ? '<div style="background:#e8f5e9;border-radius:10px;padding:9px 12px;margin-bottom:10px;">'
+        + '<div style="font-size:10px;font-weight:800;color:#1a7a3a;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">📍 Your location</div>'
+        + (lm.userStreet ? '<div style="font-size:13px;font-weight:800;color:#1a1a1a;">'+lm.userStreet+'</div>' : '')
+        + (lm.userArea ? '<div style="font-size:11px;color:#555;">'+lm.userArea+'</div>' : '')
+        + '<div style="font-size:10px;color:#888;font-family:monospace;margin-top:2px;">'+[lm.userLatStr, lm.userLngStr].filter(Boolean).join(' · ')+'</div>'
         + '</div>'
     : '';
 
-  el.innerHTML = '<div style="padding:14px 14px 36px;">'
-    // Header row
+  // Distance badge
+  let distStr = '';
+  if (lm.userLat && lm.lmLat) {
+    const d = _haversineMetres(lm.userLat, lm.userLng, lm.lmLat, lm.lmLng);
+    distStr = d < 1000 ? Math.round(d) + 'm away' : (d/1000).toFixed(1) + 'km away';
+  }
+
+  el.innerHTML = '<div style="padding:12px 14px 32px;">'
+    // Header
     + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">'
     + '<span style="background:#5c4db1;color:#fff;font-size:11px;font-weight:800;padding:4px 10px;border-radius:20px;letter-spacing:0.5px;">📷 IDENTIFIED</span>'
-    + '<button onclick="'+close+'" style="margin-left:auto;background:#f0f0f0;border:none;border-radius:20px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;">✕</button>'
+    + (distStr ? '<span style="font-size:11px;color:#1a7a3a;font-weight:700;">'+distStr+'</span>' : '')
+    + '<button onclick="_closeIdentifyCard()" style="margin-left:auto;background:#f0f0f0;border:none;border-radius:20px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;">✕</button>'
     + '</div>'
-    // User location block
+    // User location
     + userLocHtml
-    // Photo
-    + (lm.image ? '<div style="border-radius:12px;overflow:hidden;background:#f0f0f0;margin-bottom:12px;"><img src="'+lm.image+'" style="width:100%;max-height:200px;object-fit:contain;display:block;" loading="eager"></div>' : '')
+    // Photo (left) + Map (right) — same as walking guide card
+    + '<div style="display:flex;gap:8px;margin-bottom:10px;height:120px;">'
+    + (lm.image
+        ? '<div style="flex:1;border-radius:10px;overflow:hidden;background:#f0f0f0;display:flex;align-items:center;">'
+          + '<img src="'+lm.image+'" style="width:100%;height:120px;object-fit:contain;display:block;" loading="eager">'
+          + '</div>'
+        : '')
+    + '<div id="identifyMapDiv" style="flex:1;height:120px;border-radius:10px;overflow:hidden;background:#dce8d0;"></div>'
+    + '</div>'
     // Name
-    + '<div style="font-size:20px;font-weight:900;line-height:1.2;margin-bottom:8px;">'+lm.name+'</div>'
+    + '<div style="font-size:19px;font-weight:900;line-height:1.2;margin-bottom:6px;">'+lm.name+'</div>'
+    + (lm.location ? '<div style="font-size:12px;color:#888;margin-bottom:8px;">'+lm.location+'</div>' : '')
     // Description
-    + '<p id="identifyTldr" style="font-size:14px;color:#333;line-height:1.6;margin:0 0 12px;">'+lm.tldr+'</p>'
+    + '<p id="identifyTldr" style="font-size:14px;color:#333;line-height:1.6;margin:0 0 10px;">'+lm.tldr+'</p>'
     // Fun fact
-    + '<div id="identifyFactWrap" style="'+(lm.funFact?'':'display:none;')+'background:#fffbeb;border-left:3px solid #f59e0b;border-radius:0 10px 10px 0;padding:10px 12px;margin-bottom:10px;">'
-        + '<span style="font-size:10px;font-weight:800;color:#b45309;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">⭐ Fun fact</span>'
+    + '<div id="identifyFactWrap" style="'+(lm.funFact?'':'display:none;')+'background:#fffbeb;border-left:3px solid #f59e0b;border-radius:0 10px 10px 0;padding:9px 12px;margin-bottom:8px;">'
+        + '<span style="font-size:10px;font-weight:800;color:#b45309;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:3px;">⭐ Fun fact</span>'
         + '<span id="identifyFact" style="font-size:13px;color:#444;line-height:1.5;">'+(lm.funFact||'')+'</span></div>'
     // Suggestion
-    + '<div id="identifySuggestWrap" style="'+(lm.suggestion?'':'display:none;')+'background:#e8f5e9;border-left:3px solid #1a7a3a;border-radius:0 10px 10px 0;padding:10px 12px;margin-bottom:14px;">'
-        + '<span style="font-size:10px;font-weight:800;color:#1a7a3a;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">💡 Do this now</span>'
+    + '<div id="identifySuggestWrap" style="'+(lm.suggestion?'':'display:none;')+'background:#e8f5e9;border-left:3px solid #1a7a3a;border-radius:0 10px 10px 0;padding:9px 12px;margin-bottom:12px;">'
+        + '<span style="font-size:10px;font-weight:800;color:#1a7a3a;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:3px;">💡 Do this now</span>'
         + '<span id="identifySuggest" style="font-size:13px;color:#1b5e20;line-height:1.5;font-weight:600;">'+(lm.suggestion||'')+'</span></div>'
     // Wikipedia + speak
     + '<div style="display:flex;gap:8px;margin-bottom:10px;">'
     + (lm.wikiUrl
-        ? '<a href="'+lm.wikiUrl+'" target="_blank" rel="noopener" style="flex:1;padding:11px;text-align:center;background:#f0f7ff;border:1px solid #d0e8ff;border-radius:12px;font-size:13px;font-weight:700;color:#1a73e8;text-decoration:none;">📖 Read full Wikipedia article</a>'
-        : '<span style="flex:1;padding:11px;text-align:center;font-size:13px;color:#aaa;">No Wikipedia article found</span>')
-    + '<button onclick="_speakIdentified()" style="padding:11px 16px;background:#f5f5f5;border:none;border-radius:12px;font-size:17px;cursor:pointer;">🔊</button>'
+        ? '<a href="'+lm.wikiUrl+'" target="_blank" rel="noopener" style="flex:1;padding:10px;text-align:center;background:#f0f7ff;border:1px solid #d0e8ff;border-radius:12px;font-size:13px;font-weight:700;color:#1a73e8;text-decoration:none;">📖 Wikipedia</a>'
+        : '')
+    + '<button onclick="_speakIdentified()" style="padding:10px 14px;background:#f5f5f5;border:none;border-radius:12px;font-size:16px;cursor:pointer;">🔊</button>'
+    + '</div>'
+    // Add to schedule + Passed by
+    + '<div style="display:flex;gap:8px;">'
+    + '<button onclick="_addIdentifiedToSchedule()" style="flex:1;padding:12px;border-radius:12px;border:none;background:#1a1a1a;color:#fff;font-size:13px;font-weight:800;cursor:pointer;">📅 Add to schedule</button>'
+    + '<button onclick="_markPassedBy()" style="flex:1;padding:12px;border-radius:12px;border:1px solid #ddd;background:#fff;color:#555;font-size:13px;font-weight:700;cursor:pointer;">👣 Passed by</button>'
     + '</div>'
     + '</div>';
 
   document.body.appendChild(el);
   window._identifiedLandmark = lm;
+
+  // Init Leaflet mini-map after element is in DOM
+  if (typeof L !== 'undefined' && (lm.lmLat || lm.userLat)) {
+    requestAnimationFrame(function() {
+      try {
+        const mapEl = document.getElementById('identifyMapDiv');
+        if (!mapEl) return;
+        const cLat = lm.lmLat || lm.userLat;
+        const cLng = lm.lmLng || lm.userLng;
+        _identifyMap = L.map(mapEl, {
+          zoomControl: false, attributionControl: false,
+          dragging: false, scrollWheelZoom: false,
+          doubleClickZoom: false, touchZoom: false,
+          center: [cLat, cLng], zoom: 16
+        });
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19}).addTo(_identifyMap);
+        // Landmark marker — photo thumbnail if available
+        const lmIconHtml = lm.image
+          ? '<div style="width:32px;height:32px;border-radius:50%;overflow:hidden;border:2.5px solid #c0392b;background:#f0f0f0;">'
+            + '<img src="'+lm.image+'" style="width:100%;height:100%;object-fit:cover;"></div>'
+          : '<div style="width:14px;height:14px;background:#c0392b;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>';
+        const lmSz = lm.image ? [32,32] : [14,14];
+        L.marker([lm.lmLat||cLat, lm.lmLng||cLng], {
+          icon: L.divIcon({html:lmIconHtml, className:'', iconSize:lmSz, iconAnchor:[lmSz[0]/2,lmSz[1]/2]})
+        }).addTo(_identifyMap);
+        // User position — blue dot
+        if (lm.userLat) {
+          const meIcon = L.divIcon({
+            html: '<div style="width:14px;height:14px;background:#1a73e8;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 4px rgba(26,115,232,0.25);"></div>',
+            className:'', iconSize:[14,14], iconAnchor:[7,7]
+          });
+          L.marker([lm.userLat, lm.userLng], {icon:meIcon}).addTo(_identifyMap);
+          L.polyline([[lm.userLat,lm.userLng],[lm.lmLat||cLat,lm.lmLng||cLng]], {
+            color:'#1a73e8', weight:2, dashArray:'5,6', opacity:0.65
+          }).addTo(_identifyMap);
+          _identifyMap.fitBounds([[lm.userLat,lm.userLng],[lm.lmLat||cLat,lm.lmLng||cLng]], {padding:[20,20]});
+        }
+        setTimeout(function() { if (_identifyMap) _identifyMap.invalidateSize(); }, 380);
+        window._identifyMap = _identifyMap; // expose for close button
+      } catch(e) { console.warn('identify map:', e); }
+    });
+  }
+
   requestAnimationFrame(function() { requestAnimationFrame(function() {
     el.style.transform = 'translateY(0)';
   }); });
@@ -4006,6 +4071,51 @@ function _showIdentifyCard(lm) {
     el.removeEventListener('transitionend', onSlide);
     _speakIdentified();
   }, { once: true });
+}
+
+function _closeIdentifyCard() {
+  if (_identifyMap) { try { _identifyMap.remove(); } catch(e) {} _identifyMap = null; }
+  var c = document.getElementById('identifyCard');
+  if (c) { c.style.transform = 'translateY(100%)'; setTimeout(function(){if(c.parentNode)c.remove();}, 380); }
+}
+
+function _addIdentifiedToSchedule() {
+  const lm = window._identifiedLandmark;
+  if (!lm) return;
+  const stop = {
+    name: lm.name,
+    type: lm.type || 'landmark',
+    address: lm.location || '',
+    image: lm.image || null,
+    lat: lm.lmLat || _currentGpsLat || 0,
+    lng: lm.lmLng || _currentGpsLng || 0,
+    time: '12:00 PM',
+    duration: '30 min',
+    history: lm.tldr || '',
+    wikiUrl: lm.wikiUrl || '',
+    color: '#5c4db1',
+    tags: [],
+    badges: []
+  };
+  if (days && days[currentDay]) {
+    days[currentDay].stops.push(stop);
+    saveToStorage();
+    renderAll();
+    showToast('Added ' + lm.name + ' to Day ' + (currentDay + 1));
+  } else {
+    showToast('No active day — open the schedule first', true);
+  }
+}
+
+function _markPassedBy() {
+  const lm = window._identifiedLandmark;
+  showToast('✓ Noted — you passed ' + (lm ? lm.name : 'this landmark'));
+  const card = document.getElementById('identifyCard');
+  if (card) {
+    if (_identifyMap) { try { _identifyMap.remove(); } catch(e) {} _identifyMap = null; }
+    card.style.transform = 'translateY(100%)';
+    setTimeout(function() { if (card.parentNode) card.remove(); }, 380);
+  }
 }
 
 
