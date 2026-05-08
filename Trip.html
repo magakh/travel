@@ -4349,35 +4349,53 @@ async function liveWikiSearch(lat, lng, radius) {
       } catch(e) {}
     }
 
+    // Wikipedia fetch only — no AI in the hot path
     var extRes = await fetch('https://en.wikipedia.org/w/api.php?action=query&pageids=' + hit.pageid + '&prop=extracts|pageimages&exintro=1&explaintext=1&pithumbsize=400&format=json&origin=*');
     var extData = await extRes.json();
     var page = (extData.query && extData.query.pages && extData.query.pages[hit.pageid]) || {};
     var extract = (page.extract || '').replace(/\n+/g, ' ').trim().slice(0, 800);
     var image = (page.thumbnail && page.thumbnail.source) || null;
-
     var tldr = extract ? extract.split(/[.!?]/)[0] + '.' : hit.title;
-    var funFact = '';
-    try {
-      var aiText = await callAnthropic({
-        prompt: 'Return ONLY valid JSON, no markdown, no explanation:\n{"tldr":"2-3 vivid specific sentences a tourist walking past right now would love — paint a picture, be surprising","funFact":"one unexpected little-known fact about this place — keep it to one sentence"}\n\nAbout: "' + hit.title + '"\nContext: ' + extract.slice(0, 600),
-        maxTokens: 250
-      });
-      if (aiText && aiText.trim()) {
-        try {
-          var clean = aiText.trim().replace(/^```json|^```|```$/g, '').trim();
-          var parsed = JSON.parse(clean);
-          if (parsed.tldr) tldr = parsed.tldr;
-          if (parsed.funFact) funFact = parsed.funFact;
-        } catch(e) { tldr = aiText.trim(); }
-      }
-    } catch(e) {}
 
-    showLandmarkAlert({
+    // ── Re-verify position before showing ─────────────────────────
+    // API calls above took time; user may have walked past the landmark.
+    if (_currentGpsLat !== null) {
+      var recheck = getLandmarkRelativePos(_currentGpsLat, _currentGpsLng, hit.lat, hit.lon);
+      if (recheck.metersAhead < -5) return;   // already passed — abort
+      if (recheck.totalDist > 60) return;     // drifted too far — abort
+    }
+
+    // ── Show card immediately with Wikipedia text ──────────────────
+    var lmObj = {
       name: hit.title, lat: hit.lat, lng: hit.lon,
-      image: image, extract: extract, tldr: tldr, funFact: funFact,
+      image: image, extract: extract, tldr: tldr, funFact: '',
       address: (typeof lmAddressFromGuard !== 'undefined' ? lmAddressFromGuard : null),
       wikiUrl: 'https://en.wikipedia.org/wiki/' + encodeURIComponent(hit.title)
-    }, -1, _haversineMetres(lat, lng, hit.lat, hit.lon));
+    };
+    showLandmarkAlert(lmObj, -1, _haversineMetres(_currentGpsLat||lat, _currentGpsLng||lng, hit.lat, hit.lon));
+
+    // ── Enhance with AI blurb in background ───────────────────────
+    // Runs after card is already visible; updates it if still open
+    callAnthropic({
+      prompt: 'Return ONLY valid JSON, no markdown:\n{"tldr":"2-3 vivid specific sentences a tourist walking past right now would love","funFact":"one unexpected little-known fact — one sentence"}\n\nAbout: "' + hit.title + '"\nContext: ' + extract.slice(0, 600),
+      maxTokens: 250
+    }).then(function(aiText) {
+      if (!aiText || !aiText.trim()) return;
+      if (!_activeLandmark || _activeLandmark.name !== hit.title) return; // card already gone
+      try {
+        var clean = aiText.trim().replace(/^```json|^```|```$/g, '').trim();
+        var parsed = JSON.parse(clean);
+        var tldrEl = document.getElementById('walkAlertTldr');
+        var factWrap = document.getElementById('walkAlertFactWrap');
+        var factEl = document.getElementById('walkAlertFact');
+        if (parsed.tldr && tldrEl) tldrEl.textContent = parsed.tldr;
+        if (parsed.funFact && factEl) {
+          factEl.textContent = parsed.funFact;
+          if (factWrap) factWrap.style.display = '';
+        }
+      } catch(e) {}
+    }).catch(function(){});
+
   } catch(e) {}
 }
 
@@ -4558,11 +4576,11 @@ function showLandmarkAlert(lm, idx, dist) {
     + '<button onclick="dismissLandmarkAlert()" style="background:#f0f0f0;border:none;border-radius:20px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;">✕</button>'
     + '</div>'
     + '<div style="font-size:18px;font-weight:900;line-height:1.2;margin-bottom:8px;">'+lm.name+'</div>'
-    + '<p style="font-size:14px;color:#333;line-height:1.6;margin:0 0 12px;">'+(lm.tldr||'')+'</p>'
-    + (lm.funFact ? '<div style="background:#fffbeb;border-left:3px solid #f59e0b;border-radius:0 10px 10px 0;padding:10px 12px;margin-bottom:14px;">'
+    + '<p id="walkAlertTldr" style="font-size:14px;color:#333;line-height:1.6;margin:0 0 12px;">'+(lm.tldr||'')+'</p>'
+    + '<div id="walkAlertFactWrap" style="'+(lm.funFact?'':'display:none;')+'background:#fffbeb;border-left:3px solid #f59e0b;border-radius:0 10px 10px 0;padding:10px 12px;margin-bottom:14px;">'
         + '<span style="font-size:10px;font-weight:800;color:#b45309;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">⭐ Fun fact</span>'
-        + '<span style="font-size:13px;color:#444;line-height:1.5;">'+lm.funFact+'</span>'
-        + '</div>' : '<div style="margin-bottom:14px;"></div>')
+        + '<span id="walkAlertFact" style="font-size:13px;color:#444;line-height:1.5;">'+(lm.funFact||'')+'</span>'
+        + '</div>'
     + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">'
     + '<a href="'+lm.wikiUrl+'" target="_blank" rel="noopener" style="font-size:13px;font-weight:700;color:#1a73e8;text-decoration:none;">📖 Continue reading on Wikipedia →</a>'
     + '<button onclick="speakTourLandmark('+idx+')" style="padding:8px 12px;background:#f5f5f5;border:none;border-radius:10px;font-size:16px;cursor:pointer;">🔊</button>'
