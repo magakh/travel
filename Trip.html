@@ -3887,10 +3887,13 @@ function renderTourCards(tour, fromStop, toStop, afterIdx, dayIdx, beforeIdx) {
     return '<a href="'+p.url+'" target="_blank" style="display:inline-flex;align-items:center;gap:4px;padding:7px 11px;background:#4285f4;color:#fff;border-radius:20px;font-size:11px;font-weight:700;text-decoration:none;flex-shrink:0;">'+label+'</a>';
   }).join('');
 
-  var html = '<div style="display:flex;align-items:flex-start;gap:10px;padding:0 0 12px;border-bottom:1px solid #eee;margin-bottom:0;">'
+  var html = '<div style="padding:0 0 12px;border-bottom:1px solid #eee;margin-bottom:0;">'
+    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">'
     +'<div style="flex:1;"><div style="font-size:13px;font-weight:800;">'+landmarks.length+' landmark'+(landmarks.length>1?'s':'')+' on the way</div>'
     +'<div style="font-size:11px;color:#888;margin-top:2px;">~'+totalMins+' min'+(extra>0?' (+'+extra+' vs direct)':'')+'</div></div>'
     +'<div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0;">'+gmLinksHtml+'</div>'
+    +'</div>'
+    +'<button id="startWalkBtnTop" onclick="startLiveWalkingTour()" style="width:100%;padding:11px;border-radius:12px;border:none;background:#1a7a3a;color:#fff;font-size:13px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;">&#x1F6B6; Start live walking tour · auto-alerts as you approach</button>'
     +'</div>';
 
   html += '<div style="display:flex;align-items:center;gap:12px;padding:14px 0 6px;">'
@@ -3934,13 +3937,6 @@ function renderTourCards(tour, fromStop, toStop, afterIdx, dayIdx, beforeIdx) {
   cardsEl.innerHTML = html;
   cardsEl.innerHTML = html;
   _tourLandmarks = landmarks;
-
-  // Add Start Live Tour button
-  const btnWrap = document.createElement('div');
-  btnWrap.style.cssText = 'padding:0 0 20px;';
-  btnWrap.innerHTML = '<button id="startWalkBtn" onclick="startLiveWalkingTour()" style="width:100%;padding:14px;border-radius:14px;border:none;background:#1a7a3a;color:#fff;font-size:15px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">&#x1F6B6; Start live walking tour</button>'
-    + '<p style="font-size:11px;color:#aaa;text-align:center;margin:6px 0 0;">Uses GPS · notifies you when approaching each landmark</p>';
-  cardsEl.appendChild(btnWrap);
 
   // Scroll-based highlight: find which card is most visible in the list container
   const listContainer = document.getElementById('suggestResultsList');
@@ -4026,14 +4022,22 @@ let _walkTourVisited = new Set();
 let _walkTourAlertOpen = false;
 const WALK_TRIGGER_METRES = 50;
 
+function setWalkBtnState(active) {
+  ['startWalkBtn','startWalkBtnTop'].forEach(function(id) {
+    var btn = document.getElementById(id);
+    if (!btn) return;
+    if (active) { btn.innerHTML = '&#x23F9; Stop live tour'; btn.style.background = '#c0392b'; }
+    else { btn.innerHTML = '&#x1F6B6; Start live walking tour · auto-alerts as you approach'; btn.style.background = '#1a7a3a'; }
+  });
+}
+
 function startLiveWalkingTour() {
   if (!('geolocation' in navigator)) { showToast('GPS not available on this device', true); return; }
   if (!_tourLandmarks || !_tourLandmarks.length) { showToast('Run the magic tour first', true); return; }
 
-  const btn = document.getElementById('startWalkBtn');
   if (_walkTourActive) {
     stopLiveWalkingTour();
-    if (btn) { btn.innerHTML = '&#x1F6B6; Start live walking tour'; btn.style.background = '#1a7a3a'; }
+    setWalkBtnState(false);
     return;
   }
 
@@ -4041,7 +4045,7 @@ function startLiveWalkingTour() {
     _walkTourActive = true;
     _walkTourVisited = new Set();
     _walkTourAlertOpen = false;
-    if (btn) { btn.innerHTML = '&#x23F9; Stop live tour'; btn.style.background = '#c0392b'; }
+    setWalkBtnState(true);
     showToast('&#x1F6B6; Live tour started — walk towards your landmarks!');
     _walkTourWatchId = navigator.geolocation.watchPosition(
       function(pos) { checkNearbyLandmarks(pos.coords.latitude, pos.coords.longitude); },
