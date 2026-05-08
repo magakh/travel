@@ -3734,7 +3734,8 @@ function identifyLandmark() {
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = 'image/*';
-  input.setAttribute('capture', 'environment');
+  input.setAttribute('capture', 'environment'); // back camera on Android/iOS
+  input.capture = 'environment';                // belt-and-suspenders for older WebKit
   input.onchange = async function() {
     const file = input.files && input.files[0];
     if (!file) return;
@@ -3798,12 +3799,16 @@ async function _callVision(base64, prompt) {
 }
 
 async function _processLandmarkPhoto(file) {
+  // Snapshot GPS the moment the user fires the shutter
+  const snapLat = _currentGpsLat;
+  const snapLng = _currentGpsLng;
+
   // Overlay spinner
   const ov = document.createElement('div');
   ov.id = 'identifyOv';
   ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:32000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;';
   ov.innerHTML = '<div style="width:48px;height:48px;border:4px solid rgba(255,255,255,0.25);border-top-color:#fff;border-radius:50%;animation:identifySpin 0.75s linear infinite;"></div>'
-    + '<p id="identifyStatus" style="color:#fff;font-size:15px;font-weight:700;text-align:center;max-width:280px;">Analysing photo…</p>';
+    + '<p id="identifyStatus" style="color:#fff;font-size:15px;font-weight:700;text-align:center;max-width:280px;">Identifying landmark…</p>';
   if (!document.getElementById('identifySpinStyle')) {
     const s = document.createElement('style');
     s.id = 'identifySpinStyle';
@@ -3811,101 +3816,158 @@ async function _processLandmarkPhoto(file) {
     document.head.appendChild(s);
   }
   document.body.appendChild(ov);
-  const setStatus = t => { const el = document.getElementById('identifyStatus'); if(el) el.textContent = t; };
+  const setStatus = t => { const el = document.getElementById('identifyStatus'); if (el) el.textContent = t; };
 
   try {
     const base64 = await _resizeToBase64(file, 1024);
 
-    // Step 1 — Vision: identify the landmark
-    setStatus('Identifying landmark…');
+    // Step 1 — Vision: identify from photo
     const visionText = await _callVision(base64,
       'Identify this landmark, building, statue, monument, or structure. Return ONLY valid JSON (no markdown):\n{"name":"exact full official name","location":"city, country","type":"building|church|statue|monument|bridge|park|other","wiki_query":"best Wikipedia search query"}\nIf unidentifiable set name to empty string.'
     );
-    let identified = { name:'', location:'', type:'other', wiki_query:'' };
-    try { identified = JSON.parse(visionText.replace(/```json|```/g,'').trim()); } catch(e){}
+    let identified = { name: '', location: '', type: 'other', wiki_query: '' };
+    try { identified = JSON.parse(visionText.replace(/```json|```/g, '').trim()); } catch(e) {}
 
     if (!identified.name) {
       ov.remove();
-      showToast("Couldn't identify — try a clearer photo of the landmark", true);
+      showToast("Couldn\'t identify — try a clearer photo of the landmark", true);
       return;
     }
 
-    setStatus('Found: ' + identified.name + '\nFetching information…');
+    setStatus('Found: ' + identified.name + ' · Fetching info…');
 
-    // Step 2 — Wikipedia search
+    // Step 2 — Reverse-geocode user location (parallel with Wikipedia)
+    const userLocationPromise = (snapLat && snapLng)
+      ? fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat=' + snapLat + '&lon=' + snapLng + '&zoom=16', {headers: {'Accept-Language': 'en'}})
+          .then(r => r.json()).then(d => {
+            const a = d.address || {};
+            return [
+              a.road || a.pedestrian || a.neighbourhood || '',
+              a.suburb || a.city_district || a.town || a.city || ''
+            ].filter(Boolean).join(', ');
+          }).catch(() => '')
+      : Promise.resolve('');
+
+    // Step 3 — Wikipedia: text search + optional geosearch near GPS
     const q = encodeURIComponent(identified.wiki_query || (identified.name + ' ' + identified.location));
     const srRes = await fetch('https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=' + q + '&format=json&origin=*&srlimit=1');
     const srData = await srRes.json();
     const hit = srData.query && srData.query.search && srData.query.search[0];
-    let wTitle = identified.name, wExtract = '', wImage = null, wUrl = '';
+
+    let wTitle = identified.name, wExtract = '', wImage = null, wUrl = '', wLat = snapLat, wLng = snapLng;
     if (hit) {
-      const pgRes = await fetch('https://en.wikipedia.org/w/api.php?action=query&pageids=' + hit.pageid + '&prop=extracts|pageimages&exintro=1&explaintext=1&pithumbsize=500&format=json&origin=*');
+      const pgRes = await fetch('https://en.wikipedia.org/w/api.php?action=query&pageids=' + hit.pageid + '&prop=extracts|pageimages|coordinates&exintro=1&explaintext=1&pithumbsize=500&format=json&origin=*');
       const pgData = await pgRes.json();
       const pg = (pgData.query && pgData.query.pages && pgData.query.pages[hit.pageid]) || {};
       wTitle = pg.title || hit.title;
-      wExtract = (pg.extract || '').replace(/\n+/g,' ').trim().slice(0, 900);
+      wExtract = (pg.extract || '').replace(/
++/g, ' ').trim().slice(0, 900);
       wImage = (pg.thumbnail && pg.thumbnail.source) || null;
       wUrl = 'https://en.wikipedia.org/wiki/' + encodeURIComponent(wTitle);
+      // Use Wikipedia coordinates if available (more accurate than GPS snap)
+      const coords = pg.coordinates && pg.coordinates[0];
+      if (coords) { wLat = coords.lat; wLng = coords.lon; }
     }
 
-    // Step 3 — Show card immediately with Wikipedia text
+    // Await location label
+    const userLocation = await userLocationPromise;
+    const locationContext = userLocation || identified.location || '';
+
+    // Step 4 — Show card immediately with Wikipedia text
     ov.remove();
-    let tldr = wExtract ? wExtract.split(/[.!?]/)[0] + '.' : identified.name + '.';
-    _showIdentifyCard({ name: wTitle, location: identified.location, type: identified.type, image: wImage, tldr, funFact: '', wikiUrl: wUrl });
+    const tldr = wExtract ? wExtract.split(/[.!?]/)[0] + '.' : identified.name + '.';
+    _showIdentifyCard({
+      name: wTitle,
+      location: locationContext,
+      type: identified.type,
+      image: wImage,
+      tldr,
+      funFact: '',
+      suggestion: '',
+      wikiUrl: wUrl,
+      lmLat: wLat,
+      lmLng: wLng,
+      userLat: snapLat,
+      userLng: snapLng
+    });
 
-    // Step 4 — Enhance with AI description + fun fact in background
-    if (wExtract || identified.name) {
-      callAnthropic({
-        prompt: 'Return ONLY valid JSON (no markdown):\n{"tldr":"2-3 vivid sentences a tourist standing in front of it right now would love","funFact":"one surprising little-known fact — one sentence"}\n\nAbout: "' + wTitle + '" — ' + identified.location + '\n' + (wExtract || identified.name),
-        maxTokens: 280
-      }).then(function(aiRaw) {
-        try {
-          const parsed = JSON.parse(aiRaw.replace(/```json|```/g,'').trim());
-          const card = document.getElementById('identifyCard');
-          if (!card) return;
-          if (parsed.tldr) {
-            const tldrEl = card.querySelector('#identifyTldr');
-            if (tldrEl) tldrEl.textContent = parsed.tldr;
-            if (window._identifiedLandmark) window._identifiedLandmark.tldr = parsed.tldr;
-          }
-          if (parsed.funFact) {
-            const factWrap = card.querySelector('#identifyFactWrap');
-            const factEl = card.querySelector('#identifyFact');
-            if (factEl) factEl.textContent = parsed.funFact;
-            if (factWrap) factWrap.style.display = '';
-            if (window._identifiedLandmark) window._identifiedLandmark.funFact = parsed.funFact;
-          }
-          // Re-speak with full enriched content
-          _speakIdentified();
-        } catch(e) { console.warn('Identify AI update:', e); }
-      }).catch(function(){});
-    }
+    // Step 5 — AI: vivid description + fun fact + suggestion (background)
+    const context = (wExtract || identified.name).slice(0, 600);
+    const locationHint = locationContext ? '\nUser is standing near: ' + locationContext : '';
+    callAnthropic({
+      prompt: 'Return ONLY valid JSON (no markdown):\n{"tldr":"2-3 vivid sentences a tourist standing here right now would love","funFact":"one surprising little-known fact — one sentence","suggestion":"one specific thing to look for or do RIGHT NOW at this exact spot — be concrete and actionable"}\n\nAbout: "' + wTitle + '"' + locationHint + '\n' + context,
+      maxTokens: 320
+    }).then(function(aiRaw) {
+      try {
+        const parsed = JSON.parse(aiRaw.replace(/```json|```/g, '').trim());
+        const card = document.getElementById('identifyCard');
+        if (!card) return;
+        if (parsed.tldr) {
+          const el = card.querySelector('#identifyTldr');
+          if (el) el.textContent = parsed.tldr;
+          if (window._identifiedLandmark) window._identifiedLandmark.tldr = parsed.tldr;
+        }
+        if (parsed.funFact) {
+          const fw = card.querySelector('#identifyFactWrap');
+          const fe = card.querySelector('#identifyFact');
+          if (fe) fe.textContent = parsed.funFact;
+          if (fw) fw.style.display = '';
+          if (window._identifiedLandmark) window._identifiedLandmark.funFact = parsed.funFact;
+        }
+        if (parsed.suggestion) {
+          const sw = card.querySelector('#identifySuggestWrap');
+          const se = card.querySelector('#identifySuggest');
+          if (se) se.textContent = parsed.suggestion;
+          if (sw) sw.style.display = '';
+          if (window._identifiedLandmark) window._identifiedLandmark.suggestion = parsed.suggestion;
+        }
+        _speakIdentified();
+      } catch(e) { console.warn('Identify AI:', e); }
+    }).catch(function() {});
 
   } catch(e) { ov.remove(); throw e; }
 }
+
 
 function _showIdentifyCard(lm) {
   const old = document.getElementById('identifyCard');
   if (old) old.remove();
   const el = document.createElement('div');
   el.id = 'identifyCard';
-  el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:31000;background:#fff;border-radius:20px 20px 0 0;box-shadow:0 -4px 30px rgba(0,0,0,0.3);max-height:84vh;overflow-y:auto;transform:translateY(100%);transition:transform 0.35s ease;';
+  el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:31000;background:#fff;border-radius:20px 20px 0 0;box-shadow:0 -4px 30px rgba(0,0,0,0.3);max-height:86vh;overflow-y:auto;transform:translateY(100%);transition:transform 0.35s ease;';
 
-  const close = "var c=document.getElementById('identifyCard');if(c){c.style.transform='translateY(100%)';setTimeout(()=>c.remove(),380);}";
+  const close = "var c=document.getElementById('identifyCard');if(c){c.style.transform='translateY(100%)';setTimeout(function(){c.remove();},380);}";
+
+  // Distance from user to landmark
+  let distStr = '';
+  if (lm.userLat && lm.lmLat) {
+    const d = _haversineMetres(lm.userLat, lm.userLng, lm.lmLat, lm.lmLng);
+    distStr = d < 1000 ? Math.round(d) + 'm away' : (d/1000).toFixed(1) + 'km away';
+  }
 
   el.innerHTML = '<div style="padding:14px 14px 36px;">'
+    // Header row
     + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">'
     + '<span style="background:#5c4db1;color:#fff;font-size:11px;font-weight:800;padding:4px 10px;border-radius:20px;letter-spacing:0.5px;">📷 IDENTIFIED</span>'
     + (lm.location ? '<span style="font-size:12px;color:#888;font-weight:600;">'+lm.location+'</span>' : '')
-    + '<button onclick="'+close+'" style="margin-left:auto;background:#f0f0f0;border:none;border-radius:20px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;">✕</button>'
+    + (distStr ? '<span style="font-size:12px;color:#1a7a3a;font-weight:700;margin-left:auto;">📍 '+distStr+'</span>' : '<span style="margin-left:auto;"></span>')
+    + '<button onclick="'+close+'" style="background:#f0f0f0;border:none;border-radius:20px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;margin-left:8px;">✕</button>'
     + '</div>'
-    + (lm.image ? '<div style="border-radius:12px;overflow:hidden;background:#f0f0f0;margin-bottom:12px;">'
-        + '<img src="'+lm.image+'" style="width:100%;max-height:220px;object-fit:contain;display:block;" loading="eager"></div>' : '')
+    // Photo
+    + (lm.image ? '<div style="border-radius:12px;overflow:hidden;background:#f0f0f0;margin-bottom:12px;"><img src="'+lm.image+'" style="width:100%;max-height:220px;object-fit:contain;display:block;" loading="eager"></div>' : '')
+    // Name
     + '<div style="font-size:20px;font-weight:900;line-height:1.2;margin-bottom:8px;">'+lm.name+'</div>'
+    // Description
     + '<p id="identifyTldr" style="font-size:14px;color:#333;line-height:1.6;margin:0 0 12px;">'+lm.tldr+'</p>'
-    + '<div id="identifyFactWrap" style="'+(lm.funFact?'':'display:none;')+'background:#fffbeb;border-left:3px solid #f59e0b;border-radius:0 10px 10px 0;padding:10px 12px;margin-bottom:14px;">'
+    // Fun fact
+    + '<div id="identifyFactWrap" style="'+(lm.funFact?'':'display:none;')+'background:#fffbeb;border-left:3px solid #f59e0b;border-radius:0 10px 10px 0;padding:10px 12px;margin-bottom:10px;">'
         + '<span style="font-size:10px;font-weight:800;color:#b45309;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">⭐ Fun fact</span>'
         + '<span id="identifyFact" style="font-size:13px;color:#444;line-height:1.5;">'+(lm.funFact||'')+'</span></div>'
+    // Suggestion
+    + '<div id="identifySuggestWrap" style="'+(lm.suggestion?'':'display:none;')+'background:#e8f5e9;border-left:3px solid #1a7a3a;border-radius:0 10px 10px 0;padding:10px 12px;margin-bottom:14px;">'
+        + '<span style="font-size:10px;font-weight:800;color:#1a7a3a;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">💡 Do this now</span>'
+        + '<span id="identifySuggest" style="font-size:13px;color:#1b5e20;line-height:1.5;font-weight:600;">'+(lm.suggestion||'')+'</span></div>'
+    // Wikipedia + speak
     + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">'
     + (lm.wikiUrl
         ? '<a href="'+lm.wikiUrl+'" target="_blank" rel="noopener" style="font-size:13px;font-weight:700;color:#1a73e8;text-decoration:none;">📖 Continue reading on Wikipedia →</a>'
@@ -3916,24 +3978,29 @@ function _showIdentifyCard(lm) {
 
   document.body.appendChild(el);
   window._identifiedLandmark = lm;
-  requestAnimationFrame(() => requestAnimationFrame(() => {
+  requestAnimationFrame(function() { requestAnimationFrame(function() {
     el.style.transform = 'translateY(0)';
-  }));
-  // Auto-speak after slide-in — wrapped in user-gesture-safe way
+  }); });
   el.addEventListener('transitionend', function onSlide() {
     el.removeEventListener('transitionend', onSlide);
     _speakIdentified();
   }, { once: true });
 }
 
+
 function _speakIdentified() {
   const lm = window._identifiedLandmark;
   if (!lm) return;
   if (window.speechSynthesis) window.speechSynthesis.cancel();
-  const text = lm.name + (lm.location ? ', ' + lm.location : '') + '. ' + lm.tldr + (lm.funFact ? ' Fun fact: ' + lm.funFact : '');
-  const utt = new SpeechSynthesisUtterance(text.slice(0, 1500));
+  const text = lm.name
+    + (lm.location ? ', ' + lm.location : '')
+    + '. ' + (lm.tldr || '')
+    + (lm.funFact ? ' Fun fact: ' + lm.funFact : '')
+    + (lm.suggestion ? ' What to do: ' + lm.suggestion : '');
+  const utt = new SpeechSynthesisUtterance(text.slice(0, 1800));
   utt.lang = 'en-GB'; utt.rate = 0.95;
   window.speechSynthesis.speak(utt);
+}eechSynthesis.speak(utt);
 }
 
 // end photo identify
