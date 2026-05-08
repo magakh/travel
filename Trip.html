@@ -3838,15 +3838,21 @@ async function _processLandmarkPhoto(file) {
 
     // Step 2 — Reverse-geocode user location (parallel with Wikipedia)
     const userLocationPromise = (snapLat && snapLng)
-      ? fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat=' + snapLat + '&lon=' + snapLng + '&zoom=16', {headers: {'Accept-Language': 'en'}})
+      ? fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat=' + snapLat + '&lon=' + snapLng + '&zoom=18', {headers: {'Accept-Language': 'en'}})
           .then(r => r.json()).then(d => {
             const a = d.address || {};
-            return [
-              a.road || a.pedestrian || a.neighbourhood || '',
-              a.suburb || a.city_district || a.town || a.city || ''
-            ].filter(Boolean).join(', ');
-          }).catch(() => '')
-      : Promise.resolve('');
+            const road = a.road || a.pedestrian || a.footway || a.path || '';
+            const houseNum = parseInt(a.house_number) || null;
+            const blockStart = houseNum ? Math.floor(houseNum / 100) * 100 : null;
+            const block = blockStart !== null ? blockStart + '–' + (blockStart + 99) + ' block' : '';
+            const streetLine = [block, road].filter(Boolean).join(' of ');
+            const area = a.suburb || a.city_district || a.neighbourhood || a.town || a.city || '';
+            // Format lat/lng: 51.5123°N, 0.0987°W
+            const latStr = Math.abs(snapLat).toFixed(4) + '°' + (snapLat >= 0 ? 'N' : 'S');
+            const lngStr = Math.abs(snapLng).toFixed(4) + '°' + (snapLng >= 0 ? 'E' : 'W');
+            return { streetLine, area, latStr, lngStr, fullLine: [streetLine, area].filter(Boolean).join(', ') };
+          }).catch(() => null)
+      : Promise.resolve(null);
 
     // Step 3 — Wikipedia: text search + optional geosearch near GPS
     const q = encodeURIComponent(identified.wiki_query || (identified.name + ' ' + identified.location));
@@ -3868,9 +3874,9 @@ async function _processLandmarkPhoto(file) {
       if (coords) { wLat = coords.lat; wLng = coords.lon; }
     }
 
-    // Await location label
-    const userLocation = await userLocationPromise;
-    const locationContext = userLocation || identified.location || '';
+    // Await location info
+    const userLocInfo = await userLocationPromise;
+    const locationContext = (userLocInfo && userLocInfo.fullLine) || identified.location || '';
 
     // Step 4 — Show card immediately with Wikipedia text
     ov.remove();
@@ -3887,7 +3893,11 @@ async function _processLandmarkPhoto(file) {
       lmLat: wLat,
       lmLng: wLng,
       userLat: snapLat,
-      userLng: snapLng
+      userLng: snapLng,
+      userStreet: userLocInfo ? userLocInfo.streetLine : '',
+      userArea: userLocInfo ? userLocInfo.area : '',
+      userLatStr: userLocInfo ? userLocInfo.latStr : (snapLat ? Math.abs(snapLat).toFixed(4)+'°'+(snapLat>=0?'N':'S') : ''),
+      userLngStr: userLocInfo ? userLocInfo.lngStr : (snapLng ? Math.abs(snapLng).toFixed(4)+'°'+(snapLng>=0?'E':'W') : '')
     });
 
     // Step 5 — AI: vivid description + fun fact + suggestion (background)
@@ -3941,19 +3951,31 @@ function _showIdentifyCard(lm) {
   let distStr = '';
   if (lm.userLat && lm.lmLat) {
     const d = _haversineMetres(lm.userLat, lm.userLng, lm.lmLat, lm.lmLng);
-    distStr = d < 1000 ? Math.round(d) + 'm away' : (d/1000).toFixed(1) + 'km away';
+    distStr = d < 1000 ? Math.round(d) + 'm' : (d/1000).toFixed(1) + 'km';
   }
+
+  // User location block
+  const hasUserLoc = lm.userStreet || lm.userLatStr;
+  const userLocHtml = hasUserLoc
+    ? '<div style="background:#e8f5e9;border-radius:10px;padding:10px 14px;margin-bottom:10px;">'
+        + '<div style="font-size:10px;font-weight:800;color:#1a7a3a;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px;">📍 Your location when photo was taken</div>'
+        + (lm.userStreet ? '<div style="font-size:14px;font-weight:800;color:#1a1a1a;margin-bottom:2px;">'+lm.userStreet+'</div>' : '')
+        + (lm.userArea ? '<div style="font-size:12px;color:#555;margin-bottom:4px;">'+lm.userArea+'</div>' : '')
+        + '<div style="font-size:11px;color:#888;font-family:monospace;">'+[lm.userLatStr, lm.userLngStr].filter(Boolean).join(' · ')+'</div>'
+        + (distStr ? '<div style="font-size:11px;color:#1a7a3a;font-weight:700;margin-top:3px;">Landmark approx. '+distStr+' from here</div>' : '')
+        + '</div>'
+    : '';
 
   el.innerHTML = '<div style="padding:14px 14px 36px;">'
     // Header row
-    + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">'
+    + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">'
     + '<span style="background:#5c4db1;color:#fff;font-size:11px;font-weight:800;padding:4px 10px;border-radius:20px;letter-spacing:0.5px;">📷 IDENTIFIED</span>'
-    + (lm.location ? '<span style="font-size:12px;color:#888;font-weight:600;">'+lm.location+'</span>' : '')
-    + (distStr ? '<span style="font-size:12px;color:#1a7a3a;font-weight:700;margin-left:auto;">📍 '+distStr+'</span>' : '<span style="margin-left:auto;"></span>')
-    + '<button onclick="'+close+'" style="background:#f0f0f0;border:none;border-radius:20px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;margin-left:8px;">✕</button>'
+    + '<button onclick="'+close+'" style="margin-left:auto;background:#f0f0f0;border:none;border-radius:20px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;">✕</button>'
     + '</div>'
+    // User location block
+    + userLocHtml
     // Photo
-    + (lm.image ? '<div style="border-radius:12px;overflow:hidden;background:#f0f0f0;margin-bottom:12px;"><img src="'+lm.image+'" style="width:100%;max-height:220px;object-fit:contain;display:block;" loading="eager"></div>' : '')
+    + (lm.image ? '<div style="border-radius:12px;overflow:hidden;background:#f0f0f0;margin-bottom:12px;"><img src="'+lm.image+'" style="width:100%;max-height:200px;object-fit:contain;display:block;" loading="eager"></div>' : '')
     // Name
     + '<div style="font-size:20px;font-weight:900;line-height:1.2;margin-bottom:8px;">'+lm.name+'</div>'
     // Description
@@ -3967,11 +3989,11 @@ function _showIdentifyCard(lm) {
         + '<span style="font-size:10px;font-weight:800;color:#1a7a3a;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">💡 Do this now</span>'
         + '<span id="identifySuggest" style="font-size:13px;color:#1b5e20;line-height:1.5;font-weight:600;">'+(lm.suggestion||'')+'</span></div>'
     // Wikipedia + speak
-    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">'
+    + '<div style="display:flex;gap:8px;margin-bottom:10px;">'
     + (lm.wikiUrl
-        ? '<a href="'+lm.wikiUrl+'" target="_blank" rel="noopener" style="font-size:13px;font-weight:700;color:#1a73e8;text-decoration:none;">📖 Continue reading on Wikipedia →</a>'
-        : '<span style="font-size:13px;color:#aaa;">No Wikipedia article found</span>')
-    + '<button onclick="_speakIdentified()" style="padding:8px 14px;background:#f5f5f5;border:none;border-radius:10px;font-size:17px;cursor:pointer;">🔊</button>'
+        ? '<a href="'+lm.wikiUrl+'" target="_blank" rel="noopener" style="flex:1;padding:11px;text-align:center;background:#f0f7ff;border:1px solid #d0e8ff;border-radius:12px;font-size:13px;font-weight:700;color:#1a73e8;text-decoration:none;">📖 Read full Wikipedia article</a>'
+        : '<span style="flex:1;padding:11px;text-align:center;font-size:13px;color:#aaa;">No Wikipedia article found</span>')
+    + '<button onclick="_speakIdentified()" style="padding:11px 16px;background:#f5f5f5;border:none;border-radius:12px;font-size:17px;cursor:pointer;">🔊</button>'
     + '</div>'
     + '</div>';
 
