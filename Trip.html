@@ -1188,7 +1188,11 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
     <button class="day-tab green-tab" onclick="showAllMap()" id="dtabAll">All Days Map</button>
     <button class="day-tab" onclick="showView('search')" id="dtabSearch" style="border-color:#1a73e8;color:#1a73e8;">+ Add / Search</button>
     <button class="day-tab" onclick="showView('settings')" id="dtabSettings" style="border-color:#555;color:#555;">⚙ Settings</button>
-    <button class="day-tab" id="walkGuideBtn" onclick="toggleWalkingGuide()" style="border-color:#1a7a3a;color:#1a7a3a;font-weight:800;background:rgba(26,122,58,0.08);">🚶 Guide</button>
+  </div>
+</div>
+
+<!-- Floating walk guide button — always visible -->
+<button id="walkGuideBtn" onclick="toggleWalkingGuide()" style="position:fixed;bottom:90px;right:16px;z-index:1000;background:#1a7a3a;color:#fff;border:none;border-radius:30px;padding:10px 16px;font-size:13px;font-weight:800;box-shadow:0 3px 12px rgba(0,0,0,0.3);cursor:pointer;display:flex;align-items:center;gap:6px;">🚶 Guide</button>
   </div>
 </div>
 
@@ -4037,15 +4041,11 @@ function setWalkBtnState(active) {
   var hdr = document.getElementById('walkGuideBtn');
   if (hdr) {
     if (active) {
-      hdr.textContent = '⏹ Stop';
-      hdr.style.borderColor = '#c0392b';
-      hdr.style.color = '#c0392b';
-      hdr.style.background = '#fff0f0';
+      hdr.innerHTML = '⏹ Stop';
+      hdr.style.background = '#c0392b';
     } else {
-      hdr.textContent = '🚶';
-      hdr.style.borderColor = '#1a7a3a';
-      hdr.style.color = '#1a7a3a';
-      hdr.style.background = '';
+      hdr.innerHTML = '🚶 Guide';
+      hdr.style.background = '#1a7a3a';
     }
   }
   // In-panel button
