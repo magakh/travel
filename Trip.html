@@ -3823,16 +3823,26 @@ async function _processLandmarkPhoto(file) {
 
     // Step 1 — Vision: identify from photo
     const visionText = await _callVision(base64,
-      'Identify this landmark, building, statue, monument, or structure. Return ONLY valid JSON (no markdown):\n{"name":"exact full official name","location":"city, country","type":"building|church|statue|monument|bridge|park|other","wiki_query":"best Wikipedia search query"}\nIf unidentifiable set name to empty string.'
+      'Look at this photo. Identify the BUSINESS, RESTAURANT, PUB, CAFE, BAR, SHOP or LANDMARK. Read visible signage.\\nNEVER return a person\'s name — return the PLACE or BUSINESS name only.\\nReturn ONLY valid JSON (no markdown):\\n{"name":"exact name from sign or known place — not a person","location":"city, country","type":"restaurant|cafe|pub|bar|hotel|shop|museum|church|monument|building|other","is_business":true,"google_query":"Google Maps search: name + location","wiki_query":"Wikipedia title if notable else empty"}\\nIf unidentifiable set name to empty string.'
     );
-    let identified = { name: '', location: '', type: 'other', wiki_query: '' };
+    let identified = { name: '', location: '', type: 'other', is_business: false, google_query: '', wiki_query: '' };
     try { identified = JSON.parse(visionText.replace(/```json|```/g, '').trim()); } catch(e) {}
 
     if (!identified.name) {
       ov.remove();
-      showToast("Could not identify — try a clearer photo of the landmark", true);
+      showToast('Could not identify — try a clearer photo showing the sign or name', true);
       return;
     }
+
+    // Classify as business (restaurant/cafe/pub/bar/hotel/shop)
+    const BIZ_TYPES = ['restaurant','cafe','pub','bar','hotel','shop','store'];
+    const isBusiness = !!identified.is_business ||
+      BIZ_TYPES.some(function(t){ return (identified.type||'').toLowerCase().includes(t); });
+
+    // Build Google Maps link — always useful, especially for businesses
+    const gmapsQuery = identified.google_query || (identified.name + ' ' + identified.location);
+    const gmapsUrl = 'https://www.google.com/maps/search/' + encodeURIComponent(gmapsQuery)
+      + (snapLat ? '/@' + snapLat.toFixed(5) + ',' + snapLng.toFixed(5) + ',17z' : '');
 
     setStatus('Found: ' + identified.name + ' · Fetching info…');
 
@@ -3854,25 +3864,28 @@ async function _processLandmarkPhoto(file) {
           }).catch(() => null)
       : Promise.resolve(null);
 
-    // Step 3 — Wikipedia: text search + optional geosearch near GPS
-    const q = encodeURIComponent(identified.wiki_query || (identified.name + ' ' + identified.location));
-    const srRes = await fetch('https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=' + q + '&format=json&origin=*&srlimit=1');
-    const srData = await srRes.json();
-    const hit = srData.query && srData.query.search && srData.query.search[0];
-
+    // Step 3 — Wikipedia (skip for pure businesses without wiki_query)
     let wTitle = identified.name, wExtract = '', wImage = null, wUrl = '', wLat = snapLat, wLng = snapLng;
-    if (hit) {
-      const pgRes = await fetch('https://en.wikipedia.org/w/api.php?action=query&pageids=' + hit.pageid + '&prop=extracts|pageimages|coordinates&exintro=1&explaintext=1&pithumbsize=500&format=json&origin=*');
-      const pgData = await pgRes.json();
-      const pg = (pgData.query && pgData.query.pages && pgData.query.pages[hit.pageid]) || {};
-      wTitle = pg.title || hit.title;
-      wExtract = (pg.extract || '').replace(/\n+/g, ' ').trim().slice(0, 900);
-      wImage = (pg.thumbnail && pg.thumbnail.source) || null;
-      wUrl = 'https://en.wikipedia.org/wiki/' + encodeURIComponent(wTitle);
-      // Use Wikipedia coordinates if available (more accurate than GPS snap)
-      const coords = pg.coordinates && pg.coordinates[0];
-      if (coords) { wLat = coords.lat; wLng = coords.lon; }
+    if (identified.wiki_query) {
+      const q = encodeURIComponent(identified.wiki_query);
+      try {
+        const srRes = await fetch('https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=' + q + '&format=json&origin=*&srlimit=1');
+        const srData = await srRes.json();
+        const hit = srData.query && srData.query.search && srData.query.search[0];
+        if (hit) {
+          const pgRes = await fetch('https://en.wikipedia.org/w/api.php?action=query&pageids=' + hit.pageid + '&prop=extracts|pageimages|coordinates&exintro=1&explaintext=1&pithumbsize=500&format=json&origin=*');
+          const pgData = await pgRes.json();
+          const pg = (pgData.query && pgData.query.pages && pgData.query.pages[hit.pageid]) || {};
+          wTitle = pg.title || hit.title;
+          wExtract = (pg.extract || '').replace(/\n+/g, ' ').trim().slice(0, 900);
+          wImage = (pg.thumbnail && pg.thumbnail.source) || null;
+          wUrl = 'https://en.wikipedia.org/wiki/' + encodeURIComponent(wTitle);
+          const coords = pg.coordinates && pg.coordinates[0];
+          if (coords) { wLat = coords.lat; wLng = coords.lon; }
+        }
+      } catch(e) {}
     }
+
 
     // Await location info
     const userLocInfo = await userLocationPromise;
@@ -3890,6 +3903,8 @@ async function _processLandmarkPhoto(file) {
       funFact: '',
       suggestion: '',
       wikiUrl: wUrl,
+      gmapsUrl: gmapsUrl,
+      isBusiness: isBusiness,
       lmLat: wLat,
       lmLng: wLng,
       userLat: snapLat,
@@ -4005,11 +4020,14 @@ function _showIdentifyCard(lm) {
     + '<div id="identifySuggestWrap" style="'+(lm.suggestion?'':'display:none;')+'background:#e8f5e9;border-left:3px solid #1a7a3a;border-radius:0 10px 10px 0;padding:9px 12px;margin-bottom:12px;">'
         + '<span style="font-size:10px;font-weight:800;color:#1a7a3a;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:3px;">💡 Do this now</span>'
         + '<span id="identifySuggest" style="font-size:13px;color:#1b5e20;line-height:1.5;font-weight:600;">'+(lm.suggestion||'')+'</span></div>'
-    // Wikipedia + speak
+    // Google Maps + Wikipedia + speak
     + '<div style="display:flex;gap:8px;margin-bottom:10px;">'
-    + (lm.wikiUrl
-        ? '<a href="'+lm.wikiUrl+'" target="_blank" rel="noopener" style="flex:1;padding:10px;text-align:center;background:#f0f7ff;border:1px solid #d0e8ff;border-radius:12px;font-size:13px;font-weight:700;color:#1a73e8;text-decoration:none;">📖 Wikipedia</a>'
+    + (lm.gmapsUrl
+        ? '<a href="'+lm.gmapsUrl+'" target="_blank" rel="noopener" style="flex:1;padding:10px;text-align:center;background:#e8f5e9;border:1px solid #a5d6a7;border-radius:12px;font-size:13px;font-weight:700;color:#1a7a3a;text-decoration:none;">🗺 Google Maps</a>'
         : '')
+    + (lm.wikiUrl && !lm.isBusiness
+        ? '<a href="'+lm.wikiUrl+'" target="_blank" rel="noopener" style="flex:1;padding:10px;text-align:center;background:#f0f7ff;border:1px solid #d0e8ff;border-radius:12px;font-size:13px;font-weight:700;color:#1a73e8;text-decoration:none;">📖 Wikipedia</a>'
+        : (lm.wikiUrl ? '<a href="'+lm.wikiUrl+'" target="_blank" rel="noopener" style="padding:10px 12px;background:#f0f7ff;border:1px solid #d0e8ff;border-radius:12px;font-size:12px;font-weight:700;color:#1a73e8;text-decoration:none;white-space:nowrap;">📖 Wiki</a>' : ''))
     + '<button onclick="_speakIdentified()" style="padding:10px 14px;background:#f5f5f5;border:none;border-radius:12px;font-size:16px;cursor:pointer;">🔊</button>'
     + '</div>'
     // Add to schedule + Passed by
