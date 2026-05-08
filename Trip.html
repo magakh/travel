@@ -3440,7 +3440,7 @@ function renderStopList() {
         </div>
         ${bookingArrivalHtml(currentDay, i)}
         ${getConflict(i) ? '<div class="conflict-banner">⚠️ Time conflict with previous stop</div>' : ''}
-        <div class="stop-name-label">${s.name}${s.reservation ? ' <span class="res-badge ' + (s.reservation.confirmed?'confirmed':'') + '">' + (s.reservation.confirmed?'✓ Booked':'⏳ Pending') + '</span>' : ''}</div>
+        <div class="stop-name-label">${s.name}${s.passedBy ? ' <span class="res-badge" style="background:#f3e5f5;border-color:#9c27b0;color:#6a1b9a;">📷 Passed by</span>' : ''}${s.reservation ? ' <span class="res-badge ' + (s.reservation.confirmed?'confirmed':'') + '">' + (s.reservation.confirmed?'✓ Booked':'⏳ Pending') + '</span>' : ''}</div>
         <div class="stop-type-label">${s.type}</div>
         <div class="stop-tags">
           ${s.prebook ? '<span class="tag-pill prebook">Pre-book</span>' : ''}
@@ -4030,11 +4030,7 @@ function _showIdentifyCard(lm) {
         : (lm.wikiUrl ? '<a href="'+lm.wikiUrl+'" target="_blank" rel="noopener" style="padding:10px 12px;background:#f0f7ff;border:1px solid #d0e8ff;border-radius:12px;font-size:12px;font-weight:700;color:#1a73e8;text-decoration:none;white-space:nowrap;">📖 Wiki</a>' : ''))
     + '<button onclick="_speakIdentified()" style="padding:10px 14px;background:#f5f5f5;border:none;border-radius:12px;font-size:16px;cursor:pointer;">🔊</button>'
     + '</div>'
-    // Add to schedule + Passed by
-    + '<div style="display:flex;gap:8px;">'
-    + '<button onclick="_addIdentifiedToSchedule()" style="flex:1;padding:12px;border-radius:12px;border:none;background:#1a1a1a;color:#fff;font-size:13px;font-weight:800;cursor:pointer;">📅 Add to schedule</button>'
-    + '<button onclick="_markPassedBy()" style="flex:1;padding:12px;border-radius:12px;border:1px solid #ddd;background:#fff;color:#555;font-size:13px;font-weight:700;cursor:pointer;">👣 Passed by</button>'
-    + '</div>'
+    // (Auto-added to schedule on identification — no buttons needed)
     + '</div>';
 
   document.body.appendChild(el);
@@ -4800,6 +4796,33 @@ async function liveWikiSearch(lat, lng, radius) {
       wikiUrl: 'https://en.wikipedia.org/wiki/' + encodeURIComponent(hit.title)
     };
     showLandmarkAlert(lmObj, -1, currentDist);
+
+    // ── Auto-add to today's schedule as a "passed by" stop ────────
+    const snapDate = new Date();
+    const snapHr = snapDate.getHours(), snapMin = snapDate.getMinutes();
+    const snapAmPm = snapHr >= 12 ? 'PM' : 'AM';
+    const snapH12 = snapHr % 12 || 12;
+    const snapTimeStr = snapH12 + ':' + String(snapMin).padStart(2,'0') + ' ' + snapAmPm;
+    if (typeof days !== 'undefined' && days && days[currentDay]) {
+      days[currentDay].stops.push({
+        name: wTitle,
+        type: identified.type || 'landmark',
+        address: locationContext || '',
+        image: wImage || null,
+        lat: wLat || snapLat || 0,
+        lng: wLng || snapLng || 0,
+        time: snapTimeStr,
+        duration: '5 min',
+        history: tldr || '',
+        wikiUrl: wUrl || '',
+        passedBy: true,
+        color: isBusiness ? '#e65100' : '#5c4db1',
+        tags: [], badges: []
+      });
+      if (typeof saveToStorage === 'function') saveToStorage();
+      if (typeof renderAll === 'function') renderAll();
+      showToast('📍 Added to Day ' + (currentDay+1) + ' · passed by at ' + snapTimeStr);
+    }
 
     // AI enrichment in background — updates card text + re-speaks with full content
     callAnthropic({
