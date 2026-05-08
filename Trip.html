@@ -4095,20 +4095,26 @@ function startLiveWalkingTour() {
 var _walkLastSearchLat = null, _walkLastSearchLng = null;
 var _walkLiveCache = new Set();
 
-async function liveWikiSearch(lat, lng) {
+async function liveWikiSearch(lat, lng, radius) {
   if (!_walkTourActive || _walkTourAlertOpen) return;
-  if (_walkLastSearchLat !== null) {
+  radius = radius || 80; // auto-trigger uses 80m, manual Next uses wider
+  if (radius <= 100 && _walkLastSearchLat !== null) {
     if (_haversineMetres(_walkLastSearchLat, _walkLastSearchLng, lat, lng) < 150) return;
   }
   _walkLastSearchLat = lat;
   _walkLastSearchLng = lng;
   try {
-    var res = await fetch('https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=' + lat + '|' + lng + '&gsradius=80&gslimit=10&format=json&origin=*');
+    var res = await fetch('https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=' + lat + '|' + lng + '&gsradius=' + radius + '&gslimit=20&format=json&origin=*');
     var data = await res.json();
+    // For auto-trigger use WALK_TRIGGER_METRES; for manual use full radius
+    var maxDist = radius > 100 ? radius : WALK_TRIGGER_METRES;
     var nearby = ((data.query && data.query.geosearch) || []).filter(function(p) {
-      return !_walkLiveCache.has(p.pageid) && _haversineMetres(lat, lng, p.lat, p.lon) <= WALK_TRIGGER_METRES;
+      return !_walkLiveCache.has(p.pageid) && _haversineMetres(lat, lng, p.lat, p.lon) <= maxDist;
     });
-    if (!nearby.length || _walkTourAlertOpen) return;
+    if (!nearby.length || _walkTourAlertOpen) {
+      if (radius > 100) showToast('No new landmarks found within ' + radius + 'm');
+      return;
+    }
     var hit = nearby[0];
     _walkLiveCache.add(hit.pageid);
 
@@ -4261,15 +4267,23 @@ function showLandmarkAlert(lm, idx, dist) {
 function dismissLandmarkAlert() {
   _walkTourAlertOpen = false;
   if (window.speechSynthesis) window.speechSynthesis.cancel();
-  var bar = document.getElementById('walkNextBar'); if (bar && _walkTourActive) bar.style.display = 'flex';
   const el = document.getElementById('walkAlert'); if (!el) return;
   clearTimeout(el._timer);
   el.style.transform = 'translateY(100%)';
   setTimeout(function() { if (el.parentNode) el.remove(); }, 380);
+  // Show next bar only if NOT immediately showing next card
+  setTimeout(function() {
+    var bar = document.getElementById('walkNextBar');
+    if (bar && _walkTourActive && !_walkTourAlertOpen) bar.style.display = 'flex';
+  }, 400);
 }
 
 async function nextLandmark() {
-  dismissLandmarkAlert();
+  // Close current card immediately without animation delay
+  _walkTourAlertOpen = false;
+  if (window.speechSynthesis) window.speechSynthesis.cancel();
+  const el = document.getElementById('walkAlert');
+  if (el) { clearTimeout(el._timer); el.remove(); }
 
   // Try magic tour landmarks first (next unvisited in sequence)
   if (_tourLandmarks && _tourLandmarks.length) {
@@ -4284,12 +4298,13 @@ async function nextLandmark() {
     }
   }
 
-  // Fallback: Wikipedia search at current GPS position
+  // Fallback: wide-radius Wikipedia search at current GPS position
   if (_currentGpsLat !== null) {
-    _walkLastSearchLat = null; // force a fresh search
-    await liveWikiSearch(_currentGpsLat, _currentGpsLng);
+    showToast('🔍 Searching for nearby landmarks…');
+    _walkLastSearchLat = null; // bypass distance throttle
+    await liveWikiSearch(_currentGpsLat, _currentGpsLng, 600); // 600m radius for manual Next
   } else {
-    showToast('No more landmarks found nearby');
+    showToast('No GPS position yet — walk a few steps and try again');
   }
 }
 
