@@ -3889,6 +3889,13 @@ function renderTourCards(tour, fromStop, toStop, afterIdx, dayIdx, beforeIdx) {
   cardsEl.innerHTML = html;
   _tourLandmarks = landmarks;
 
+  // Add Start Live Tour button
+  const btnWrap = document.createElement('div');
+  btnWrap.style.cssText = 'padding:0 0 20px;';
+  btnWrap.innerHTML = '<button id="startWalkBtn" onclick="startLiveWalkingTour()" style="width:100%;padding:14px;border-radius:14px;border:none;background:#1a7a3a;color:#fff;font-size:15px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">&#x1F6B6; Start live walking tour</button>'
+    + '<p style="font-size:11px;color:#aaa;text-align:center;margin:6px 0 0;">Uses GPS · notifies you when approaching each landmark</p>';
+  cardsEl.appendChild(btnWrap);
+
   // Scroll-to-highlight: when a card enters view, highlight its marker on the map
   if ('IntersectionObserver' in window) {
     var io = new IntersectionObserver(function(entries) {
@@ -3957,6 +3964,112 @@ async function drawTourRoute(tour, fromStop, toStop) {
   if(_tourRouteLayer) _suggestMap.fitBounds(_tourRouteLayer.getBounds(),{padding:[30,30]});
 }
 
+// ── LIVE WALKING TOUR ─────────────────────────────────────────────
+let _walkTourActive = false;
+let _walkTourWatchId = null;
+let _walkTourVisited = new Set();
+let _walkTourAlertOpen = false;
+const WALK_TRIGGER_METRES = 50;
+
+function startLiveWalkingTour() {
+  if (!('geolocation' in navigator)) { showToast('GPS not available on this device', true); return; }
+  if (!_tourLandmarks || !_tourLandmarks.length) { showToast('Run the magic tour first', true); return; }
+
+  const btn = document.getElementById('startWalkBtn');
+  if (_walkTourActive) {
+    stopLiveWalkingTour();
+    if (btn) { btn.innerHTML = '&#x1F6B6; Start live walking tour'; btn.style.background = '#1a7a3a'; }
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(function() {
+    _walkTourActive = true;
+    _walkTourVisited = new Set();
+    _walkTourAlertOpen = false;
+    if (btn) { btn.innerHTML = '&#x23F9; Stop live tour'; btn.style.background = '#c0392b'; }
+    showToast('&#x1F6B6; Live tour started — walk towards your landmarks!');
+    _walkTourWatchId = navigator.geolocation.watchPosition(
+      function(pos) { checkNearbyLandmarks(pos.coords.latitude, pos.coords.longitude); },
+      function(err) { console.warn('GPS:', err); },
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+    );
+  }, function() { showToast('Location permission denied — enable in browser settings', true); },
+  { enableHighAccuracy: true, timeout: 8000 });
+}
+
+function stopLiveWalkingTour() {
+  _walkTourActive = false;
+  if (_walkTourWatchId !== null) { navigator.geolocation.clearWatch(_walkTourWatchId); _walkTourWatchId = null; }
+  const el = document.getElementById('walkAlert');
+  if (el) el.remove();
+}
+
+function checkNearbyLandmarks(lat, lng) {
+  if (!_walkTourActive || _walkTourAlertOpen) return;
+  for (let i = 0; i < _tourLandmarks.length; i++) {
+    if (_walkTourVisited.has(i)) continue;
+    const lm = _tourLandmarks[i];
+    const dist = _haversineMetres(lat, lng, lm.lat, lm.lng);
+    if (dist <= WALK_TRIGGER_METRES) {
+      _walkTourVisited.add(i);
+      showLandmarkAlert(lm, i, dist);
+      break;
+    }
+  }
+}
+
+function showLandmarkAlert(lm, idx, dist) {
+  _walkTourAlertOpen = true;
+  const old = document.getElementById('walkAlert'); if (old) old.remove();
+
+  const el = document.createElement('div');
+  el.id = 'walkAlert';
+  el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:30000;background:#fff;border-radius:20px 20px 0 0;box-shadow:0 -4px 30px rgba(0,0,0,0.3);max-height:80vh;overflow-y:auto;transform:translateY(100%);transition:transform 0.35s ease;';
+
+  const distLabel = dist < 1000 ? Math.round(dist) + 'm away' : (dist/1000).toFixed(1) + 'km';
+  const imgHtml = lm.image
+    ? '<div style="height:220px;overflow:hidden;border-radius:20px 20px 0 0;"><img src="'+lm.image+'" style="width:100%;height:100%;object-fit:contain;object-position:top;background:#f0f0f0;display:block;"></div>'
+    : '';
+
+  el.innerHTML = imgHtml
+    + '<div style="padding:16px 18px 36px;">'
+    + '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:10px;">'
+    + '<div><div style="font-size:11px;font-weight:700;color:#1a7a3a;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">&#x1F4CD; '+distLabel+' · Landmark '+(idx+1)+'</div>'
+    + '<div style="font-size:17px;font-weight:900;line-height:1.2;">'+lm.name+'</div></div>'
+    + '<button onclick="dismissLandmarkAlert()" style="background:#f0f0f0;border:none;border-radius:20px;padding:5px 12px;font-size:13px;font-weight:700;cursor:pointer;flex-shrink:0;">&#x2715; Done</button>'
+    + '</div>'
+    + '<p style="font-size:14px;color:#333;line-height:1.6;margin:0 0 14px;">'+(lm.tldr||'')+'</p>'
+    + '<div style="display:flex;gap:10px;">'
+    + '<a href="'+lm.wikiUrl+'" target="_blank" style="flex:1;padding:11px;text-align:center;background:#f0f7ff;border:1px solid #d0e8ff;border-radius:12px;font-size:13px;font-weight:700;color:#1a73e8;text-decoration:none;">&#x1F4D6; Read on Wikipedia</a>'
+    + '<button onclick="speakTourLandmark('+idx+')" style="padding:11px 16px;background:#f5f5f5;border:none;border-radius:12px;font-size:18px;cursor:pointer;">&#x1F50A;</button>'
+    + '</div></div>';
+
+  document.body.appendChild(el);
+  requestAnimationFrame(function() { requestAnimationFrame(function() { el.style.transform = 'translateY(0)'; }); });
+
+  // Auto-read aloud
+  if (lm.tldr && window.speechSynthesis) {
+    window.speechSynthesis.cancel();
+    const utt = new SpeechSynthesisUtterance('Landmark ahead: ' + lm.name + '. ' + lm.tldr);
+    utt.lang = 'en-GB'; utt.rate = 0.95;
+    window.speechSynthesis.speak(utt);
+  }
+
+  // Auto-dismiss after 45s
+  const t = setTimeout(dismissLandmarkAlert, 45000);
+  el._timer = t;
+
+  // Highlight on map
+  highlightTourMarker(idx);
+}
+
+function dismissLandmarkAlert() {
+  _walkTourAlertOpen = false;
+  const el = document.getElementById('walkAlert'); if (!el) return;
+  clearTimeout(el._timer);
+  el.style.transform = 'translateY(100%)';
+  setTimeout(function() { if (el.parentNode) el.remove(); }, 380);
+}
 
 const _reminderTimers = [];
 
