@@ -4607,8 +4607,12 @@ function speakTourLandmark(idx) {
   var lm = (idx >= 0 && _tourLandmarks[idx]) ? _tourLandmarks[idx] : _activeLandmark;
   if (!lm) return;
   if (window.speechSynthesis && window.speechSynthesis.speaking) { window.speechSynthesis.cancel(); return; }
-  var text = lm.name + '. ' + (lm.tldr || '') + '. ' + (lm.extract || '');
-  var utt = new SpeechSynthesisUtterance(text.slice(0, 1000));
+  // Read: name → TL;DR → fun fact → rest of Wikipedia extract
+  var text = lm.name + '. '
+    + (lm.tldr || '')
+    + (lm.funFact ? ' Fun fact: ' + lm.funFact + '.' : '')
+    + (lm.extract ? ' ' + lm.extract : '');
+  var utt = new SpeechSynthesisUtterance(text.slice(0, 1400));
   utt.lang = 'en-GB'; utt.rate = 0.95;
   window.speechSynthesis && window.speechSynthesis.speak(utt);
   showToast('Reading ' + lm.name + '...');
@@ -4828,7 +4832,17 @@ async function liveWikiSearch(lat, lng, radius) {
     var page = (extData.query && extData.query.pages && extData.query.pages[hit.pageid]) || {};
     var extract = (page.extract || '').replace(/\n+/g, ' ').trim().slice(0, 800);
     var image = (page.thumbnail && page.thumbnail.source) || null;
-    var tldr = extract ? extract.split(/[.!?]/)[0] + '.' : hit.title;
+    // Build richer initial content from Wikipedia without waiting for AI
+    // TL;DR: first 2-3 sentences (not just one)
+    var sentences = extract.match(/[^.!?]+[.!?]+\s*/g) || [];
+    var tldr = sentences.slice(0, 3).join('').trim() || hit.title;
+
+    // Fun fact: find a sentence with a number, date, or superlative from the extract
+    var funFact = '';
+    var factSentence = sentences.find(function(s, i) {
+      return i > 0 && /\d{3,}|\b(first|oldest|largest|tallest|biggest|only|famous|unique|secret|hidden|rare|never|original|ancient|survived|destroyed|rebuilt|designed by|built in|opened in|stands|measures|weighing)\b/i.test(s);
+    });
+    if (factSentence) funFact = factSentence.trim();
 
     // Re-verify: if we have bearing, abort if already passed during API calls
     if (_currentGpsLat !== null && hasBearing) {
@@ -4840,7 +4854,7 @@ async function liveWikiSearch(lat, lng, radius) {
     var currentDist = _haversineMetres(_currentGpsLat || lat, _currentGpsLng || lng, hit.lat, hit.lon);
     var lmObj = {
       name: hit.title, lat: hit.lat, lng: hit.lon,
-      image: image, extract: extract, tldr: tldr, funFact: '',
+      image: image, extract: extract, tldr: tldr, funFact: funFact,
       address: lmAddressFromGuard,
       wikiUrl: 'https://en.wikipedia.org/wiki/' + encodeURIComponent(hit.title)
     };
@@ -5136,6 +5150,13 @@ function showLandmarkAlert(lm, idx, dist) {
         + '<span style="font-size:10px;font-weight:800;color:#b45309;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">⭐ Fun fact</span>'
         + '<span id="walkAlertFact" style="font-size:13px;color:#444;line-height:1.5;">'+(lm.funFact||'')+'</span>'
         + '</div>'
+    // Expandable full Wikipedia extract
+    + (lm.extract && lm.extract.length > 100
+        ? '<details style="margin-bottom:12px;">'
+          + '<summary style="font-size:12px;font-weight:700;color:#1a73e8;cursor:pointer;list-style:none;display:flex;align-items:center;gap:4px;">📖 Full Wikipedia extract <span style="color:#999;font-weight:400;">(tap to expand)</span></summary>'
+          + '<p style="font-size:13px;color:#555;line-height:1.6;margin-top:8px;padding:10px;background:#f8f9fa;border-radius:8px;">'+(lm.extract||'')+'</p>'
+          + '</details>'
+        : '')
     + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">'
     + '<a href="'+lm.wikiUrl+'" target="_blank" rel="noopener" style="font-size:13px;font-weight:700;color:#1a73e8;text-decoration:none;">📖 Continue reading on Wikipedia →</a>'
     + '<button onclick="speakTourLandmark('+idx+')" style="padding:8px 12px;background:#f5f5f5;border:none;border-radius:10px;font-size:16px;cursor:pointer;">🔊</button>'
