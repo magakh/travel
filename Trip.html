@@ -3733,7 +3733,7 @@ async function buildGuidedTour(fromStop, toStop, tolerance) {
   var seenIds = new Set(), candidates = [];
   await Promise.all(samplePts.map(async function(pt) {
     try {
-      var res = await fetch('https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord='+pt.lat+'|'+pt.lng+'&gsradius='+Math.round(searchRadius)+'&gslimit=20&format=json&origin=*');
+      var res = await fetch('https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord='+pt.lat+'|'+pt.lng+'&gsradius='+Math.round(searchRadius)+'&gslimit=50&format=json&origin=*');
       var data = await res.json();
       ((data.query&&data.query.geosearch)||[]).forEach(function(p) {
         if (!seenIds.has(p.pageid)) { seenIds.add(p.pageid); candidates.push({pageid:p.pageid,name:p.title,lat:p.lat,lng:p.lon}); }
@@ -3763,11 +3763,11 @@ async function buildGuidedTour(fromStop, toStop, tolerance) {
   var deduped = dedupByProximity(filtered, 120);
 
   // 2. Spread evenly: at most 2 per ~400m segment along route
-  var maxPerSeg = tolerance <= 0.1 ? 1 : tolerance <= 0.35 ? 2 : 3;
+  var maxPerSeg = tolerance <= 0.1 ? 2 : tolerance <= 0.35 ? 4 : 6;
   var spread = spreadAlongRoute(fromStop, deduped, toStop, maxPerSeg);
 
   // 3. Nearest-neighbor ordering (no zigzag)
-  var selected = nearestNeighborOrder(fromStop, spread.slice(0, 25), toStop);
+  var selected = nearestNeighborOrder(fromStop, spread.slice(0, 50), toStop);
 
   // Fetch extracts + large thumbnails
   var selIds = selected.map(function(c){return c.pageid;}).join('|');
