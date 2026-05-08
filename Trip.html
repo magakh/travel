@@ -3875,7 +3875,9 @@ async function _processLandmarkPhoto(file) {
             if (factWrap) factWrap.style.display = '';
             if (window._identifiedLandmark) window._identifiedLandmark.funFact = parsed.funFact;
           }
-        } catch(e) {}
+          // Re-speak with full enriched content
+          _speakIdentified();
+        } catch(e) { console.warn('Identify AI update:', e); }
       }).catch(function(){});
     }
 
@@ -3916,9 +3918,12 @@ function _showIdentifyCard(lm) {
   window._identifiedLandmark = lm;
   requestAnimationFrame(() => requestAnimationFrame(() => {
     el.style.transform = 'translateY(0)';
-    // Auto-speak name + description when card slides in
-    setTimeout(_speakIdentified, 650);
   }));
+  // Auto-speak after slide-in — wrapped in user-gesture-safe way
+  el.addEventListener('transitionend', function onSlide() {
+    el.removeEventListener('transitionend', onSlide);
+    _speakIdentified();
+  }, { once: true });
 }
 
 function _speakIdentified() {
@@ -4509,7 +4514,7 @@ async function liveWikiSearch(lat, lng, radius) {
         }
         var rp = getLandmarkRelativePos(lat, lng, p.lat, p.lon);
         if (rp.metersAhead < 0) return false;   // already passed
-        if (rp.metersCross > 22) return false;  // more than ~1.5 street widths off path
+        if (rp.metersCross > 15) return false;  // must be within ~1 street width to be visually findable
       }
       return true;
     });
@@ -4600,8 +4605,9 @@ async function liveWikiSearch(lat, lng, radius) {
           lmObj.funFact = parsed.funFact;
           if (factWrap) factWrap.style.display = '';
         }
-        // Re-speak with enriched content if nothing is currently playing
-        if (window.speechSynthesis && !window.speechSynthesis.speaking) {
+        // Re-speak enriched content (replace initial bare Wikipedia sentence)
+        if (window.speechSynthesis) {
+          window.speechSynthesis.cancel();
           var addr = lmObj.address ? 'at ' + lmObj.address + '. ' : '';
           var full = lmObj.name + '. ' + addr + (lmObj.tldr || '') + (lmObj.funFact ? ' Fun fact: ' + lmObj.funFact : '');
           var utt = new SpeechSynthesisUtterance(full.slice(0, 1200));
@@ -4743,6 +4749,7 @@ function showLandmarkAlert(lm, idx, dist) {
   const old = document.getElementById('walkAlert');
   if (old) {
     clearTimeout(old._timer);
+    if (old._approachInterval) clearInterval(old._approachInterval);
     if (_walkAlertMap) { try { _walkAlertMap.remove(); } catch(e) {} _walkAlertMap = null; }
     old.remove();
   }
