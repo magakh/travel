@@ -4166,10 +4166,10 @@ function showLandmarkAlert(lm, idx, dist) {
 
   const distLabel = dist >= 0 ? (dist < 1000 ? Math.round(dist) + 'm' : (dist/1000).toFixed(1) + 'km') : '';
   const idxLabel = idx >= 0 ? '#' + (idx+1) : '';
-  // Use small thumbnail for fast loading (displayed small anyway)
-  const imgSrc = lm.image ? lm.image.replace(/\/\d+px-/, '/300px-') : null;
+  // Use 400px thumbnail for decent quality without huge file size
+  const imgSrc = lm.image ? lm.image.replace(/\/\d+px-/, '/400px-') : null;
   const imgHtml = imgSrc
-    ? '<div style="height:180px;overflow:hidden;border-radius:20px 20px 0 0;background:#f0f0f0;"><img src="'+imgSrc+'" style="width:100%;height:100%;object-fit:cover;object-position:top;display:block;" loading="eager"></div>'
+    ? '<div style="border-radius:20px 20px 0 0;overflow:hidden;background:#f0f0f0;"><img src="'+imgSrc+'" style="width:100%;height:auto;display:block;max-height:300px;object-fit:contain;" loading="eager"></div>'
     : '';
 
   el.innerHTML = imgHtml
