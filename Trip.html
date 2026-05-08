@@ -4211,18 +4211,29 @@ async function liveWikiSearch(lat, lng, radius) {
     var extRes = await fetch('https://en.wikipedia.org/w/api.php?action=query&pageids=' + hit.pageid + '&prop=extracts|pageimages&exintro=1&explaintext=1&pithumbsize=400&format=json&origin=*');
     var extData = await extRes.json();
     var page = (extData.query && extData.query.pages && extData.query.pages[hit.pageid]) || {};
-    var extract = (page.extract || '').replace(/\n+/g, ' ').trim().slice(0, 600);
+    var extract = (page.extract || '').replace(/\n+/g, ' ').trim().slice(0, 800);
     var image = (page.thumbnail && page.thumbnail.source) || null;
 
     var tldr = extract ? extract.split(/[.!?]/)[0] + '.' : hit.title;
+    var funFact = '';
     try {
-      var aiText = await callAnthropic({ prompt: 'Write ONE punchy hook sentence about "' + hit.title + '" that makes a tourist stop and look. Specific, surprising, vivid. Just the sentence, no quotes.', maxTokens: 80 });
-      if (aiText && aiText.trim()) tldr = aiText.trim();
+      var aiText = await callAnthropic({
+        prompt: 'Return ONLY valid JSON, no markdown, no explanation:\n{"tldr":"2-3 vivid specific sentences a tourist walking past right now would love — paint a picture, be surprising","funFact":"one unexpected little-known fact about this place — keep it to one sentence"}\n\nAbout: "' + hit.title + '"\nContext: ' + extract.slice(0, 600),
+        maxTokens: 250
+      });
+      if (aiText && aiText.trim()) {
+        try {
+          var clean = aiText.trim().replace(/^```json|^```|```$/g, '').trim();
+          var parsed = JSON.parse(clean);
+          if (parsed.tldr) tldr = parsed.tldr;
+          if (parsed.funFact) funFact = parsed.funFact;
+        } catch(e) { tldr = aiText.trim(); }
+      }
     } catch(e) {}
 
     showLandmarkAlert({
       name: hit.title, lat: hit.lat, lng: hit.lon,
-      image: image, extract: extract, tldr: tldr,
+      image: image, extract: extract, tldr: tldr, funFact: funFact,
       wikiUrl: 'https://en.wikipedia.org/wiki/' + encodeURIComponent(hit.title)
     }, -1, _haversineMetres(lat, lng, hit.lat, hit.lon));
   } catch(e) {}
@@ -4404,11 +4415,15 @@ function showLandmarkAlert(lm, idx, dist) {
     + '<div style="font-size:10px;font-weight:700;color:#1a7a3a;text-transform:uppercase;letter-spacing:0.5px;">Landmark' + (idxLabel?' '+idxLabel:'') + (distDirectionLabel?' · '+distDirectionLabel:'') + '</div>'
     + '<button onclick="dismissLandmarkAlert()" style="background:#f0f0f0;border:none;border-radius:20px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;">✕</button>'
     + '</div>'
-    + '<div style="font-size:18px;font-weight:900;line-height:1.2;margin-bottom:6px;">'+lm.name+'</div>'
-    + '<p style="font-size:14px;color:#444;line-height:1.5;margin:0 0 14px;">'+(lm.tldr||'')+'</p>'
-    + '<div style="display:flex;gap:8px;margin-bottom:10px;">'
-    + '<a href="'+lm.wikiUrl+'" target="_blank" rel="noopener" style="flex:1;padding:10px;text-align:center;background:#f0f7ff;border:1px solid #d0e8ff;border-radius:12px;font-size:13px;font-weight:700;color:#1a73e8;text-decoration:none;">📖 Wikipedia</a>'
-    + '<button onclick="speakTourLandmark('+idx+')" style="padding:10px 14px;background:#f5f5f5;border:none;border-radius:12px;font-size:18px;cursor:pointer;">🔊</button>'
+    + '<div style="font-size:18px;font-weight:900;line-height:1.2;margin-bottom:8px;">'+lm.name+'</div>'
+    + '<p style="font-size:14px;color:#333;line-height:1.6;margin:0 0 12px;">'+(lm.tldr||'')+'</p>'
+    + (lm.funFact ? '<div style="background:#fffbeb;border-left:3px solid #f59e0b;border-radius:0 10px 10px 0;padding:10px 12px;margin-bottom:14px;">'
+        + '<span style="font-size:10px;font-weight:800;color:#b45309;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">⭐ Fun fact</span>'
+        + '<span style="font-size:13px;color:#444;line-height:1.5;">'+lm.funFact+'</span>'
+        + '</div>' : '<div style="margin-bottom:14px;"></div>')
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">'
+    + '<a href="'+lm.wikiUrl+'" target="_blank" rel="noopener" style="font-size:13px;font-weight:700;color:#1a73e8;text-decoration:none;">📖 Continue reading on Wikipedia →</a>'
+    + '<button onclick="speakTourLandmark('+idx+')" style="padding:8px 12px;background:#f5f5f5;border:none;border-radius:10px;font-size:16px;cursor:pointer;">🔊</button>'
     + '</div>'
     + '<button onclick="nextLandmark()" style="width:100%;padding:12px;border-radius:12px;border:none;background:#1a1a1a;color:#fff;font-size:14px;font-weight:800;cursor:pointer;">Next landmark ➡</button>'
     + '</div>';
@@ -4481,7 +4496,8 @@ function showLandmarkAlert(lm, idx, dist) {
       window.speechSynthesis.cancel();
       const sideText = side ? 'on your ' + side.toLowerCase() : '';
       const addrText = addr ? 'Located at ' + addr + (sideText ? ', ' + sideText : '') + '. ' : (sideText ? sideText + '. ' : '');
-      const text = lm.name + '. ' + addrText + (lm.tldr || '');
+      const factText = lm.funFact ? ' Fun fact: ' + lm.funFact : '';
+      const text = lm.name + '. ' + addrText + (lm.tldr || '') + factText;
       const utt = new SpeechSynthesisUtterance(text.slice(0, 1000));
       utt.lang = 'en-GB'; utt.rate = 0.95;
       window.speechSynthesis.speak(utt);
