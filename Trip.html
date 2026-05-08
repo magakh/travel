@@ -3984,13 +3984,17 @@ function highlightTourMarker(idx) {
 
 function panToTourMarker(idx) { highlightTourMarker(idx); }
 
+let _activeLandmark = null; // currently displayed landmark in the alert card
+
 function speakTourLandmark(idx) {
-  var lm = _tourLandmarks[idx]; if(!lm) return;
+  var lm = (idx >= 0 && _tourLandmarks[idx]) ? _tourLandmarks[idx] : _activeLandmark;
+  if (!lm) return;
   if (window.speechSynthesis && window.speechSynthesis.speaking) { window.speechSynthesis.cancel(); return; }
-  var utt = new SpeechSynthesisUtterance((lm.name+'. '+(lm.extract||lm.tldr||'')).slice(0,1000));
-  utt.lang='en-GB'; utt.rate=0.95;
+  var text = lm.name + '. ' + (lm.tldr || '') + '. ' + (lm.extract || '');
+  var utt = new SpeechSynthesisUtterance(text.slice(0, 1000));
+  utt.lang = 'en-GB'; utt.rate = 0.95;
   window.speechSynthesis && window.speechSynthesis.speak(utt);
-  showToast('Reading '+lm.name+'...');
+  showToast('Reading ' + lm.name + '...');
 }
 
 async function drawTourRoute(tour, fromStop, toStop) {
@@ -4149,44 +4153,53 @@ let _currentGpsLat = null, _currentGpsLng = null;
 
 function showLandmarkAlert(lm, idx, dist) {
   _walkTourAlertOpen = true;
-  const old = document.getElementById('walkAlert'); if (old) old.remove();
+  _activeLandmark = lm;
+  const old = document.getElementById('walkAlert'); if (old) { clearTimeout(old._timer); old.remove(); }
 
   const el = document.createElement('div');
   el.id = 'walkAlert';
-  el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:30000;background:#fff;border-radius:20px 20px 0 0;box-shadow:0 -4px 30px rgba(0,0,0,0.3);max-height:80vh;overflow-y:auto;transform:translateY(100%);transition:transform 0.35s ease;';
+  el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:30000;background:#fff;border-radius:20px 20px 0 0;box-shadow:0 -4px 30px rgba(0,0,0,0.3);max-height:75vh;overflow-y:auto;transform:translateY(100%);transition:transform 0.35s ease;';
 
-  const distLabel = dist >= 0 ? (dist < 1000 ? Math.round(dist) + 'm away' : (dist/1000).toFixed(1) + 'km') : 'nearby';
-  const idxLabel = idx >= 0 ? 'Landmark ' + (idx+1) : 'Landmark';
-  const imgHtml = lm.image
-    ? '<div style="height:220px;overflow:hidden;border-radius:20px 20px 0 0;"><img src="'+lm.image+'" style="width:100%;height:100%;object-fit:contain;object-position:top;background:#f0f0f0;display:block;"></div>'
+  const distLabel = dist >= 0 ? (dist < 1000 ? Math.round(dist) + 'm' : (dist/1000).toFixed(1) + 'km') : '';
+  const idxLabel = idx >= 0 ? '#' + (idx+1) : '';
+  // Use small thumbnail for fast loading (displayed small anyway)
+  const imgSrc = lm.image ? lm.image.replace(/\/\d+px-/, '/300px-') : null;
+  const imgHtml = imgSrc
+    ? '<div style="height:180px;overflow:hidden;border-radius:20px 20px 0 0;background:#f0f0f0;"><img src="'+imgSrc+'" style="width:100%;height:100%;object-fit:cover;object-position:top;display:block;" loading="eager"></div>'
     : '';
 
   el.innerHTML = imgHtml
-    + '<div style="padding:16px 18px 32px;">'
-    + '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:10px;">'
-    + '<div><div style="font-size:11px;font-weight:700;color:#1a7a3a;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:3px;">&#x1F4CD; '+distLabel+' · '+idxLabel+'</div>'
-    + '<div style="font-size:17px;font-weight:900;line-height:1.2;">'+lm.name+'</div></div>'
-    + '<button onclick="dismissLandmarkAlert()" style="background:#f0f0f0;border:none;border-radius:20px;padding:5px 12px;font-size:13px;font-weight:700;cursor:pointer;flex-shrink:0;">&#x2715;</button>'
+    + '<div style="padding:14px 16px 28px;">'
+    // Header row: badge + dismiss
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'
+    + '<div style="font-size:10px;font-weight:700;color:#1a7a3a;text-transform:uppercase;letter-spacing:0.5px;">&#x1F4CD; Landmark' + (idxLabel?' '+idxLabel:'') + (distLabel?' · '+distLabel:'') + '</div>'
+    + '<button onclick="dismissLandmarkAlert()" style="background:#f0f0f0;border:none;border-radius:20px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;">&#x2715;</button>'
     + '</div>'
-    + '<p style="font-size:14px;color:#333;line-height:1.6;margin:0 0 14px;">'+(lm.tldr||'')+'</p>'
+    // Name
+    + '<div style="font-size:18px;font-weight:900;line-height:1.2;margin-bottom:6px;">'+lm.name+'</div>'
+    // TL;DR right under name
+    + '<p style="font-size:14px;color:#444;line-height:1.5;margin:0 0 14px;">'+(lm.tldr||'')+'</p>'
+    // Action buttons
     + '<div style="display:flex;gap:8px;margin-bottom:10px;">'
-    + '<a href="'+lm.wikiUrl+'" target="_blank" style="flex:1;padding:10px;text-align:center;background:#f0f7ff;border:1px solid #d0e8ff;border-radius:12px;font-size:13px;font-weight:700;color:#1a73e8;text-decoration:none;">&#x1F4D6; Wikipedia</a>'
-    + '<button onclick="speakTourLandmark('+idx+')" style="padding:10px 14px;background:#f5f5f5;border:none;border-radius:12px;font-size:18px;cursor:pointer;">&#x1F50A;</button>'
+    + '<a href="'+lm.wikiUrl+'" target="_blank" rel="noopener" style="flex:1;padding:10px;text-align:center;background:#f0f7ff;border:1px solid #d0e8ff;border-radius:12px;font-size:13px;font-weight:700;color:#1a73e8;text-decoration:none;">&#x1F4D6; Wikipedia</a>'
+    + '<button onclick="speakTourLandmark('+idx+')" style="padding:10px 14px;background:#f5f5f5;border:none;border-radius:12px;font-size:18px;cursor:pointer;" title="Read aloud">&#x1F50A;</button>'
     + '</div>'
+    // Next button
     + '<button onclick="nextLandmark()" style="width:100%;padding:12px;border-radius:12px;border:none;background:#1a1a1a;color:#fff;font-size:14px;font-weight:800;cursor:pointer;">Next landmark &#x27A1;</button>'
     + '</div>';
 
   document.body.appendChild(el);
   requestAnimationFrame(function() { requestAnimationFrame(function() { el.style.transform = 'translateY(0)'; }); });
 
+  // Auto-read TL;DR
   if (lm.tldr && window.speechSynthesis) {
     window.speechSynthesis.cancel();
-    const utt = new SpeechSynthesisUtterance('Landmark: ' + lm.name + '. ' + lm.tldr);
+    const utt = new SpeechSynthesisUtterance(lm.name + '. ' + lm.tldr);
     utt.lang = 'en-GB'; utt.rate = 0.95;
     window.speechSynthesis.speak(utt);
   }
 
-  const t = setTimeout(function() { dismissLandmarkAlert(); nextLandmark(); }, 60000);
+  const t = setTimeout(function() { dismissLandmarkAlert(); }, 60000);
   el._timer = t;
   if (idx >= 0) highlightTourMarker(idx);
 }
@@ -4319,6 +4332,7 @@ function showFeatureTour() {
     { icon:'✨', title:'Fill the gaps', desc:'Tap "Add here" between two stops — AI suggests places actually on your route.' },
     { icon:'🔍', title:'Find any place', desc:'Search by name or describe what you want ("hidden café near Soho") and AI finds it.' },
     { icon:'🔊', title:'Read & listen', desc:'Tap any stop to read its history, facts and tips. Hit 🔊 to have it read aloud.' },
+    { icon:'🚶', title:'Live walking guide', desc:'Tap 🚶 in the header to start — landmarks pop up automatically as you approach them. Tap "Next →" to advance manually or if you\'ve passed one.' },
   ];
 
   const features = [
