@@ -3830,7 +3830,7 @@ async function _processLandmarkPhoto(file) {
 
     if (!identified.name) {
       ov.remove();
-      showToast("Couldn\'t identify — try a clearer photo of the landmark", true);
+      showToast("Could not identify — try a clearer photo of the landmark", true);
       return;
     }
 
@@ -3860,8 +3860,7 @@ async function _processLandmarkPhoto(file) {
       const pgData = await pgRes.json();
       const pg = (pgData.query && pgData.query.pages && pgData.query.pages[hit.pageid]) || {};
       wTitle = pg.title || hit.title;
-      wExtract = (pg.extract || '').replace(/
-+/g, ' ').trim().slice(0, 900);
+      wExtract = (pg.extract || '').replace(/\n+/g, ' ').trim().slice(0, 900);
       wImage = (pg.thumbnail && pg.thumbnail.source) || null;
       wUrl = 'https://en.wikipedia.org/wiki/' + encodeURIComponent(wTitle);
       // Use Wikipedia coordinates if available (more accurate than GPS snap)
@@ -4000,7 +3999,6 @@ function _speakIdentified() {
   const utt = new SpeechSynthesisUtterance(text.slice(0, 1800));
   utt.lang = 'en-GB'; utt.rate = 0.95;
   window.speechSynthesis.speak(utt);
-}eechSynthesis.speak(utt);
 }
 
 // end photo identify
