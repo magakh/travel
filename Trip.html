@@ -6051,31 +6051,58 @@ async function checkInHere() {
     else if (a.bar || a.pub) placeType = 'Bar';
   } catch(e) {}
   if (!placeName) placeName = lat.toFixed(4) + ', ' + lng.toFixed(4);
-  const now = new Date();
-  const h = now.getHours(), m = now.getMinutes();
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  const timeStr = (h % 12 || 12) + ':' + String(m).padStart(2,'0') + ' ' + ampm;
-  const nowMins = h * 60 + m;
-  const stop = {
-    name: placeName, type: placeType, address: '', note: '',
-    time: timeStr, duration: '1 min', lat, lng,
-    isUserAdded: true, fixedTime: true, checkIn: true,
-    color: '#e67e22', tags: [], badges: []
+
+  // Show confirmation sheet
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:99999;display:flex;align-items:flex-end;justify-content:center;';
+  ov.innerHTML = `
+    <div style="background:#1e1e1e;border-radius:20px 20px 0 0;padding:24px;width:100%;max-width:480px;">
+      <div style="font-size:11px;font-weight:700;color:#e67e22;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">📍 Check-in at</div>
+      <div style="font-size:12px;color:#888;margin-bottom:12px;">Edit the name if needed</div>
+      <input id="checkinName" value="${placeName.replace(/"/g,'&quot;')}"
+        style="width:100%;padding:12px 14px;border:1px solid #555;border-radius:10px;background:#111;color:#fff;font-size:15px;font-weight:700;box-sizing:border-box;margin-bottom:6px;">
+      <div style="font-size:11px;color:#666;margin-bottom:18px;">📌 ${lat.toFixed(5)}, ${lng.toFixed(5)} · ${placeType}</div>
+      <div style="display:flex;gap:10px;">
+        <button onclick="this.closest('div[style*=fixed]').remove()" style="flex:1;padding:13px;border-radius:12px;border:none;background:#2a2a2a;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">Cancel</button>
+        <button id="checkinConfirm" style="flex:2;padding:13px;border-radius:12px;border:none;background:#e67e22;color:#fff;font-size:14px;font-weight:800;cursor:pointer;">📍 Add to schedule</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+  ov.onclick = e => { if (e.target === ov) ov.remove(); };
+
+  const input = document.getElementById('checkinName');
+  input.focus(); input.select();
+
+  document.getElementById('checkinConfirm').onclick = () => {
+    const confirmedName = input.value.trim() || placeName;
+    ov.remove();
+
+    const now = new Date();
+    const h = now.getHours(), m = now.getMinutes();
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    const timeStr = (h % 12 || 12) + ':' + String(m).padStart(2,'0') + ' ' + ampm;
+    const nowMins = h * 60 + m;
+    const stop = {
+      name: confirmedName, type: placeType, address: '', note: '',
+      time: timeStr, duration: '1 min', lat, lng,
+      isUserAdded: true, fixedTime: true, checkIn: true,
+      color: '#e67e22', tags: [], badges: []
+    };
+    const targetDay = days[currentDay];
+    if (!targetDay) return;
+    let insertAt = targetDay.stops.length;
+    for (let i = 0; i < targetDay.stops.length; i++) {
+      const [stp, sap] = (targetDay.stops[i].time || '').split(' ');
+      const [sh, sm2] = (stp||'0:0').split(':').map(Number);
+      const sMins = (sap==='PM' ? (sh===12?12:sh+12) : (sh===12?0:sh)) * 60 + (sm2||0);
+      if (sMins > nowMins) { insertAt = i; break; }
+    }
+    targetDay.stops.splice(insertAt, 0, stop);
+    saveToStorage();
+    cloudSave('check-in: ' + confirmedName);
+    renderAll();
+    showToast('📍 Added: ' + confirmedName);
   };
-  const targetDay = days[currentDay];
-  if (!targetDay) return;
-  let insertAt = targetDay.stops.length;
-  for (let i = 0; i < targetDay.stops.length; i++) {
-    const [stp, sap] = (targetDay.stops[i].time || '').split(' ');
-    const [sh, sm2] = (stp||'0:0').split(':').map(Number);
-    const sMins = (sap==='PM' ? (sh===12?12:sh+12) : (sh===12?0:sh)) * 60 + (sm2||0);
-    if (sMins > nowMins) { insertAt = i; break; }
-  }
-  targetDay.stops.splice(insertAt, 0, stop);
-  saveToStorage();
-  cloudSave('check-in: ' + placeName);
-  renderAll();
-  showToast('📍 Checked in: ' + placeName);
 }
 
 function showFeatureTour() {
