@@ -848,13 +848,13 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
   font-size: 12px; color: #7a5000; font-weight: 500;
 }
 .action-bar {
-  display: flex; gap: 8px; padding: 10px 16px; border-bottom: 1px solid var(--border);
-  background: #fafaf8;
+  display: flex; gap: 6px; padding: 6px 12px; border-bottom: 1px solid var(--border);
+  background: #fafaf8; position: sticky; top: 0; z-index: 10;
 }
 .action-bar button {
-  flex: 1; padding: 8px 6px; border-radius: 8px; border: 1px solid var(--border);
-  font-size: 12px; font-weight: 700; cursor: pointer; background: var(--surface);
-  color: var(--muted); transition: all 0.15s;
+  flex: 1; padding: 6px 4px; border-radius: 8px; border: 1px solid var(--border);
+  font-size: 11px; font-weight: 700; cursor: pointer; background: var(--surface);
+  color: var(--muted); transition: all 0.15s; white-space: nowrap;
 }
 .action-bar button.blue-btn { border-color: var(--accent); color: var(--accent); background: #e8f0fd; }
 
@@ -6246,7 +6246,7 @@ function paintWeather(dayIdx, w) {
   const strip = document.getElementById('weatherStrip');
   if (!strip) return;
   const icon = WMO_ICONS[w.code]||'🌡️', desc = WMO_DESC[w.code]||'';
-  strip.style.cssText = 'display:flex;align-items:center;gap:8px;padding:7px 16px;background:linear-gradient(135deg,#e8f4fd,#f0f8ff);border-bottom:1px solid #d0e8f8;font-size:12px;';
+  strip.style.cssText = 'display:flex;align-items:center;gap:6px;padding:4px 12px;background:linear-gradient(135deg,#e8f4fd,#f0f8ff);border-bottom:1px solid #d0e8f8;font-size:11px;position:sticky;top:0;z-index:11;';
   strip.innerHTML = '<span style="font-size:18px;">'+icon+'</span><span style="font-weight:600;color:#1a4a6b;flex:1;">'+desc+'</span><span style="font-weight:800;color:#1a4a6b;">'+w.tmax+'° <span style="font-size:11px;font-weight:400;color:#7a9aaa;">/ '+w.tmin+'°C</span></span>';
   // Per-stop hourly weather
   const stops = days[dayIdx]&&days[dayIdx].stops; if (!stops) return;
