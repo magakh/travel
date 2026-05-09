@@ -3320,8 +3320,13 @@ async function init() {
   }
   renderPrebook();
   window.addEventListener('resize', updateHeaderHeight);
-  // 10-second auto-save — keeps everyone in sync
-  setInterval(() => { if (EDITOR_MODE && !_autoPushInFlight) doAutoPush(); }, 10000);
+  // Auto-save every 10 seconds — only pushes if there are unsaved changes
+  setInterval(() => {
+    if (EDITOR_MODE && !_autoPushInFlight && _autoPushTimer === null) {
+      const currentSig = stateSignature({ config: getTripConfig(), data: getSaveData() });
+      if (currentSig !== _lastKnownSignature) doAutoPush();
+    }
+  }, 10000);
   // Show feature highlights to first-time visitors
   setTimeout(() => {
     if (!localStorage.getItem('trip_tour_v1')) showFeatureTour();
