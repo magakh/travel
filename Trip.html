@@ -1710,13 +1710,18 @@ function applyRemoteData(row) {
 async function cloudLoad() {
   if (!supabaseReady()) return false;
   try {
-    const { data, error } = await supa.from('trips').select('*').eq('id', TRIP_ID).maybeSingle();
+    const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000));
+    const fetch = supa.from('trips').select('*').eq('id', TRIP_ID).maybeSingle();
+    const { data, error } = await Promise.race([fetch, timeout]);
     if (error) { console.warn('cloudLoad', error); return false; }
-    if (!data) return false; // trip doesn't exist yet
+    if (!data) return false;
     applyRemoteData(data);
     _lastKnownSignature = stateSignature(data);
     return true;
-  } catch(e) { console.warn('cloudLoad', e); return false; }
+  } catch(e) {
+    console.warn('cloudLoad', e);
+    return false;
+  }
 }
 
 // Push current state to Supabase (upsert)
@@ -3384,7 +3389,10 @@ function renderAll() {
 
 
 function renderStopList() {
-  if (!days[currentDay] || !days[currentDay].stops) return;
+  if (!days[currentDay] || !days[currentDay].stops) {
+    document.getElementById('stopList').innerHTML = '<div style="text-align:center;padding:40px;color:#aaa;font-size:14px;">No stops for this day yet.<br><br><button onclick="showView(\'search\')" style="padding:10px 18px;background:#1a1a1a;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer;">+ Add a stop</button></div>';
+    return;
+  }
   const stops = days[currentDay].stops;
   const total = stops.length;
   const done = stops.filter((_, i) => completed.includes(currentDay+'-'+i)).length;
