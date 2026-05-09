@@ -4313,7 +4313,7 @@ function _showIdentifyCard(lm) {
         : (lm.wikiUrl ? '<a href="'+lm.wikiUrl+'" target="_blank" rel="noopener" style="padding:10px 12px;background:#f0f7ff;border:1px solid #d0e8ff;border-radius:12px;font-size:12px;font-weight:700;color:#1a73e8;text-decoration:none;white-space:nowrap;">📖 Wiki</a>' : ''))
     + '<button onclick="_speakIdentified()" style="padding:10px 14px;background:#f5f5f5;border:none;border-radius:12px;font-size:16px;cursor:pointer;">🔊</button>'
     + '</div>'
-    // (Auto-added to schedule on identification — no buttons needed)
+    + '<button id="identifyPassedByBtn" onclick="_addIdentifyPassedBy()" style="width:100%;padding:12px;border-radius:12px;border:1.5px solid #1a7a3a;background:#e8f5e9;color:#1a7a3a;font-size:13px;font-weight:800;cursor:pointer;margin-bottom:8px;">📍 Passed by — Add to schedule</button>'
     + '</div>';
 
   document.body.appendChild(el);
@@ -4374,6 +4374,66 @@ function _closeIdentifyCard() {
   if (_identifyMap) { try { _identifyMap.remove(); } catch(e) {} _identifyMap = null; }
   var c = document.getElementById('identifyCard');
   if (c) { c.style.transform = 'translateY(100%)'; setTimeout(function(){if(c.parentNode)c.remove();}, 380); }
+}
+
+function _addIdentifyPassedBy() {
+  const lm = window._identifiedLandmark;
+  if (!lm) return;
+
+  const now = new Date();
+  const h = now.getHours(), m = now.getMinutes();
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 || 12;
+  const timeStr = h12 + ':' + String(m).padStart(2, '0') + ' ' + ampm;
+  const nowMins = h * 60 + m;
+
+  const stop = {
+    name: lm.name,
+    type: lm.type || lm.category || 'Landmark',
+    address: lm.location || lm.address || '',
+    note: lm.tldr || '',
+    history: lm.wikiExtract || lm.tldr || '',
+    todo: lm.funFact ? '<p>' + lm.funFact + '</p>' : (lm.suggestion ? '<p>' + lm.suggestion + '</p>' : ''),
+    facts: lm.funFact || '',
+    image: lm.image || null,
+    wikiUrl: lm.wikiUrl || '',
+    lat: lm.lmLat || _currentGpsLat || 0,
+    lng: lm.lmLng || _currentGpsLng || 0,
+    time: timeStr,
+    duration: '1 min',
+    passedBy: true,
+    isUserAdded: true,
+    color: '#5c4db1',
+    tags: [], badges: []
+  };
+
+  const targetDay = days[currentDay];
+  if (!targetDay) { showToast('No active day', true); return; }
+
+  // Insert in chronological order
+  let insertAt = targetDay.stops.length;
+  for (let i = 0; i < targetDay.stops.length; i++) {
+    const st = targetDay.stops[i].time || '';
+    const [stp, sap] = st.split(' ');
+    const [sh, sm2] = (stp || '0:0').split(':').map(Number);
+    const sMins24 = (sap === 'PM' ? (sh === 12 ? 12 : sh + 12) : (sh === 12 ? 0 : sh)) * 60 + (sm2 || 0);
+    if (sMins24 > nowMins) { insertAt = i; break; }
+  }
+  targetDay.stops.splice(insertAt, 0, stop);
+
+  saveToStorage();
+  cloudSave('passed by: ' + lm.name);
+  renderAll();
+
+  const btn = document.getElementById('identifyPassedByBtn');
+  if (btn) {
+    btn.textContent = '✅ Added at ' + timeStr;
+    btn.style.background = '#1a7a3a';
+    btn.style.color = '#fff';
+    btn.style.border = 'none';
+    btn.disabled = true;
+  }
+  showToast('📍 Added "' + lm.name + '" at ' + timeStr);
 }
 
 function _addIdentifiedToSchedule() {
