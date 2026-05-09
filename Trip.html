@@ -3260,6 +3260,11 @@ async function init() {
   }
 
   switchDay(getTodayDayIndex());
+  if (document.getElementById('stopList').innerHTML.includes('Loading')) {
+    // Fallback: loading state never cleared — render directly
+    renderAll();
+    showView('list');
+  }
   renderPrebook();
   window.addEventListener('resize', updateHeaderHeight);
   // Show feature highlights to first-time visitors
@@ -3357,7 +3362,8 @@ function updateBottomNav() {
 
 // ── DAY SWITCHING ─────────────────────────────────────────────────
 function switchDay(d) {
-  if (d < 0 || d >= days.length || !days[d]) return;
+  if (!days || days.length === 0) { renderAll(); showView('list'); return; }
+  d = Math.max(0, Math.min(d, days.length - 1));
 
   // Auto-open inline map on desktop
   if (window.innerWidth > 700 && !_inlineMapOpen) {
