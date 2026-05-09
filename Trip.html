@@ -5266,8 +5266,9 @@ async function liveWikiSearch(lat, lng, radius) {
       if (d > TRIGGER) return false;
       if (hasBearing && radius <= 100) {
         var rp = getLandmarkRelativePos(lat, lng, p.lat, p.lon);
-        if (rp.metersAhead < -5) return false; // behind you (allow 5m grace)
-        // Show everything left, right, ahead — no cross-street limit
+        if (rp.metersAhead < -5) return false;        // behind you
+        if (rp.metersAhead > TRIGGER) return false;   // too far ahead even if laterally close
+        if (rp.metersCross > TRIGGER) return false;   // too far to the side to see
       }
       return true;
     });
@@ -5293,7 +5294,14 @@ async function liveWikiSearch(lat, lng, radius) {
           if (!el.tags || !el.tags.name) return false;
           if (_walkLiveCache.has('osm-' + el.id)) return false;
           const d = _haversineMetres(lat, lng, el.lat, el.lon);
-          return d <= WALK_TRIGGER_METRES;
+          if (d > WALK_TRIGGER_METRES) return false;
+          if (hasBearing) {
+            const rp = getLandmarkRelativePos(lat, lng, el.lat, el.lon);
+            if (rp.metersAhead < -5) return false;
+            if (rp.metersAhead > WALK_TRIGGER_METRES) return false;
+            if (rp.metersCross > WALK_TRIGGER_METRES) return false;
+          }
+          return true;
         });
         if (osmHits.length) {
           const hit = osmHits[0];
