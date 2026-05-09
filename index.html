@@ -207,10 +207,25 @@ function confirmDelete(id, title) {
 }
 
 async function deleteTrip(id, overlay) {
-  overlay.querySelector('button:last-child').textContent = 'Deleting...';
+  const deleteBtn = overlay.querySelector('button:last-child');
+  deleteBtn.textContent = 'Deleting...';
+  deleteBtn.disabled = true;
+
   const { error } = await supa.from('trips').delete().eq('id', id);
+  if (error) {
+    overlay.remove();
+    alert('Delete failed: ' + error.message + '\n\nYou may need editor access to delete trips.');
+    return;
+  }
+
+  // Verify it's actually gone from Supabase
+  const { data: check } = await supa.from('trips').select('id').eq('id', id).maybeSingle();
   overlay.remove();
-  if (error) { alert('Delete failed: ' + error.message); return; }
+  if (check) {
+    alert('Delete failed — trip still exists in database. Check Supabase RLS permissions.');
+    return;
+  }
+
   allTrips = allTrips.filter(t => t.id !== id);
   renderTrips();
 }
