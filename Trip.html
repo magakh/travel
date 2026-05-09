@@ -6863,11 +6863,19 @@ function populateDaySelects() {
   });
 }
 
-function confirmResetAll() {
+async function confirmResetAll() {
   const savedKey = APP_CONFIG.supabaseKey;
   const savedUrl = APP_CONFIG.supabaseUrl;
+  // Clear stops from Supabase so reload doesn't restore them
+  if (supabaseReady()) {
+    try {
+      const emptyDays = days.map(d => ({ title: d.title, note: d.note, stops: [] }));
+      await supa.from('trips').update({
+        data: { days: emptyDays, completed: [], hotel: null }
+      }).eq('id', TRIP_ID);
+    } catch(e) { console.warn('Reset supabase failed', e); }
+  }
   localStorage.clear();
-  // Restore API credentials so the app stays connected
   try {
     const preserved = { supabaseUrl: savedUrl, supabaseKey: savedKey };
     localStorage.setItem('app_config_v2', JSON.stringify(preserved));
