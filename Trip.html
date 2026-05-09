@@ -1810,6 +1810,8 @@ function startRealtime() {
         const incomingSig = stateSignature(row);
         // Ignore echo of our own write
         if (incomingSig === _lastKnownSignature) return;
+        // Don't let realtime overwrite a pending local change
+        if (_autoPushInFlight || _autoPushTimer) return;
         // Foreign change — apply immediately
         if (isUserBusy()) {
           applyRemoteData(row);
@@ -3668,8 +3670,8 @@ function openPhotoGallery(stopIdx, dayIdx, startIdx) {
         <button onclick="galleryNav(${stopIdx},${dayIdx},${cur-1})" ${cur===0?'disabled':''} style="flex:1;background:rgba(255,255,255,${cur===0?'0.1':'0.25'});border:none;color:#fff;padding:14px;border-radius:24px;font-size:15px;font-weight:700;cursor:pointer;opacity:${cur===0?'0.4':'1'};">← Prev</button>
         <button onclick="galleryNav(${stopIdx},${dayIdx},${cur+1})" ${cur===photos.length-1?'disabled':''} style="flex:1;background:rgba(255,255,255,${cur===photos.length-1?'0.1':'0.25'});border:none;color:#fff;padding:14px;border-radius:24px;font-size:15px;font-weight:700;cursor:pointer;opacity:${cur===photos.length-1?'0.4':'1'};">Next →</button>
       </div>
-      ${EDITOR_MODE ? `<div style="position:absolute;bottom:20px;right:20px;">
-        <button onclick="deleteGalleryPhoto(${stopIdx},${dayIdx},${cur})" style="background:rgba(192,57,43,0.9);border:none;color:#fff;padding:12px 20px;border-radius:24px;font-size:14px;font-weight:800;cursor:pointer;">🗑 Delete</button>
+      ${EDITOR_MODE ? `<div style="position:absolute;bottom:16px;right:16px;">
+        <button onclick="deleteGalleryPhoto(${stopIdx},${dayIdx},${cur})" style="background:rgba(192,57,43,0.85);border:none;color:#fff;padding:8px 14px;border-radius:20px;font-size:12px;font-weight:800;cursor:pointer;">🗑</button>
       </div>` : ''}`;
   };
 
