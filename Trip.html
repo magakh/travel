@@ -1172,6 +1172,7 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
     <div style="display:flex;gap:6px;flex-shrink:0;">
       <button class="prebook-pill" id="lockBtn" onclick="showLockDialog()" title="Edit access" style="border-color:#aaa;color:#555;">🔒 View</button>
       <button class="prebook-pill" id="saveBtn" onclick="saveToStorage()" title="Save & sync" style="border-color:#88d8a0;color:#88d8a0;">💾</button>
+      <span id="syncDot" title="Sync status" style="font-size:10px;font-weight:800;padding:3px 7px;border-radius:20px;background:#333;color:#888;display:none;align-items:center;"></span>
       <button class="prebook-pill" id="refreshBtn" onclick="manualRefresh()" title="Refresh from sync" style="border-color:#88d8a0;color:#88d8a0;">🔄</button>
       <button class="prebook-pill" id="walkGuideBtn" onclick="toggleWalkingGuide()" title="Live walking guide" style="border-color:#1a7a3a;color:#1a7a3a;font-size:16px;padding:4px 8px;">🚶</button>
       <button class="prebook-pill" onclick="identifyLandmark()" title="Identify landmark from photo" style="border-color:#5c4db1;color:#5c4db1;font-size:16px;padding:4px 8px;">📷</button>
@@ -1776,8 +1777,10 @@ async function cloudSave(summary) {
       config: payload.config, data: payload.data
     });
     _localSaveAt = Date.now();
+    showSyncDot('⟳ Saving…');
     const { error } = await supa.from('trips').upsert(payload, { onConflict: 'id' });
-    if (error) { console.warn('cloudSave', error); showToast('Sync failed — saved locally', true); return false; }
+    if (error) { console.warn('cloudSave', error); showToast('Sync failed — ' + (error.message || 'check connection'), true); showSyncDot('!'); return false; }
+    showSyncDot('✓ Saved');
     return true;
   } catch(e) { console.warn('cloudSave', e); return false; }
 }
@@ -1822,25 +1825,36 @@ function startRealtime() {
         const incomingSig = stateSignature(row);
         // Ignore echo of our own write
         if (incomingSig === _lastKnownSignature) return;
-        // Suppress any remote update arriving within 5s of a local save — prevents bounce-back loop
-        if (Date.now() - _localSaveAt < 5000) return;
-        // Password-only change (TRIP_PW_HASH changed but content identical)
-        // applyRemoteData will still update it quietly; no toast needed.
+        // Foreign change — apply immediately
         if (isUserBusy()) {
-          // Remember the new signature but skip rendering until the user is done
-          // to avoid disrupting input. The next manual action or renderAll will
-          // be based on the freshest data since applyRemoteData still runs.
           applyRemoteData(row);
           _lastKnownSignature = incomingSig;
+          showSyncDot('↻');
           return;
         }
         applyRemoteData(row);
         _lastKnownSignature = incomingSig;
         _walkLoadedDays.clear();
         try { renderAll(); } catch(e) {}
-        showToast('↻ Updated by someone else');
+        showSyncDot('↻ Synced');
       })
-    .subscribe();
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') showSyncDot('●', '#1a7a3a');
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        showSyncDot('!', '#c0392b');
+        setTimeout(startRealtime, 5000); // reconnect
+      }
+    });
+}
+
+function showSyncDot(text, color) {
+  const dot = document.getElementById('syncDot');
+  if (!dot) return;
+  dot.textContent = text;
+  dot.style.display = 'inline-flex';
+  dot.style.color = color || (text === '●' ? '#1a7a3a' : text === '!' ? '#c0392b' : '#1a73e8');
+  dot.style.background = color ? color + '22' : '#f0f8ff';
+  if (text !== '●') setTimeout(() => { dot.style.display = 'none'; }, 3000);
 }
 
 function isUserBusy() {
@@ -2000,7 +2014,7 @@ function schedulePush() {
   if (!EDITOR_MODE) return;
   if (!supabaseReady()) return;
   if (_autoPushTimer) clearTimeout(_autoPushTimer);
-  _autoPushTimer = setTimeout(doAutoPush, 2000);
+  _autoPushTimer = setTimeout(doAutoPush, 500);
 }
 
 async function doAutoPush() {
