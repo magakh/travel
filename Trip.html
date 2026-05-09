@@ -5140,7 +5140,7 @@ let _walkTourActive = false;
 let _walkTourWatchId = null;
 let _walkTourVisited = new Set();
 let _walkTourAlertOpen = false;
-const WALK_TRIGGER_METRES = 30;
+const WALK_TRIGGER_METRES = 15;
 
 function toggleWalkingGuide() {
   if (_walkTourActive) {
@@ -5224,11 +5224,11 @@ var _userStreetTs = 0;       // timestamp of last street name refresh
 
 async function liveWikiSearch(lat, lng, radius) {
   if (!_walkTourActive || _walkTourAlertOpen) return;
-  radius = radius || 50;
+  radius = radius || 30;
 
-  // Throttle: re-search after moving 30m
+  // Throttle: re-search after moving 10m
   if (radius <= 100 && _walkLastSearchLat !== null) {
-    if (_haversineMetres(_walkLastSearchLat, _walkLastSearchLng, lat, lng) < 30) return;
+    if (_haversineMetres(_walkLastSearchLat, _walkLastSearchLng, lat, lng) < 10) return;
   }
   _walkLastSearchLat = lat;
   _walkLastSearchLng = lng;
@@ -5267,6 +5267,8 @@ async function liveWikiSearch(lat, lng, radius) {
       if (radius > 100) {
         // Show a proper slide-up notice instead of a tiny toast
         _showNoLandmarksCard();
+      } else if (!_walkTourAlertOpen && radius <= 100) {
+        showToast('📍 Nothing within 30 m');
       }
       return;
     }
