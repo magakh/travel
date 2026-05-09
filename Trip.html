@@ -1060,9 +1060,11 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
 .toast {
   position: fixed; bottom: calc(var(--bottom-h) + 12px); left: 50%;
   transform: translateX(-50%); background: #1a1a1a; color: #fff;
-  padding: 10px 20px; border-radius: 20px; font-size: 13px; font-weight: 600;
-  z-index: 9999; white-space: nowrap; pointer-events: none;
+  padding: 10px 16px; border-radius: 16px; font-size: 13px; font-weight: 600;
+  z-index: 9999; white-space: normal; pointer-events: all;
   box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+  max-width: calc(100vw - 32px); width: max-content; text-align: left;
+  line-height: 1.4;
 }
 .toast.err { background: var(--red); }
 
@@ -8237,10 +8239,22 @@ function showToast(msg, isError=false) {
   const old = document.getElementById('toast-el');
   if (old) old.remove();
   const t = document.createElement('div');
-  t.id = 'toast-el'; t.className = 'toast' + (isError?' err':'');
-  t.textContent = msg;
+  t.id = 'toast-el';
+  t.className = 'toast' + (isError ? ' err' : '');
+  t.style.cssText += ';white-space:normal;max-width:calc(100vw - 32px);display:flex;align-items:flex-start;gap:10px;cursor:pointer;';
+  const span = document.createElement('span');
+  span.style.flex = '1';
+  span.textContent = msg;
+  const close = document.createElement('button');
+  close.textContent = '✕';
+  close.style.cssText = 'background:none;border:none;color:inherit;opacity:0.7;font-size:14px;cursor:pointer;padding:0;flex-shrink:0;margin-top:1px;';
+  close.onclick = () => t.remove();
+  t.append(span, close);
   document.body.appendChild(t);
-  setTimeout(() => t.remove(), 3000);
+  // Scale duration: short msgs 3s, long msgs up to 12s
+  const duration = Math.min(12000, Math.max(3000, msg.length * 80));
+  const timer = setTimeout(() => t.remove(), duration);
+  t.onclick = (e) => { if (e.target !== close) { clearTimeout(timer); t.remove(); } };
 }
 
 // ── API KEY / ANTHROPIC HELPER ────────────────────────────────────
