@@ -3447,6 +3447,7 @@ function switchDay(d) {
   }
   currentDay = d;
   currentStop = 0;
+  window._routeMapSig = null; // force re-render if route map is open
   const n = APP_CONFIG.numDays || days.length;
   for (let i = 0; i < n; i++) {
     const el = document.getElementById('dtab' + i);
@@ -7770,6 +7771,10 @@ function showAllMap() {
 function renderRouteMap() {
   const d = days[currentDay];
   const stops = d.stops;
+  // Skip re-render if map already showing and stops haven't changed
+  const sig = currentDay + ':' + stops.map(s => s.name + s.time).join('|');
+  if (window._routeMapSig === sig && window._routeMap) return;
+  window._routeMapSig = sig;
   // Build Google Maps URL using only NOT-YET-DONE stops, so when someone
   // checks off a completed location, the directions skip it.
   // The map visualization below still shows all stops (done + pending).
