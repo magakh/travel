@@ -815,21 +815,32 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
   gap: 6px;
 }
 @media (max-width: 700px) {
-  .split-map-panel { 
+  #panel-list.active {
+    height: auto;
+    overflow: visible;
+  }
+  #panel-list.active .split-layout {
+    flex-direction: column;
+    height: auto;
+  }
+  .split-list {
+    overflow-y: visible;
+    height: auto;
+  }
+  .split-map-panel {
     width: 100%;
-    position: fixed;
-    top: var(--header-h);
-    left: 0; right: 0;
+    position: relative;
+    top: auto;
+    left: auto; right: auto;
     height: 45vh;
     border-left: none;
-    border-bottom: 2px solid var(--border);
-    z-index: 100;
-    background: #fff;
+    border-top: 2px solid var(--border);
+    z-index: 1;
+    background: #f5f5f5;
+    display: flex !important;
   }
-  .split-map-panel.hidden { display: none; }
-  .split-layout.map-open .split-list {
-    margin-top: 45vh;
-  }
+  .split-map-panel.hidden { display: none !important; }
+  .split-map-toggle { display: none; }
 }
 @media (min-width: 701px) {
   .split-map-toggle { display: none; }
@@ -1179,7 +1190,6 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
     </div>
   </div>
   <div class="day-tabs" id="dayTabs">
-    <span id="dayTabsPlaceholder"></span>
     <button class="day-tab blue" onclick="showRouteMap()" id="dtabMap">Route Map</button>
     <button class="day-tab green-tab" onclick="showAllMap()" id="dtabAll">All Days Map</button>
     <button class="day-tab" onclick="showView('search')" id="dtabSearch" style="border-color:#1a73e8;color:#1a73e8;">+ Add / Search</button>
@@ -3355,8 +3365,8 @@ function updateBottomNav() {
 function switchDay(d) {
   if (d < 0 || d >= days.length || !days[d]) return;
 
-  // Auto-open inline map on desktop
-  if (window.innerWidth > 700 && !_inlineMapOpen) {
+  // Always show inline map (desktop: side panel; mobile: below stops)
+  if (!_inlineMapOpen) {
     _inlineMapOpen = true;
     const panel = document.getElementById('splitMapPanel');
     if (panel) panel.classList.remove('hidden');
@@ -6825,14 +6835,21 @@ function applyConfig() {
   }
 
   // Rebuild day tabs dynamically — no hardcoded limit
-  const placeholder = document.getElementById('dayTabsPlaceholder');
-  if (placeholder) {
-    let html = '';
-    for (let i = 0; i < _n; i++) {
+  const dayTabs = document.getElementById('dayTabs');
+  const dtabMap = document.getElementById('dtabMap');
+  if (dayTabs && dtabMap) {
+    // Remove old day buttons
+    dayTabs.querySelectorAll('.day-tab[id^="dtab"]:not(#dtabMap):not(#dtabAll):not(#dtabSearch):not(#dtabSettings)').forEach(el => el.remove());
+    // Insert new ones before Route Map
+    for (let i = _n - 1; i >= 0; i--) {
       const lbl = (c.dayLabels || [])[i] || ('Day ' + (i + 1));
-      html += `<button class="day-tab${i === currentDay ? ' active' : ''}" onclick="switchDay(${i})" id="dtab${i}">${lbl}</button>`;
+      const btn = document.createElement('button');
+      btn.className = 'day-tab' + (i === currentDay ? ' active' : '');
+      btn.id = 'dtab' + i;
+      btn.textContent = lbl;
+      btn.onclick = () => switchDay(i);
+      dayTabs.insertBefore(btn, dtabMap);
     }
-    placeholder.innerHTML = html;
   }
 
   // Populate the "Add to day" selects (AI search + manual add)
