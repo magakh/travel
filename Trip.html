@@ -3364,7 +3364,8 @@ function switchDay(d) {
   }
   currentDay = d;
   currentStop = 0;
-  for (let i = 0; i < 7; i++) {
+  const n = APP_CONFIG.numDays || days.length;
+  for (let i = 0; i < n; i++) {
     const el = document.getElementById('dtab' + i);
     if (el) el.classList.toggle('active', i === d);
   }
