@@ -5841,20 +5841,24 @@ async function nextLandmark() {
 }
 
 const _reminderTimers = [];
+let _reminderInterval = null;
 
-function scheduleBookingReminders() {
-  // Clear any previously scheduled reminders this session
-  _reminderTimers.forEach(t => clearTimeout(t));
-  _reminderTimers.length = 0;
+// Register service worker for background notifications
+async function registerReminderSW() {
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    await navigator.serviceWorker.register('./sw.js', { scope: './' });
+  } catch(e) { console.warn('SW register failed:', e); }
+}
+registerReminderSW();
 
-  const booked = [];
+function buildReminderList() {
+  const list = [];
   days.forEach((day, di) => {
     (day.stops || []).forEach(s => {
       if (!s.prebook && !s.reservation) return;
-      // Derive the date for this day
       const dateStr = getDayDate(di);
       if (!dateStr) return;
-      // Parse the stop time
       const stopTime = s.reservation && s.reservation.time ? s.reservation.time : s.time;
       const m = (stopTime || '').match(/(\d+):(\d+)\s*(AM|PM)?/i);
       if (!m) return;
@@ -5863,39 +5867,75 @@ function scheduleBookingReminders() {
       if ((m[3]||'').toUpperCase() === 'AM' && h === 12) h = 0;
       const [yr, mo, dd] = dateStr.split('-').map(Number);
       const stopDt = new Date(yr, mo-1, dd, h, min, 0);
-      const remindDt = new Date(stopDt.getTime() - 10 * 60 * 1000);
-      const msUntil = remindDt.getTime() - Date.now();
-      if (msUntil > 0) {
-        booked.push({ name: s.name, time: stopTime, msUntil, stopDt });
+      const fireAt = stopDt.getTime() - 10 * 60 * 1000; // 10 min before
+      if (fireAt > Date.now() - 120000) { // due in future or within last 2 min
+        list.push({ name: s.name, time: stopTime, fireAt, url: location.href });
       }
     });
   });
+  return list;
+}
 
-  if (!booked.length) return;
+function saveRemindersToSW(list) {
+  if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) return;
+  navigator.serviceWorker.controller.postMessage({ type: 'CHECK_REMINDERS', reminders: list });
+  // Also persist to cache so SW can read it when tab is closed
+  if ('caches' in window) {
+    caches.open('travel-sw-v1').then(c =>
+      c.put('reminders', new Response(JSON.stringify(list)))
+    );
+  }
+}
 
-  // Request permission once, then schedule
-  const scheduleAll = () => {
-    booked.forEach(b => {
-      const t = setTimeout(() => fireReminder(b.name, b.time), b.msUntil);
-      _reminderTimers.push(t);
-    });
+function scheduleBookingReminders() {
+  const list = buildReminderList();
+  if (!list.length) return;
+
+  const doSchedule = () => {
+    // Clear old interval
+    if (_reminderInterval) { clearInterval(_reminderInterval); _reminderInterval = null; }
+
+    // Push reminder list to service worker
+    saveRemindersToSW(list);
+
+    // Interval-based check every 30s — works even after phone sleep wakes up
+    const fired = new Set();
+    _reminderInterval = setInterval(() => {
+      const now = Date.now();
+      list.forEach(r => {
+        if (fired.has(r.name)) return;
+        const diff = now - r.fireAt;
+        if (diff >= 0 && diff < 120000) { // within 2-minute window
+          fired.add(r.name);
+          fireReminder(r.name, r.time);
+        }
+      });
+      // Cancel if all fired
+      if (fired.size >= list.length) { clearInterval(_reminderInterval); _reminderInterval = null; }
+    }, 30000);
+
+    showToast('🔔 Reminders set for ' + list.length + ' booking' + (list.length > 1 ? 's' : ''));
   };
 
   if (Notification.permission === 'granted') {
-    scheduleAll();
+    doSchedule();
   } else if (Notification.permission !== 'denied') {
-    // Show a friendly prompt
     const prompt = document.createElement('div');
     prompt.style.cssText = 'position:fixed;bottom:80px;left:16px;right:16px;max-width:520px;margin:0 auto;background:#1a1a1a;color:#fff;border-radius:14px;padding:14px 16px;z-index:9999;display:flex;align-items:center;gap:12px;box-shadow:0 4px 20px rgba(0,0,0,0.3);';
-    prompt.innerHTML = '<span style="font-size:22px;">🔔</span><div style="flex:1;font-size:13px;line-height:1.4;"><b>Get reminders for booked venues?</b><br><span style="color:#bbb;">10 min before each reservation, on this device.</span></div><button id="allowNotifBtn" style="background:#fff;color:#1a1a1a;border:none;border-radius:8px;padding:7px 12px;font-weight:800;font-size:12px;cursor:pointer;white-space:nowrap;">Allow</button><button onclick="this.closest(\'div\').remove()" style="background:none;border:none;color:#888;font-size:18px;cursor:pointer;padding:0 4px;">✕</button>';
+    prompt.innerHTML = '<span style="font-size:22px;">🔔</span><div style="flex:1;font-size:13px;line-height:1.4;"><b>Get reminders for booked venues?</b><br><span style="color:#bbb;">10 min before each reservation, even when phone sleeps.</span></div><button id="allowNotifBtn" style="background:#fff;color:#1a1a1a;border:none;border-radius:8px;padding:7px 12px;font-weight:800;font-size:12px;cursor:pointer;white-space:nowrap;">Allow</button><button onclick="this.closest(\'div\').remove()" style="background:none;border:none;color:#888;font-size:18px;cursor:pointer;padding:0 4px;">✕</button>';
     document.body.appendChild(prompt);
     document.getElementById('allowNotifBtn').onclick = async () => {
       prompt.remove();
       const perm = await Notification.requestPermission();
-      if (perm === 'granted') { scheduleAll(); showToast('🔔 Reminders set for ' + booked.length + ' booking' + (booked.length > 1 ? 's' : '')); }
+      if (perm === 'granted') doSchedule();
     };
   }
 }
+
+// Re-check reminders when tab becomes visible again (catches missed timers after sleep)
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') scheduleBookingReminders();
+});
 
 function getDayDate(dayIdx) {
   if (APP_CONFIG.startDate) {
