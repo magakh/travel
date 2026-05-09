@@ -5264,12 +5264,14 @@ async function liveWikiSearch(lat, lng, radius) {
       if (_walkLiveCache.has(p.pageid)) return false;
       var d = _haversineMetres(lat, lng, p.lat, p.lon);
       if (d > TRIGGER) return false;
-      if (hasBearing && radius <= 100) {
-        var rp = getLandmarkRelativePos(lat, lng, p.lat, p.lon);
-        if (rp.metersAhead < -5) return false;        // behind you
-        if (rp.metersAhead > TRIGGER) return false;   // too far ahead even if laterally close
-        if (rp.metersCross > TRIGGER) return false;   // too far to the side to see
+      if (!hasBearing) {
+        // No direction data — only show if practically on top of you
+        return d <= 12;
       }
+      var rp = getLandmarkRelativePos(lat, lng, p.lat, p.lon);
+      if (rp.metersAhead < -5) return false;        // behind you
+      if (rp.metersAhead > TRIGGER) return false;   // too far ahead
+      if (rp.metersCross > TRIGGER) return false;   // too far to the side
       return true;
     });
 
@@ -5350,7 +5352,10 @@ async function liveWikiSearch(lat, lng, radius) {
           return;
         }
         lmAddressFromGuard = [sa.house_number, sa.road || sa.pedestrian || sa.path || sa.footway].filter(Boolean).join(' ') || null;
-      } catch(e) {} // geocode failed — proceed, don't hard-block
+      } catch(e) {
+        // Geocode failed — block the landmark unless it's very close (< 12m)
+        if (hitDist > 12) { _walkLiveCache.delete(hit.pageid); return; }
+      }
     }
 
     // Wikipedia content fetch
