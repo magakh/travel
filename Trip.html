@@ -6832,7 +6832,7 @@ function applyConfig() {
     // Remove old day buttons
     dayTabs.querySelectorAll('.day-tab[id^="dtab"]:not(#dtabMap):not(#dtabAll):not(#dtabSearch):not(#dtabSettings)').forEach(el => el.remove());
     // Insert new ones before All Days Map
-    for (let i = _n - 1; i >= 0; i--) {
+    for (let i = 0; i < _n; i++) {
       const lbl = (c.dayLabels || [])[i] || ('Day ' + (i + 1));
       const btn = document.createElement('button');
       btn.className = 'day-tab' + (i === currentDay ? ' active' : '');
