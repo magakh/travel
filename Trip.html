@@ -5140,7 +5140,7 @@ let _walkTourActive = false;
 let _walkTourWatchId = null;
 let _walkTourVisited = new Set();
 let _walkTourAlertOpen = false;
-const WALK_TRIGGER_METRES = 50;
+const WALK_TRIGGER_METRES = 30;
 
 function toggleWalkingGuide() {
   if (_walkTourActive) {
@@ -5224,11 +5224,11 @@ var _userStreetTs = 0;       // timestamp of last street name refresh
 
 async function liveWikiSearch(lat, lng, radius) {
   if (!_walkTourActive || _walkTourAlertOpen) return;
-  radius = radius || 80;
+  radius = radius || 50;
 
-  // Throttle: re-search after moving 80m (was 150 — too infrequent)
+  // Throttle: re-search after moving 30m
   if (radius <= 100 && _walkLastSearchLat !== null) {
-    if (_haversineMetres(_walkLastSearchLat, _walkLastSearchLng, lat, lng) < 80) return;
+    if (_haversineMetres(_walkLastSearchLat, _walkLastSearchLng, lat, lng) < 30) return;
   }
   _walkLastSearchLat = lat;
   _walkLastSearchLng = lng;
@@ -5251,7 +5251,7 @@ async function liveWikiSearch(lat, lng, radius) {
         }
         var rp = getLandmarkRelativePos(lat, lng, p.lat, p.lon);
         if (rp.metersAhead < 0) return false;   // already passed
-        if (rp.metersCross > 15) return false;  // must be within ~1 street width to be visually findable
+        if (rp.metersCross > 10) return false;  // must be within ~half a street width
       }
       return true;
     });
