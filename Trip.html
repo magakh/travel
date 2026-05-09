@@ -1171,10 +1171,10 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
     </div>
     <div style="display:flex;gap:6px;flex-shrink:0;">
       <button class="prebook-pill" id="lockBtn" onclick="showLockDialog()" title="Edit access" style="border-color:#aaa;color:#555;">🔒 View</button>
-      <button class="prebook-pill" id="saveBtn" onclick="saveToStorage()" title="Save & sync" style="border-color:#88d8a0;color:#88d8a0;">💾</button>
+      <button class="prebook-pill" id="saveBtn" onclick="saveToStorage()" title="Save & sync" style="border-color:#88d8a0;color:#88d8a0;">💾 <span id="syncDotInner"></span></button>
       <span id="syncDot" title="Sync status" style="font-size:10px;font-weight:800;padding:3px 7px;border-radius:20px;background:#333;color:#888;display:none;align-items:center;"></span>
-      <button class="prebook-pill" id="refreshBtn" onclick="manualRefresh()" title="Refresh from sync" style="border-color:#88d8a0;color:#88d8a0;">🔄</button>
       <button class="prebook-pill" id="walkGuideBtn" onclick="toggleWalkingGuide()" title="Live walking guide" style="border-color:#1a7a3a;color:#1a7a3a;font-size:16px;padding:4px 8px;">🚶</button>
+      <button class="prebook-pill" onclick="checkInHere()" title="Check in at current location" style="border-color:#e67e22;color:#e67e22;font-size:16px;padding:4px 8px;">📍</button>
       <button class="prebook-pill" onclick="identifyLandmark()" title="Identify landmark from photo" style="border-color:#5c4db1;color:#5c4db1;font-size:16px;padding:4px 8px;">📷</button>
       <button class="prebook-pill" onclick="showSaveMenu()" title="More options">⋮</button>
       <button class="prebook-pill" onclick="showView('prebook')">Book list</button>
@@ -2178,12 +2178,8 @@ function showSaveMenu() {
   menu.style.cssText = 'position:fixed;top:70px;right:12px;background:#fff;border:1px solid #e8e6e0;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.18);z-index:9997;min-width:200px;overflow:hidden;';
   menu.innerHTML = `
     <div style="padding:4px 0;">
-      <button onclick="saveToStorage();document.getElementById('save-menu').remove();"
-        style="width:100%;padding:14px 16px;text-align:left;border:none;background:none;font-size:14px;font-weight:600;cursor:pointer;color:#1a1a1a;display:flex;align-items:center;gap:10px;">
-        💾 <span>Save to this device</span>
-      </button>
       <button onclick="exportFile();document.getElementById('save-menu').remove();"
-        style="width:100%;padding:14px 16px;text-align:left;border:none;background:none;font-size:14px;font-weight:600;cursor:pointer;color:#1a1a1a;display:flex;align-items:center;gap:10px;border-top:1px solid #f0ede8;">
+        style="width:100%;padding:14px 16px;text-align:left;border:none;background:none;font-size:14px;font-weight:600;cursor:pointer;color:#1a1a1a;display:flex;align-items:center;gap:10px;">
         📤 <span>Export as file (.json)</span>
       </button>
       <button onclick="document.getElementById('import-input').click();document.getElementById('save-menu').remove();"
@@ -2201,8 +2197,74 @@ function showSaveMenu() {
   }), 100);
 }
 
-// ── AI SEARCH ─────────────────────────────────────────────────────
-async function unifiedAiAdd() {
+async function checkInHere() {
+  if (!EDITOR_MODE) { showToast('Unlock editing first (tap 🔒)', true); return; }
+
+  showToast('📍 Getting your location…');
+  let lat = _currentGpsLat, lng = _currentGpsLng;
+
+  // Try to get a fresh fix if we don't have one
+  if (!lat || !lng) {
+    try {
+      const pos = await new Promise((res, rej) =>
+        navigator.geolocation.getCurrentPosition(res, rej, { timeout: 8000, maximumAge: 10000 }));
+      lat = pos.coords.latitude;
+      lng = pos.coords.longitude;
+    } catch(e) { showToast('Could not get location — enable GPS', true); return; }
+  }
+
+  // Reverse geocode to get a name
+  let placeName = '';
+  let placeType = 'Location';
+  try {
+    const r = await fetch('https://nominatim.openstreetmap.org/reverse?lat='+lat+'&lon='+lng+'&format=json&zoom=18&addressdetails=1');
+    const d = await r.json();
+    const a = d.address || {};
+    placeName = d.name || a.cafe || a.restaurant || a.bar || a.pub || a.shop || a.amenity || a.road || '';
+    if (!placeName) placeName = [a.road, a.suburb || a.neighbourhood].filter(Boolean).join(', ');
+    if (a.cafe || a.restaurant || a.bar || a.pub) placeType = a.cafe ? 'Café' : a.restaurant ? 'Restaurant' : 'Bar';
+  } catch(e) {}
+
+  if (!placeName) placeName = lat.toFixed(4) + ', ' + lng.toFixed(4);
+
+  const now = new Date();
+  const h = now.getHours(), m = now.getMinutes();
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const timeStr = (h % 12 || 12) + ':' + String(m).padStart(2,'0') + ' ' + ampm;
+  const nowMins = h * 60 + m;
+
+  const stop = {
+    name: placeName,
+    type: placeType,
+    address: '',
+    note: '',
+    time: timeStr,
+    duration: '1 min',
+    lat, lng,
+    isUserAdded: true,
+    fixedTime: true,
+    tags: ['check-in'],
+    checkIn: true,
+    color: '#e67e22',
+    badges: []
+  };
+
+  const targetDay = days[currentDay];
+  if (!targetDay) return;
+  let insertAt = targetDay.stops.length;
+  for (let i = 0; i < targetDay.stops.length; i++) {
+    const [stp, sap] = (targetDay.stops[i].time || '').split(' ');
+    const [sh, sm] = (stp||'0:0').split(':').map(Number);
+    const sMins = (sap==='PM' ? (sh===12?12:sh+12) : (sh===12?0:sh)) * 60 + (sm||0);
+    if (sMins > nowMins) { insertAt = i; break; }
+  }
+  targetDay.stops.splice(insertAt, 0, stop);
+
+  saveToStorage();
+  cloudSave('check-in: ' + placeName);
+  renderAll();
+  showToast('📍 Checked in: ' + placeName);
+}
   const query = document.getElementById('searchQuery').value.trim();
   const address = document.getElementById('addAddress').value.trim();
   if (!query) { showToast('Enter a place name or description', true); return; }
@@ -3506,7 +3568,7 @@ function renderStopList() {
         </div>
         ${bookingArrivalHtml(currentDay, i)}
         ${getConflict(i) ? '<div class="conflict-banner">⚠️ Time conflict with previous stop</div>' : ''}
-        <div class="stop-name-label">${s.name}${s.passedBy ? ' <span class="res-badge" style="background:#f3e5f5;border-color:#9c27b0;color:#6a1b9a;">📷 Passed by</span>' : ''}${s.reservation ? ' <span class="res-badge ' + (s.reservation.confirmed?'confirmed':'') + '">' + (s.reservation.confirmed?'✓ Booked':'⏳ Pending') + '</span>' : ''}</div>
+        <div class="stop-name-label">${s.name}${s.passedBy ? ' <span class="res-badge" style="background:#f3e5f5;border-color:#9c27b0;color:#6a1b9a;">📷 Passed by</span>' : ''}${s.checkIn ? ' <span class="res-badge" style="background:#fef3e2;border-color:#e67e22;color:#b35400;">📍 Check-in</span>' : ''}${s.reservation ? ' <span class="res-badge ' + (s.reservation.confirmed?'confirmed':'') + '">' + (s.reservation.confirmed?'✓ Booked':'⏳ Pending') + '</span>' : ''}</div>
         <div class="stop-type-label">${s.type}</div>
         <div class="stop-tags">
           ${s.prebook ? '<span class="tag-pill prebook">Pre-book</span>' : ''}
