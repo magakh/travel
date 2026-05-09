@@ -1761,7 +1761,7 @@ async function cloudSave(summary) {
     _lastKnownSignature = stateSignature({
       config: payload.config, data: payload.data
     });
-    _localSaveAt = Date.now();
+    _ourLastSavedAt = payload.data.savedAt || '';
     showSyncDot('⟳ Saving…');
     const { error } = await supa.from('trips').upsert(payload, { onConflict: 'id' });
     if (error) { console.warn('cloudSave', error); showToast('Sync failed — ' + (error.message || 'check connection'), true); showSyncDot('!'); return false; }
@@ -1774,7 +1774,7 @@ async function cloudSave(summary) {
 // decide whether a realtime event actually changed anything vs. being an
 // echo of our own write.
 let _lastKnownSignature = '';
-let _localSaveAt = 0; // timestamp of last local write — realtime events within 5s are suppressed
+let _ourLastSavedAt = '';  // ISO timestamp of our last successful push
 
 function stateSignature(row) {
   if (!row) return '';
@@ -1810,6 +1810,9 @@ function startRealtime() {
         const incomingSig = stateSignature(row);
         // Ignore echo of our own write
         if (incomingSig === _lastKnownSignature) return;
+        // Reject stale delayed events — if incoming savedAt is older than our last push, ignore it
+        const incomingSavedAt = row.data && row.data.savedAt;
+        if (_ourLastSavedAt && incomingSavedAt && incomingSavedAt < _ourLastSavedAt) return;
         // Don't let realtime overwrite a pending local change
         if (_autoPushInFlight || _autoPushTimer) return;
         // Foreign change — apply immediately
