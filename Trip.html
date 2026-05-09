@@ -1693,7 +1693,7 @@ function applyRemoteData(row) {
   if (d.days && d.days.length) {
     d.days.forEach((dd, i) => {
       if (!days[i]) days[i] = { title: '', note: '', stops: [] };
-      days[i].stops = dd.stops || [];
+      days[i].stops = (dd.stops || []).map(sanitizeStop);
       if (dd.title) days[i].title = dd.title;
       if (dd.note) days[i].note = dd.note;
     });
@@ -1704,6 +1704,23 @@ function applyRemoteData(row) {
     HOTEL.name = d.hotel.name; HOTEL.address = d.hotel.address;
     HOTEL.lat = d.hotel.lat; HOTEL.lng = d.hotel.lng;
   }
+}
+
+function sanitizeStop(s) {
+  if (!s) return s;
+  // Fix numeric duration → string
+  if (typeof s.duration === 'number') s.duration = s.duration + ' min';
+  // Fix 24h time (HH:MM) → 12h (H:MM AM/PM)
+  if (s.time && /^\d{1,2}:\d{2}$/.test(s.time)) {
+    const [h, m] = s.time.split(':').map(Number);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    const h12 = h % 12 || 12;
+    s.time = h12 + ':' + String(m).padStart(2, '0') + ' ' + ampm;
+  }
+  // Ensure required fields exist
+  if (!s.name) s.name = 'Unknown stop';
+  if (!s.type) s.type = s.category || '';
+  return s;
 }
 
 // Load this trip from Supabase; return true on success
