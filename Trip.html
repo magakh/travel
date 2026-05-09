@@ -5327,10 +5327,9 @@ async function liveWikiSearch(lat, lng, radius) {
     var hit = nearby[0];
     _walkLiveCache.add(hit.pageid);
 
-    // Street-name guard — skip entirely for very close landmarks (< 20m, clearly visible)
-    var hitDist = _haversineMetres(lat, lng, hit.lat, hit.lon);
+    // Street-name guard — always check, Wikipedia coords can be off by 50m+
     var lmAddressFromGuard = null;
-    if (radius <= 100 && hitDist > 20) {
+    if (radius <= 100) {
       if (!_userCurrentStreet) {
         try {
           var s = await getUserStreet(lat, lng);
@@ -5353,8 +5352,8 @@ async function liveWikiSearch(lat, lng, radius) {
         }
         lmAddressFromGuard = [sa.house_number, sa.road || sa.pedestrian || sa.path || sa.footway].filter(Boolean).join(' ') || null;
       } catch(e) {
-        // Geocode failed — block the landmark unless it's very close (< 12m)
-        if (hitDist > 12) { _walkLiveCache.delete(hit.pageid); return; }
+        // Geocode failed — block unless < 12m
+        if (_haversineMetres(lat, lng, hit.lat, hit.lon) > 12) { _walkLiveCache.delete(hit.pageid); return; }
       }
     }
 
