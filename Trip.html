@@ -3007,6 +3007,7 @@ function applyStopTime(i) {
 
 function parseDurationMins(dur) {
   if (!dur) return 60;
+  if (typeof dur === 'number') return Math.round(dur) || 60;
   // Handle "1h 30min", "1h", "90 min", "1.5 hours", "2 hours", "30 min" etc.
   const hLong = dur.match(/(\d+(?:\.\d+)?)\s*h(?:our)?s?/i);
   const mLong = dur.match(/(\d+)\s*min/i);
