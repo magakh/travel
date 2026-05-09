@@ -1748,6 +1748,21 @@ async function cloudSave(summary) {
     return false;
   }
   try {
+    // Merge userPhotos from Supabase so concurrent photo uploads aren't overwritten
+    try {
+      const { data: remote } = await supa.from('trips').select('data').eq('id', TRIP_ID).maybeSingle();
+      if (remote && remote.data && remote.data.days) {
+        remote.data.days.forEach((rd, di) => {
+          if (!days[di] || !rd.stops) return;
+          rd.stops.forEach((rs, si) => {
+            if (!days[di].stops[si] || !rs.userPhotos || !rs.userPhotos.length) return;
+            const local = new Set(days[di].stops[si].userPhotos || []);
+            rs.userPhotos.forEach(p => local.add(p));
+            days[di].stops[si].userPhotos = Array.from(local);
+          });
+        });
+      }
+    } catch(e) { /* merge failed — continue with local data */ }
     const payload = {
       id: TRIP_ID,
       title: APP_CONFIG.title,
@@ -2001,7 +2016,8 @@ async function doAutoPush() {
         setTimeout(() => { if (btn) btn.textContent = '💾'; }, 1500);
       }
     }
-  } catch(e) { /* silent */ }
+    return ok;
+  } catch(e) { console.error('doAutoPush:', e); return false; }
   finally { _autoPushInFlight = false; }
 }
 
@@ -3601,11 +3617,26 @@ function addStopPhotos(stopIdx, dayIdx) {
     const s = days[dayIdx].stops[stopIdx];
     if (!s.userPhotos) s.userPhotos = [];
     showToast('⏳ Resizing ' + files.length + ' photo' + (files.length>1?'s':'') + '…');
+    let added = 0;
     for (const file of files) {
-      try { s.userPhotos.push(await resizeStopPhoto(file, 600)); } catch(e) {}
+      try {
+        const b64 = await resizeStopPhoto(file, 600);
+        s.userPhotos.push(b64);
+        added++;
+      } catch(e) {
+        console.error('Photo resize failed:', e);
+        showToast('Photo resize failed: ' + (e.message || e), true);
+      }
     }
-    saveToStorage(); renderStopList(); renderDetail();
-    showToast('📷 ' + files.length + ' photo' + (files.length>1?'s':'') + ' added ✓');
+    if (!added) return;
+    renderStopList(); renderDetail();
+    // Save and explicitly report cloud save result
+    const ok = await doAutoPush();
+    if (ok === false) {
+      showToast('⚠️ Photos saved locally but sync failed — check connection', true);
+    } else {
+      showToast('📷 ' + added + ' photo' + (added>1?'s':'') + ' saved ✓');
+    }
   };
   setTimeout(function(){ input.click(); }, 30);
 }
