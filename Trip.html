@@ -5282,7 +5282,7 @@ async function liveWikiSearch(lat, lng, radius) {
 
     if (!nearby.length || _walkTourAlertOpen) {
       if (_walkTourAlertOpen) return;
-      if (radius > 100) { _showNoLandmarksCard(); return; }
+      if (radius > 100) { showToast('📍 No landmarks found within 30 m'); return; }
 
       // Wikipedia found nothing — try OpenStreetMap Overpass for better local coverage
       try {
