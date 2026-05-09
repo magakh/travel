@@ -3364,9 +3364,10 @@ function switchDay(d) {
   }
   currentDay = d;
   currentStop = 0;
-  ['dtab0','dtab1','dtab2','dtab3'].forEach((id, i) => {
-    document.getElementById(id).classList.toggle('active', i === d);
-  });
+  for (let i = 0; i < 7; i++) {
+    const el = document.getElementById('dtab' + i);
+    if (el) el.classList.toggle('active', i === d);
+  }
   renderAll();
   showView('list');
   setTimeout(loadWalkTimes, 200);
