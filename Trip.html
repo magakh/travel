@@ -1168,9 +1168,8 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
 <!-- HEADER -->
 <input type="file" id="import-input" accept=".json" style="display:none" onchange="importFile(this); this.value='';">
 <div class="header" id="appHeader">
-  <div class="header-top">
+  <div class="header-top" style="align-items:flex-start;">
     <div style="flex-shrink:0;">
-      <a href="index.html" style="font-size:10px;font-weight:700;color:#666;text-decoration:none;letter-spacing:0.5px;text-transform:uppercase;">← All Trips</a>
       <h1 id="appTitleEl">Trip</h1>
       <div class="header-sub" id="appSubtitleEl">May 7–10 · hidden gems · rooftop dining</div>
     </div>
@@ -1181,6 +1180,7 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
       <button class="prebook-pill" onclick="checkInHere()" title="Check in at current location" style="border-color:#e67e22;color:#e67e22;font-size:16px;padding:4px 8px;">📍</button>
       <button class="prebook-pill" onclick="identifyLandmark()" title="Identify landmark from photo" style="border-color:#5c4db1;color:#5c4db1;font-size:16px;padding:4px 8px;">📷</button>
       <button class="prebook-pill" onclick="showView('prebook')">Book list</button>
+      <a href="index.html" class="prebook-pill" style="border-color:#666;color:#888;text-decoration:none;white-space:nowrap;">← All Trips</a>
     </div>
   </div>
   <div class="day-tabs" id="dayTabs">
