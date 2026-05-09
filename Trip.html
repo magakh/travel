@@ -1174,7 +1174,7 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
       <h1 id="appTitleEl">Trip</h1>
       <div class="header-sub" id="appSubtitleEl">May 7–10 · hidden gems · rooftop dining</div>
     </div>
-    <div style="display:flex;gap:6px;flex-shrink:0;">
+    <div style="display:flex;gap:6px;flex-shrink:0;overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:calc(100vw - 120px);">
       <button class="prebook-pill" id="lockBtn" onclick="showLockDialog()" title="Edit access" style="border-color:#aaa;color:#555;">🔒 View</button>
       <button class="prebook-pill" id="saveBtn" onclick="saveToStorage()" title="Save" style="border-color:#88d8a0;color:#88d8a0;">💾</button>
       <button class="prebook-pill" id="walkGuideBtn" onclick="toggleWalkingGuide()" title="Live walking guide" style="border-color:#1a7a3a;color:#1a7a3a;font-size:16px;padding:4px 8px;">🚶</button>
