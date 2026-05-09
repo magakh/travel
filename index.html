@@ -211,18 +211,16 @@ async function deleteTrip(id, overlay) {
   deleteBtn.textContent = 'Deleting...';
   deleteBtn.disabled = true;
 
-  const { error } = await supa.from('trips').delete().eq('id', id);
+  // .select() returns the rows actually deleted — empty means RLS blocked it silently
+  const { data: deleted, error } = await supa.from('trips').delete().eq('id', id).select('id');
+  overlay.remove();
+
   if (error) {
-    overlay.remove();
-    alert('Delete failed: ' + error.message + '\n\nYou may need editor access to delete trips.');
+    alert('Delete failed: ' + error.message);
     return;
   }
-
-  // Verify it's actually gone from Supabase
-  const { data: check } = await supa.from('trips').select('id').eq('id', id).maybeSingle();
-  overlay.remove();
-  if (check) {
-    alert('Delete failed — trip still exists in database. Check Supabase RLS permissions.');
+  if (!deleted || deleted.length === 0) {
+    alert('Delete blocked — Supabase RLS policy prevents anonymous deletes.\n\nGo to Supabase → Table Editor → trips → RLS Policies and add a DELETE policy for the anon role.');
     return;
   }
 
