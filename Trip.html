@@ -815,32 +815,21 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
   gap: 6px;
 }
 @media (max-width: 700px) {
-  #panel-list.active {
-    height: auto;
-    overflow: visible;
-  }
-  #panel-list.active .split-layout {
-    flex-direction: column;
-    height: auto;
-  }
-  .split-list {
-    overflow-y: visible;
-    height: auto;
-  }
-  .split-map-panel {
+  .split-map-panel { 
     width: 100%;
-    position: relative;
-    top: auto;
-    left: auto; right: auto;
+    position: fixed;
+    top: var(--header-h);
+    left: 0; right: 0;
     height: 45vh;
     border-left: none;
-    border-top: 2px solid var(--border);
-    z-index: 1;
-    background: #f5f5f5;
-    display: flex !important;
+    border-bottom: 2px solid var(--border);
+    z-index: 100;
+    background: #fff;
   }
-  .split-map-panel.hidden { display: none !important; }
-  .split-map-toggle { display: none; }
+  .split-map-panel.hidden { display: none; }
+  .split-layout.map-open .split-list {
+    margin-top: 45vh;
+  }
 }
 @media (min-width: 701px) {
   .split-map-toggle { display: none; }
@@ -1190,7 +1179,6 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
     </div>
   </div>
   <div class="day-tabs" id="dayTabs">
-    <button class="day-tab blue" onclick="showRouteMap()" id="dtabMap">Route Map</button>
     <button class="day-tab green-tab" onclick="showAllMap()" id="dtabAll">All Days Map</button>
     <button class="day-tab" onclick="showView('search')" id="dtabSearch" style="border-color:#1a73e8;color:#1a73e8;">+ Add / Search</button>
     <button class="day-tab" onclick="showView('settings')" id="dtabSettings" style="border-color:#555;color:#555;">⚙ Settings</button>
@@ -1223,6 +1211,9 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
           <button class="blue-btn" onclick="showView('search')">+ Add location</button>
         </div>
         <div id="stopList"></div>
+        <div style="padding:12px 16px 24px;">
+          <button onclick="showRouteMap()" style="width:100%;padding:13px;border-radius:12px;border:none;background:#1a73e8;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">🗺 Route Map for this day</button>
+        </div>
       </div>
       <div class="split-map-panel hidden" id="splitMapPanel">
         <div id="inlineMapDiv"></div>
@@ -3365,8 +3356,8 @@ function updateBottomNav() {
 function switchDay(d) {
   if (d < 0 || d >= days.length || !days[d]) return;
 
-  // Always show inline map (desktop: side panel; mobile: below stops)
-  if (!_inlineMapOpen) {
+  // Auto-open inline map on desktop
+  if (window.innerWidth > 700 && !_inlineMapOpen) {
     _inlineMapOpen = true;
     const panel = document.getElementById('splitMapPanel');
     if (panel) panel.classList.remove('hidden');
@@ -6836,11 +6827,11 @@ function applyConfig() {
 
   // Rebuild day tabs dynamically — no hardcoded limit
   const dayTabs = document.getElementById('dayTabs');
-  const dtabMap = document.getElementById('dtabMap');
-  if (dayTabs && dtabMap) {
+  const dtabAnchor = document.getElementById('dtabAll');
+  if (dayTabs && dtabAnchor) {
     // Remove old day buttons
     dayTabs.querySelectorAll('.day-tab[id^="dtab"]:not(#dtabMap):not(#dtabAll):not(#dtabSearch):not(#dtabSettings)').forEach(el => el.remove());
-    // Insert new ones before Route Map
+    // Insert new ones before All Days Map
     for (let i = _n - 1; i >= 0; i--) {
       const lbl = (c.dayLabels || [])[i] || ('Day ' + (i + 1));
       const btn = document.createElement('button');
@@ -6848,7 +6839,7 @@ function applyConfig() {
       btn.id = 'dtab' + i;
       btn.textContent = lbl;
       btn.onclick = () => switchDay(i);
-      dayTabs.insertBefore(btn, dtabMap);
+      dayTabs.insertBefore(btn, dtabAnchor);
     }
   }
 
