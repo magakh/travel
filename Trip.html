@@ -5514,39 +5514,88 @@ function dismissLandmarkAlert() {
 function _addWalkLandmarkToDay(idx) {
   const lm = (_walkTourLandmarks || [])[idx];
   if (!lm) return;
-  const btn = document.getElementById('walkAddBtn_' + idx);
 
-  // Build time string from current time
   const now = new Date();
   const hh = now.getHours().toString().padStart(2, '0');
   const mm = now.getMinutes().toString().padStart(2, '0');
-  const timeStr = hh + ':' + mm;
 
-  const stop = {
-    name: lm.name,
-    category: lm.category || 'Landmark',
-    note: lm.tldr || '',
-    time: timeStr,
-    duration: 15,
-    lat: lm.lat,
-    lng: lm.lng,
-    tags: ['walked by'],
-    wikiUrl: lm.wikiUrl || '',
-    completed: true
-  };
-
-  days[currentDay].stops.push(stop);
-  saveToStorage();
-  cloudSave('walked by: ' + lm.name);
-
-  if (btn) {
-    btn.textContent = '✅ Added — ' + lm.name;
-    btn.style.background = '#1a7a3a';
-    btn.style.color = '#fff';
-    btn.style.borderColor = '#1a7a3a';
-    btn.disabled = true;
+  // Build day options
+  const n = APP_CONFIG.numDays || days.length;
+  const labels = APP_CONFIG.dayLabels || [];
+  let dayOptions = '';
+  for (let i = 0; i < n; i++) {
+    const lbl = labels[i] || ('Day ' + (i + 1));
+    dayOptions += `<option value="${i}" ${i === currentDay ? 'selected' : ''}>${lbl}</option>`;
   }
-  showToast('Added "' + lm.name + '" to ' + (APP_CONFIG.dayLabels || [])[currentDay] || ('Day ' + (currentDay + 1)));
+
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:99999;display:flex;align-items:flex-end;justify-content:center;';
+  ov.innerHTML = `
+    <div style="background:#1e1e1e;border-radius:20px 20px 0 0;padding:24px;width:100%;max-width:480px;">
+      <div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Add to schedule</div>
+      <div style="font-size:17px;font-weight:900;color:#fff;margin-bottom:18px;">${lm.name}</div>
+      <div style="display:flex;gap:10px;margin-bottom:16px;">
+        <div style="flex:1;">
+          <div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px;">Day</div>
+          <select id="walkAddDay" style="width:100%;padding:11px;border-radius:10px;border:1px solid #444;background:#111;color:#fff;font-size:14px;">${dayOptions}</select>
+        </div>
+        <div style="flex:1;">
+          <div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px;">Time passed by</div>
+          <input id="walkAddTime" type="time" value="${hh}:${mm}" style="width:100%;padding:11px;border-radius:10px;border:1px solid #444;background:#111;color:#fff;font-size:14px;">
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;">
+        <button onclick="this.closest('div[style*=fixed]').remove()" style="flex:1;padding:13px;border-radius:12px;border:none;background:#2a2a2a;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">Cancel</button>
+        <button id="walkAddConfirm" style="flex:1;padding:13px;border-radius:12px;border:none;background:#1a7a3a;color:#fff;font-size:14px;font-weight:800;cursor:pointer;">✅ Add walked by</button>
+      </div>
+    </div>`;
+
+  document.body.appendChild(ov);
+  ov.onclick = (e) => { if (e.target === ov) ov.remove(); };
+
+  document.getElementById('walkAddConfirm').onclick = function() {
+    const dayIdx = parseInt(document.getElementById('walkAddDay').value);
+    const timeVal = document.getElementById('walkAddTime').value || (hh + ':' + mm);
+
+    const stop = {
+      name: lm.name,
+      category: lm.category || 'Landmark',
+      note: lm.tldr || '',
+      time: timeVal,
+      duration: 15,
+      lat: lm.lat,
+      lng: lm.lng,
+      tags: ['walked by'],
+      wikiUrl: lm.wikiUrl || '',
+      completed: true
+    };
+
+    // Insert in time order
+    const targetDay = days[dayIdx];
+    if (!targetDay) return;
+    const [addH, addM] = timeVal.split(':').map(Number);
+    const addMins = addH * 60 + addM;
+    let insertAt = targetDay.stops.length;
+    for (let i = 0; i < targetDay.stops.length; i++) {
+      const [sh, sm] = (targetDay.stops[i].time || '00:00').split(':').map(Number);
+      if (sh * 60 + sm > addMins) { insertAt = i; break; }
+    }
+    targetDay.stops.splice(insertAt, 0, stop);
+
+    saveToStorage();
+    cloudSave('walked by: ' + lm.name);
+    ov.remove();
+
+    const btn = document.getElementById('walkAddBtn_' + idx);
+    if (btn) {
+      btn.textContent = '✅ Added to ' + (labels[dayIdx] || ('Day ' + (dayIdx + 1))) + ' · ' + timeVal;
+      btn.style.background = '#1a7a3a';
+      btn.style.color = '#fff';
+      btn.style.borderColor = '#1a7a3a';
+      btn.disabled = true;
+    }
+    showToast('Added "' + lm.name + '" at ' + timeVal);
+  };
 }
 
 let _nextLandmarkIdx = 0; // tracks position for manual Next cycling
