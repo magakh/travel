@@ -3325,6 +3325,23 @@ async function init() {
     if (imported) loaded = await cloudLoad();
   }
 
+  // Even if cloud loaded, check if localStorage has MORE stops (cloud may have been wiped)
+  try {
+    const localRaw = localStorage.getItem('trip_' + TRIP_ID + '_v1');
+    if (localRaw) {
+      const localData = JSON.parse(localRaw);
+      const cloudStops = days.reduce((n, d) => n + (d.stops||[]).length, 0);
+      const localStops = (localData.days||[]).reduce((n, d) => n + (d.stops||[]).length, 0);
+      if (localStops > cloudStops) {
+        // localStorage has more data — restore it and push back to Supabase
+        tryLoadLocal();
+        showToast('📦 Restored from device backup — saving to cloud…');
+        setTimeout(() => doAutoPush(), 1000);
+        loaded = true;
+      }
+    }
+  } catch(e) {}
+
   // If still nothing, fall back to local copy
   if (!loaded) {
     const localOk = tryLoadLocal();
