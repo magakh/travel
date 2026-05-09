@@ -1778,17 +1778,20 @@ async function cloudSave(summary) {
 
     let { error } = await supa.from('trips').upsert(payload, { onConflict: 'id' });
 
-    // Timeout or size error — retry once without photos
-    if (error && (error.message || '').toLowerCase().includes('timeout')) {
-      console.warn('cloudSave timeout — retrying without photos');
+    if (error) {
+      const isTimeout = (error.message || '').toLowerCase().includes('timeout');
+      // Retry without photos for timeout/size errors
       const slimData = { ...data, days: data.days.map(d => ({ ...d, stops: d.stops.map(s => { const c = {...s}; delete c.userPhotos; return c; }) })) };
       const slim = { ...payload, data: slimData };
       const r2 = await supa.from('trips').upsert(slim, { onConflict: 'id' });
       error = r2.error;
-      if (!error) showToast('⚠️ Saved without photos — connection was slow');
+      if (!error) {
+        if (!isTimeout) showToast('⚠️ Saved without photos — connection was slow');
+        // timeout: silent retry succeeded, no toast needed
+      }
     }
 
-    if (error) { console.warn('cloudSave', error); showToast('Sync failed — try again', true); return false; }
+    if (error) { console.warn('cloudSave', error); schedulePush(); return false; } // retry in 500ms, no toast
     const btn = document.getElementById('saveBtn');
     if (btn) { btn.textContent = '✓'; btn.style.color = '#1a7a3a'; setTimeout(() => { btn.textContent = '💾'; btn.style.color = '#88d8a0'; }, 1200); }
     return true;
