@@ -4077,8 +4077,7 @@ async function _processLandmarkPhoto(file) {
   ov.innerHTML = '<div style="width:48px;height:48px;border:4px solid rgba(255,255,255,0.25);border-top-color:#fff;border-radius:50%;animation:identifySpin 0.75s linear infinite;"></div>'
     + '<p id="identifyStatus" style="color:#fff;font-size:15px;font-weight:700;text-align:center;max-width:280px;">Identifying landmark…</p>';
   if (!document.getElementById('identifySpinStyle')) {
-    const s = document.createElement('style');
-    s.id = 'identifySpinStyle';
+    const s = document.createElement('style'); s.id = 'identifySpinStyle';
     s.textContent = '@keyframes identifySpin{to{transform:rotate(360deg)}}';
     document.head.appendChild(s);
   }
@@ -4088,17 +4087,56 @@ async function _processLandmarkPhoto(file) {
   try {
     const base64 = await _resizeToBase64(file, 1024);
 
-    // Step 1 — Vision: identify from photo
+    // Build GPS context for the prompt
+    const gpsHint = (snapLat && snapLng)
+      ? '\nIMPORTANT: Photo taken at GPS coordinates ' + snapLat.toFixed(5) + ', ' + snapLng.toFixed(5)
+        + '. You MUST identify a place that could plausibly exist at or very near these coordinates. '
+        + 'If what you see cannot be matched to a real place near these coordinates with high confidence, return confidence below 50.'
+      : '';
+
+    // Step 1 — Vision with GPS context and confidence
     const visionText = await _callVision(base64,
-      'Look at this photo. Identify the BUSINESS, RESTAURANT, PUB, CAFE, BAR, SHOP or LANDMARK. Read visible signage.\\nNEVER return a person\'s name — return the PLACE or BUSINESS name only.\\nReturn ONLY valid JSON (no markdown):\\n{"name":"exact name from sign or known place — not a person","location":"city, country","type":"restaurant|cafe|pub|bar|hotel|shop|museum|church|monument|building|other","is_business":true,"google_query":"Google Maps search: name + location","wiki_query":"Wikipedia title if notable else empty"}\\nIf unidentifiable set name to empty string.'
+      'Look at this photo. Identify the BUSINESS, RESTAURANT, PUB, CAFE, BAR, SHOP or LANDMARK visible. Read any visible signage first.' + gpsHint
+      + '\nReturn ONLY valid JSON (no markdown):\n{"name":"exact name from sign or known place","location":"city, country","type":"restaurant|cafe|pub|bar|hotel|shop|museum|church|theatre|monument|building|other","is_business":true,"confidence":0-100,"google_query":"name + location for Google Maps","wiki_query":"Wikipedia article title if notable else empty","confidence_reason":"why this confidence level"}'
+      + '\nconfidence 90-100: sign clearly readable or unmistakable landmark. 70-89: recognisable but some uncertainty. 50-69: best guess. Below 50: cannot reliably identify.'
+      + '\nIf unidentifiable set name to empty string and confidence to 0.'
     );
-    let identified = { name: '', location: '', type: 'other', is_business: false, google_query: '', wiki_query: '' };
+    let identified = { name: '', location: '', type: 'other', is_business: false, confidence: 0, google_query: '', wiki_query: '' };
     try { identified = JSON.parse(visionText.replace(/```json|```/g, '').trim()); } catch(e) {}
 
-    if (!identified.name) {
+    const confidence = Math.min(100, Math.max(0, parseInt(identified.confidence) || 0));
+
+    if (!identified.name || confidence < 50) {
       ov.remove();
-      showToast('Could not identify — try a clearer photo showing the sign or name', true);
+      const msg = !identified.name
+        ? 'Could not identify — try a clearer photo showing the sign or entrance'
+        : 'Low confidence (' + confidence + '%) — couldn\'t reliably identify this. Try a closer shot showing the name or sign.';
+      showToast(msg, true);
       return;
+    }
+
+    // Step 2 — If we have GPS, cross-check against nearby Wikipedia landmarks
+    if (snapLat && snapLng && confidence < 90) {
+      setStatus('Verifying location…');
+      try {
+        const nearbyRes = await fetch(
+          'https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=' + snapLat + '|' + snapLng
+          + '&gsradius=300&gslimit=10&format=json&origin=*'
+        );
+        const nearbyData = await nearbyRes.json();
+        const nearby = (nearbyData.query && nearbyData.query.geosearch) || [];
+        const nameLC = identified.name.toLowerCase();
+        const match = nearby.find(n => {
+          const t = n.title.toLowerCase();
+          return t.includes(nameLC) || nameLC.includes(t) || t.split(' ').some(w => w.length > 4 && nameLC.includes(w));
+        });
+        if (nearby.length > 0 && !match) {
+          // Identified place not found in nearby landmarks — likely wrong
+          ov.remove();
+          showToast('Identified "' + identified.name + '" (' + confidence + '%) but no match found within 300m of your location. Try again closer to the landmark.', true);
+          return;
+        }
+      } catch(e) { /* network issue — continue anyway */ }
     }
 
     // Classify as business (restaurant/cafe/pub/bar/hotel/shop)
@@ -4172,6 +4210,7 @@ async function _processLandmarkPhoto(file) {
       wikiUrl: wUrl,
       gmapsUrl: gmapsUrl,
       isBusiness: isBusiness,
+      confidence: confidence,
       menuUrl: isBusiness ? 'https://www.google.com/search?q=' + encodeURIComponent(wTitle + ' ' + identified.location + ' menu') : null,
       reviewsUrl: isBusiness ? 'https://www.google.com/search?q=' + encodeURIComponent(wTitle + ' ' + identified.location + ' reviews') : null,
       lmLat: wLat,
@@ -4260,6 +4299,7 @@ function _showIdentifyCard(lm) {
     + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">'
     + '<span style="background:#5c4db1;color:#fff;font-size:11px;font-weight:800;padding:4px 10px;border-radius:20px;letter-spacing:0.5px;">📷 IDENTIFIED</span>'
     + (distStr ? '<span style="font-size:11px;color:#1a7a3a;font-weight:700;">'+distStr+'</span>' : '')
+    + (lm.confidence ? '<span style="font-size:11px;font-weight:800;padding:3px 8px;border-radius:20px;background:' + (lm.confidence>=80?'#e8f5e9':lm.confidence>=60?'#fffbeb':'#fce4ec') + ';color:' + (lm.confidence>=80?'#1a7a3a':lm.confidence>=60?'#b45309':'#c62828') + ';">' + lm.confidence + '% match</span>' : '')
     + '<button onclick="_closeIdentifyCard()" style="margin-left:auto;background:#f0f0f0;border:none;border-radius:20px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;">✕</button>'
     + '</div>'
     // User location
