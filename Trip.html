@@ -6866,12 +6866,21 @@ function populateDaySelects() {
 async function confirmResetAll() {
   const savedKey = APP_CONFIG.supabaseKey;
   const savedUrl = APP_CONFIG.supabaseUrl;
-  // Wipe all stops in memory, then push via cloudSave so auth/format matches
-  days.forEach(d => { d.stops = []; });
-  completed = [];
-  window.HOTEL_DATA = null;
-  HOTEL.name = ''; HOTEL.address = ''; HOTEL.lat = null; HOTEL.lng = null;
-  await cloudSave('reset all data');
+  // Push empty data directly to Supabase — bypass EDITOR_MODE check
+  if (supabaseReady()) {
+    try {
+      const emptyDays = days.map(d => ({ title: d.title, note: d.note || '', stops: [] }));
+      const payload = {
+        id: TRIP_ID,
+        title: APP_CONFIG.title,
+        subtitle: APP_CONFIG.subtitle,
+        config: getTripConfig(),
+        data: { days: emptyDays, completed: [], hotel: null, savedAt: new Date().toISOString() }
+      };
+      const { error } = await supa.from('trips').upsert(payload, { onConflict: 'id' });
+      if (error) console.warn('Reset push failed:', error);
+    } catch(e) { console.warn('Reset push error:', e); }
+  }
   localStorage.clear();
   try {
     const preserved = { supabaseUrl: savedUrl, supabaseKey: savedKey };
