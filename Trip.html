@@ -1171,12 +1171,10 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
     </div>
     <div style="display:flex;gap:6px;flex-shrink:0;">
       <button class="prebook-pill" id="lockBtn" onclick="showLockDialog()" title="Edit access" style="border-color:#aaa;color:#555;">🔒 View</button>
-      <button class="prebook-pill" id="saveBtn" onclick="saveToStorage()" title="Save & sync" style="border-color:#88d8a0;color:#88d8a0;">💾</button>
-      <span id="syncDot" title="Sync status" style="font-size:10px;font-weight:800;padding:3px 7px;border-radius:20px;background:#333;color:#888;display:none;align-items:center;"></span>
+      <button class="prebook-pill" id="saveBtn" onclick="saveToStorage()" title="Save" style="border-color:#88d8a0;color:#88d8a0;">💾</button>
       <button class="prebook-pill" id="walkGuideBtn" onclick="toggleWalkingGuide()" title="Live walking guide" style="border-color:#1a7a3a;color:#1a7a3a;font-size:16px;padding:4px 8px;">🚶</button>
       <button class="prebook-pill" onclick="checkInHere()" title="Check in at current location" style="border-color:#e67e22;color:#e67e22;font-size:16px;padding:4px 8px;">📍</button>
       <button class="prebook-pill" onclick="identifyLandmark()" title="Identify landmark from photo" style="border-color:#5c4db1;color:#5c4db1;font-size:16px;padding:4px 8px;">📷</button>
-      <button class="prebook-pill" onclick="showSaveMenu()" title="More options">⋮</button>
       <button class="prebook-pill" onclick="showView('prebook')">Book list</button>
     </div>
   </div>
@@ -1417,6 +1415,15 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
         <h3 style="margin:0 0 8px 0;font-size:14px;">🗂 Trips</h3>
         <p class="gen-hint" style="margin-bottom:10px;font-size:12px;">Current trip: <strong id="setCurrentTrip">london2026</strong></p>
         <a href="index.html" style="display:block;text-align:center;padding:11px;border-radius:10px;border:1px solid #444;background:#1e1e1e;color:#ccc;font-size:13px;font-weight:700;text-decoration:none;">← All Trips</a>
+      </div>
+
+      <!-- ── DATA ── -->
+      <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
+        <p style="font-size:12px;color:#888;margin-bottom:8px;">Data</p>
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <button onclick="exportFile()" style="flex:1;padding:11px;border-radius:10px;border:1px solid #444;background:#1e1e1e;color:#ccc;font-size:13px;font-weight:700;cursor:pointer;">📤 Export</button>
+          <button onclick="document.getElementById('import-input').click()" style="flex:1;padding:11px;border-radius:10px;border:1px solid #444;background:#1e1e1e;color:#ccc;font-size:13px;font-weight:700;cursor:pointer;">📥 Import</button>
+        </div>
       </div>
 
       <!-- ── DANGER ZONE ── -->
@@ -1762,10 +1769,11 @@ async function cloudSave(summary) {
       config: payload.config, data: payload.data
     });
     _ourLastSavedAt = payload.data.savedAt || '';
-    showSyncDot('⟳ Saving…');
+    
     const { error } = await supa.from('trips').upsert(payload, { onConflict: 'id' });
-    if (error) { console.warn('cloudSave', error); showToast('Sync failed — ' + (error.message || 'check connection'), true); showSyncDot('!'); return false; }
-    showSyncDot('✓ Saved');
+    if (error) { console.warn('cloudSave', error); showToast('Sync failed — ' + (error.message || 'check connection'), true); return false; }
+    const btn = document.getElementById('saveBtn');
+    if (btn) { btn.textContent = '✓'; btn.style.color = '#1a7a3a'; setTimeout(() => { btn.textContent = '💾'; btn.style.color = '#88d8a0'; }, 1200); }
     return true;
   } catch(e) { console.warn('cloudSave', e); return false; }
 }
@@ -1819,33 +1827,25 @@ function startRealtime() {
         if (isUserBusy()) {
           applyRemoteData(row);
           _lastKnownSignature = incomingSig;
-          showSyncDot('↻');
+          
           return;
         }
         applyRemoteData(row);
         _lastKnownSignature = incomingSig;
         _walkLoadedDays.clear();
         try { renderAll(); } catch(e) {}
-        showSyncDot('↻ Synced');
+        
       })
     .subscribe((status) => {
-      if (status === 'SUBSCRIBED') showSyncDot('●', '#1a7a3a');
+      if (status === 'SUBSCRIBED') 
       if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-        showSyncDot('!', '#c0392b');
+        
         setTimeout(startRealtime, 5000); // reconnect
       }
     });
 }
 
-function showSyncDot(text, color) {
-  const dot = document.getElementById('syncDot');
-  if (!dot) return;
-  dot.textContent = text;
-  dot.style.display = 'inline-flex';
-  dot.style.color = color || (text === '●' ? '#1a7a3a' : text === '!' ? '#c0392b' : '#1a73e8');
-  dot.style.background = color ? color + '22' : '#f0f8ff';
-  if (text !== '●') setTimeout(() => { dot.style.display = 'none'; }, 3000);
-}
+function showSyncDot() { /* removed */ }
 
 function isUserBusy() {
   const overlays = ['time-overlay','dur-overlay','res-overlay','hotel-overlay','suggest-overlay','lock-overlay','newtrip-overlay','ai-gen-overlay','fill-picker-overlay'];
@@ -3315,6 +3315,8 @@ async function init() {
   }
   renderPrebook();
   window.addEventListener('resize', updateHeaderHeight);
+  // 10-second auto-save — keeps everyone in sync
+  setInterval(() => { if (EDITOR_MODE && !_autoPushInFlight) doAutoPush(); }, 10000);
   // Show feature highlights to first-time visitors
   setTimeout(() => {
     if (!localStorage.getItem('trip_tour_v1')) showFeatureTour();
