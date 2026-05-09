@@ -5244,11 +5244,11 @@ var _userStreetTs = 0;       // timestamp of last street name refresh
 
 async function liveWikiSearch(lat, lng, radius) {
   if (!_walkTourActive || _walkTourAlertOpen) return;
-  radius = radius || 30;
+  radius = radius || 80;
 
-  // Throttle: re-search after moving 10m
+  // Throttle: re-search after moving 20m
   if (radius <= 100 && _walkLastSearchLat !== null) {
-    if (_haversineMetres(_walkLastSearchLat, _walkLastSearchLng, lat, lng) < 10) return;
+    if (_haversineMetres(_walkLastSearchLat, _walkLastSearchLng, lat, lng) < 20) return;
   }
   _walkLastSearchLat = lat;
   _walkLastSearchLng = lng;
@@ -5284,12 +5284,37 @@ async function liveWikiSearch(lat, lng, radius) {
     });
 
     if (!nearby.length || _walkTourAlertOpen) {
-      if (radius > 100) {
-        // Show a proper slide-up notice instead of a tiny toast
-        _showNoLandmarksCard();
-      } else if (!_walkTourAlertOpen && radius <= 100) {
-        showToast('📍 Nothing within 30 m');
-      }
+      if (_walkTourAlertOpen) return;
+      if (radius > 100) { _showNoLandmarksCard(); return; }
+
+      // Wikipedia found nothing — try OpenStreetMap Overpass for better local coverage
+      try {
+        const r2 = radius || 80;
+        const overpassQ = `[out:json][timeout:5];(node["tourism"~"attraction|artwork|viewpoint|monument"](around:${r2},${lat},${lng});node["historic"~"monument|memorial|gate|castle|ruins"](around:${r2},${lat},${lng});node["amenity"~"place_of_worship"](around:${r2},${lat},${lng}););out 5;`;
+        const resp = await fetch('https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(overpassQ));
+        const osmData = await resp.json();
+        const osmHits = (osmData.elements || []).filter(el => {
+          if (!el.tags || !el.tags.name) return false;
+          if (_walkLiveCache.has('osm-' + el.id)) return false;
+          const d = _haversineMetres(lat, lng, el.lat, el.lon);
+          return d <= WALK_TRIGGER_METRES;
+        });
+        if (osmHits.length) {
+          const hit = osmHits[0];
+          _walkLiveCache.add('osm-' + hit.id);
+          const lm = {
+            name: hit.tags.name,
+            extract: hit.tags.description || hit.tags['name:en'] || '',
+            lat: hit.lat, lng: hit.lon,
+            category: hit.tags.tourism || hit.tags.historic || hit.tags.amenity || 'landmark',
+            image: null, wikiUrl: '', tldr: '', funFact: '', suggestion: ''
+          };
+          showLandmarkAlert(lm, -1, _haversineMetres(lat, lng, hit.lat, hit.lon));
+          return;
+        }
+      } catch(e) {}
+
+      showToast('📍 Nothing within ' + WALK_TRIGGER_METRES + ' m');
       return;
     }
 
