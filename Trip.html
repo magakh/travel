@@ -5345,10 +5345,12 @@ async function liveWikiSearch(lat, lng, radius) {
         var sgData = await sgRes.json();
         var sa = sgData.address || {};
         var lmRoad = (sa.road || sa.pedestrian || sa.path || sa.footway || '').toLowerCase().trim();
-        var myRoad = (_userCurrentStreet || '').toLowerCase().replace('__unknown__', '');
-        if (lmRoad && myRoad && lmRoad !== myRoad) {
-          _walkLiveCache.delete(hit.pageid);
-          return;
+        var myRoad = (_userCurrentStreet || '').toLowerCase().replace('__unknown__', '').trim();
+        if (lmRoad) {
+          // Know the landmark's street — enforce same-street rule strictly
+          if (!myRoad || lmRoad !== myRoad) {
+            if (hitDist > 12) { _walkLiveCache.delete(hit.pageid); return; }
+          }
         }
         lmAddressFromGuard = [sa.house_number, sa.road || sa.pedestrian || sa.path || sa.footway].filter(Boolean).join(' ') || null;
       } catch(e) {
