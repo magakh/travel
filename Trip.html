@@ -1699,11 +1699,10 @@ function applyRemoteData(row) {
   const d = row.data || {};
   if (d.days && d.days.length) {
     d.days.forEach((dd, i) => {
-      if (days[i]) {
-        days[i].stops = dd.stops || [];
-        if (dd.title) days[i].title = dd.title;
-        if (dd.note) days[i].note = dd.note;
-      }
+      if (!days[i]) days[i] = { title: '', note: '', stops: [] };
+      days[i].stops = dd.stops || [];
+      if (dd.title) days[i].title = dd.title;
+      if (dd.note) days[i].note = dd.note;
     });
   }
   if (Array.isArray(d.completed)) completed = d.completed;
@@ -1943,7 +1942,10 @@ function tryLoadLocal() {
     if (!raw) return false;
     const data = JSON.parse(raw);
     if (data.days && Array.isArray(data.days) && data.days.length >= 1) {
-      data.days.forEach((d, i) => { if (days[i] && d.stops && d.stops.length) days[i].stops = d.stops; });
+      data.days.forEach((d, i) => {
+        if (!days[i]) days[i] = { title: '', note: '', stops: [] };
+        if (d.stops && d.stops.length) days[i].stops = d.stops;
+      });
       completed = data.completed || [];
       if (data.hotel) { window.HOTEL_DATA = data.hotel; HOTEL.name = data.hotel.name; HOTEL.address = data.hotel.address; HOTEL.lat = data.hotel.lat; HOTEL.lng = data.hotel.lng; }
       return true;
@@ -2021,7 +2023,10 @@ function importFile(input) {
     try {
       const data = JSON.parse(e.target.result);
       if (!data.days || data.days.length < 1) throw new Error('Invalid format');
-      data.days.forEach((d, i) => { if (days[i]) days[i].stops = d.stops; });
+      data.days.forEach((d, i) => {
+        if (!days[i]) days[i] = { title: '', note: '', stops: [] };
+        days[i].stops = d.stops;
+      });
       completed = data.completed || [];
       if (data.hotel) { window.HOTEL_DATA = data.hotel; HOTEL.name = data.hotel.name; HOTEL.address = data.hotel.address; HOTEL.lat = data.hotel.lat; HOTEL.lng = data.hotel.lng; }
       autoSave();
@@ -6817,6 +6822,13 @@ function applyConfig() {
   const subEl = document.getElementById('appSubtitleEl');
   if (titleEl) titleEl.textContent = c.title || 'Travel 2026';
   if (subEl) subEl.textContent = c.subtitle || '';
+
+  // Extend days array to match numDays (hardcoded array only has 4)
+  const _n = c.numDays || 4;
+  while (days.length < _n) {
+    const lbl = (c.dayLabels || [])[days.length] || ('Day ' + (days.length + 1));
+    days.push({ title: lbl, note: '', stops: [] });
+  }
 
   // Update day tabs
   const tabIds = ['dtab0','dtab1','dtab2','dtab3','dtab4','dtab5','dtab6'];
