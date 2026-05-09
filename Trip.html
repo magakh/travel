@@ -1749,23 +1749,6 @@ async function cloudSave(summary) {
     return false;
   }
   try {
-    // Merge userPhotos from Supabase by stop NAME (not index) so reorders don't corrupt photos
-    try {
-      const { data: remote } = await supa.from('trips').select('data').eq('id', TRIP_ID).maybeSingle();
-      if (remote && remote.data && remote.data.days) {
-        remote.data.days.forEach((rd, di) => {
-          if (!days[di] || !rd.stops) return;
-          rd.stops.forEach(rs => {
-            if (!rs.userPhotos || !rs.userPhotos.length) return;
-            const localStop = days[di].stops.find(ls => ls.name === rs.name);
-            if (!localStop) return;
-            const localSet = new Set(localStop.userPhotos || []);
-            rs.userPhotos.forEach(p => localSet.add(p));
-            localStop.userPhotos = Array.from(localSet);
-          });
-        });
-      }
-    } catch(e) { /* merge failed — continue with local data */ }
     const payload = {
       id: TRIP_ID,
       title: APP_CONFIG.title,
