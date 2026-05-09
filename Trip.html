@@ -1743,7 +1743,10 @@ async function cloudLoad() {
 
 // Push current state to Supabase (upsert)
 async function cloudSave(summary) {
-  if (!supabaseReady() || !EDITOR_MODE) return false;
+  if (!supabaseReady() || !EDITOR_MODE) {
+    if (!EDITOR_MODE) showToast('Not in edit mode — unlock first', true);
+    return false;
+  }
   try {
     const payload = {
       id: TRIP_ID,
@@ -2003,7 +2006,11 @@ async function doAutoPush() {
 }
 
 // Legacy names still used elsewhere in the file
-function saveToStorage() { doAutoPush(); showToast('Saved ✓'); }
+function saveToStorage() {
+  if (!EDITOR_MODE) { showToast('Unlock editing to save changes (tap 🔒)', true); return; }
+  doAutoPush();
+  showToast('Saved ✓');
+}
 async function syncSave() { await doAutoPush(); }
 async function syncLoad() { return await cloudLoad(); }
 function tryLoadSaved() { return tryLoadLocal(); }
@@ -3582,6 +3589,7 @@ async function resizeStopPhoto(file, maxPx) {
 }
 
 function addStopPhotos(stopIdx, dayIdx) {
+  if (!EDITOR_MODE) { showToast('Unlock editing first (tap 🔒)', true); return; }
   const input = document.createElement('input');
   input.type = 'file'; input.accept = 'image/*'; input.multiple = true;
   input.style.cssText = 'position:fixed;top:-9999px;opacity:0;';
