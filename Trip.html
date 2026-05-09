@@ -3683,9 +3683,11 @@ function openPhotoGallery(stopIdx, dayIdx, startIdx) {
       <img src="${photos[cur]}" style="max-width:100%;max-height:75vh;object-fit:contain;">
       <div style="display:flex;align-items:center;gap:12px;margin-top:20px;padding:0 20px;width:100%;max-width:480px;justify-content:space-between;">
         <button onclick="galleryNav(${stopIdx},${dayIdx},${cur-1})" ${cur===0?'disabled':''} style="flex:1;background:rgba(255,255,255,${cur===0?'0.1':'0.25'});border:none;color:#fff;padding:14px;border-radius:24px;font-size:15px;font-weight:700;cursor:pointer;opacity:${cur===0?'0.4':'1'};">← Prev</button>
-        ${EDITOR_MODE ? `<button onclick="deleteGalleryPhoto(${stopIdx},${dayIdx},${cur})" style="flex:1;background:rgba(192,57,43,0.9);border:none;color:#fff;padding:14px;border-radius:24px;font-size:15px;font-weight:800;cursor:pointer;">🗑 Delete</button>` : ''}
         <button onclick="galleryNav(${stopIdx},${dayIdx},${cur+1})" ${cur===photos.length-1?'disabled':''} style="flex:1;background:rgba(255,255,255,${cur===photos.length-1?'0.1':'0.25'});border:none;color:#fff;padding:14px;border-radius:24px;font-size:15px;font-weight:700;cursor:pointer;opacity:${cur===photos.length-1?'0.4':'1'};">Next →</button>
-      </div>`;
+      </div>
+      ${EDITOR_MODE ? `<div style="position:absolute;bottom:20px;right:20px;">
+        <button onclick="deleteGalleryPhoto(${stopIdx},${dayIdx},${cur})" style="background:rgba(192,57,43,0.9);border:none;color:#fff;padding:12px 20px;border-radius:24px;font-size:14px;font-weight:800;cursor:pointer;">🗑 Delete</button>
+      </div>` : ''}`;
   };
 
   window.galleryNav = (si, di, idx) => { cur = idx; render(); };
