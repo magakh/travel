@@ -6199,7 +6199,7 @@ function previewDayTabs() {
   const start = new Date(sy, smo - 1, sd);
   const end = new Date(ey, emo - 1, ed);
   const n = Math.round((end - start) / 86400000) + 1;
-  if (n < 1 || n > 14) { wrap.innerHTML = '<p class="gen-hint" style="color:#c0392b;">End date must be after start date (max 14 days).</p>'; return; }
+  if (n < 1) { wrap.innerHTML = '<p class="gen-hint" style="color:#c0392b;">End date must be after start date.</p>'; return; }
   // Update hidden numDays
   const ndEl = document.getElementById('setNumDays');
   if (ndEl) ndEl.value = n;
@@ -6225,7 +6225,7 @@ async function saveSettings() {
     const [sy, smo, sd] = startVal.split('-').map(Number);
     const [ey, emo, ed] = endVal.split('-').map(Number);
     n = Math.round((new Date(ey, emo-1, ed) - new Date(sy, smo-1, sd)) / 86400000) + 1;
-    n = Math.max(1, Math.min(14, n));
+    n = Math.max(1, n);
   }
   const dateVal = startVal || '';
 
@@ -6304,7 +6304,7 @@ async function saveAllSettings() {
     const [sy, smo, sd] = startVal2.split('-').map(Number);
     const [ey, emo, ed] = endVal2.split('-').map(Number);
     n = Math.round((new Date(ey, emo-1, ed) - new Date(sy, smo-1, sd)) / 86400000) + 1;
-    n = Math.max(1, Math.min(14, n));
+    n = Math.max(1, n);
   }
   const dateVal2 = startVal2 || '';
   const monthNames2 = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -6364,8 +6364,8 @@ function showNewTripDialog() {
       '<input id="ntTitle" class="form-input" placeholder="e.g. Tokyo 2027">' +
       '<label class="form-label">Subtitle (optional)</label>' +
       '<input id="ntSubtitle" class="form-input" placeholder="e.g. spring cherry blossoms">' +
-      '<label class="form-label">Number of days (1–14)</label>' +
-      '<input id="ntDays" class="form-input" type="number" min="1" max="14" value="4">' +
+      '<label class="form-label">Number of days</label>' +
+      '<input id="ntDays" class="form-input" type="number" min="1" value="4">' +
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;">' +
         '<button onclick="document.getElementById(&quot;newtrip-overlay&quot;).remove()" style="padding:12px;border-radius:10px;border:1px solid #ddd;background:#fff;font-weight:700;cursor:pointer;">Cancel</button>' +
         '<button onclick="createNewTrip()" style="padding:12px;border-radius:10px;border:none;background:#1a73e8;color:#fff;font-weight:700;cursor:pointer;">Create</button>' +
@@ -6380,7 +6380,7 @@ async function createNewTrip() {
   const slug = (document.getElementById('ntSlug').value || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
   const title = (document.getElementById('ntTitle').value || '').trim();
   const subtitle = (document.getElementById('ntSubtitle').value || '').trim();
-  const nd = Math.max(1, Math.min(14, parseInt(document.getElementById('ntDays').value) || 4));
+  const nd = Math.max(1, parseInt(document.getElementById('ntDays').value) || 4);
   if (!slug || !title) { showToast('Slug and title required', true); return; }
 
   // Check if slug already exists
