@@ -1179,13 +1179,7 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
     </div>
   </div>
   <div class="day-tabs" id="dayTabs">
-    <button class="day-tab active" onclick="switchDay(0)" id="dtab0">May 7</button>
-    <button class="day-tab" onclick="switchDay(1)" id="dtab1">May 8</button>
-    <button class="day-tab" onclick="switchDay(2)" id="dtab2">May 9</button>
-    <button class="day-tab" onclick="switchDay(3)" id="dtab3">May 10</button>
-    <button class="day-tab" onclick="switchDay(4)" id="dtab4" style="display:none;">Day 5</button>
-    <button class="day-tab" onclick="switchDay(5)" id="dtab5" style="display:none;">Day 6</button>
-    <button class="day-tab" onclick="switchDay(6)" id="dtab6" style="display:none;">Day 7</button>
+    <span id="dayTabsPlaceholder"></span>
     <button class="day-tab blue" onclick="showRouteMap()" id="dtabMap">Route Map</button>
     <button class="day-tab green-tab" onclick="showAllMap()" id="dtabAll">All Days Map</button>
     <button class="day-tab" onclick="showView('search')" id="dtabSearch" style="border-color:#1a73e8;color:#1a73e8;">+ Add / Search</button>
@@ -6830,18 +6824,16 @@ function applyConfig() {
     days.push({ title: lbl, note: '', stops: [] });
   }
 
-  // Update day tabs
-  const tabIds = ['dtab0','dtab1','dtab2','dtab3','dtab4','dtab5','dtab6'];
-  tabIds.forEach((id, i) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    if (i < (c.numDays || 4)) {
-      el.style.display = '';
-      el.textContent = (c.dayLabels || [])[i] || ('Day '+(i+1));
-    } else {
-      el.style.display = 'none';
+  // Rebuild day tabs dynamically — no hardcoded limit
+  const placeholder = document.getElementById('dayTabsPlaceholder');
+  if (placeholder) {
+    let html = '';
+    for (let i = 0; i < _n; i++) {
+      const lbl = (c.dayLabels || [])[i] || ('Day ' + (i + 1));
+      html += `<button class="day-tab${i === currentDay ? ' active' : ''}" onclick="switchDay(${i})" id="dtab${i}">${lbl}</button>`;
     }
-  });
+    placeholder.innerHTML = html;
+  }
 
   // Populate the "Add to day" selects (AI search + manual add)
   populateDaySelects();
