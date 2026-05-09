@@ -711,9 +711,14 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
   padding: env(safe-area-inset-top, 0) 0 0;
 }
 .header-top {
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex; align-items: center;
   padding: 12px 16px 8px;
+  gap: 10px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
 }
+.header-top::-webkit-scrollbar { display: none; }
 .header h1 { font-size: 16px; font-weight: 700; letter-spacing: -0.3px; }
 .header-sub { font-size: 11px; color: #aaa; margin-top: 1px; }
 .prebook-pill {
@@ -1164,7 +1169,7 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
 <input type="file" id="import-input" accept=".json" style="display:none" onchange="importFile(this); this.value='';">
 <div class="header" id="appHeader">
   <div class="header-top">
-    <div>
+    <div style="flex-shrink:0;">
       <a href="index.html" style="font-size:10px;font-weight:700;color:#666;text-decoration:none;letter-spacing:0.5px;text-transform:uppercase;">← All Trips</a>
       <h1 id="appTitleEl">Trip</h1>
       <div class="header-sub" id="appSubtitleEl">May 7–10 · hidden gems · rooftop dining</div>
