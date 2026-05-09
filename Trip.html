@@ -6039,7 +6039,7 @@ async function checkInHere() {
       lat = pos.coords.latitude; lng = pos.coords.longitude;
     } catch(e) { showToast('Could not get location — enable GPS', true); return; }
   }
-  let address = '';
+  let placeName = '', placeType = 'Location', address = '';
   try {
     const r = await fetch('https://nominatim.openstreetmap.org/reverse?lat='+lat+'&lon='+lng+'&format=json&zoom=18&addressdetails=1');
     const d = await r.json();
@@ -6049,14 +6049,11 @@ async function checkInHere() {
     if (a.cafe) placeType = 'Café';
     else if (a.restaurant) placeType = 'Restaurant';
     else if (a.bar || a.pub) placeType = 'Bar';
-    // Build readable address
     address = [a.house_number && a.road ? a.house_number + ' ' + a.road : a.road,
       a.suburb || a.neighbourhood || a.quarter,
       a.city || a.town || a.village].filter(Boolean).join(', ');
   } catch(e) {}
   if (!placeName) placeName = lat.toFixed(4) + ', ' + lng.toFixed(4);
-
-  const gmUrl = 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(placeName + ' ' + address);
 
   // Show confirmation sheet
   const ov = document.createElement('div');
@@ -6068,8 +6065,7 @@ async function checkInHere() {
       <input id="checkinName" value="${placeName.replace(/"/g,'&quot;')}"
         style="width:100%;padding:12px 14px;border:1px solid #555;border-radius:10px;background:#111;color:#fff;font-size:15px;font-weight:700;box-sizing:border-box;margin-bottom:10px;">
       ${address ? `<div style="font-size:12px;color:#aaa;margin-bottom:6px;">📌 ${address}</div>` : ''}
-      <div style="font-size:11px;color:#666;margin-bottom:4px;">${lat.toFixed(5)}, ${lng.toFixed(5)} · ${placeType}</div>
-      <a href="${gmUrl}" target="_blank" style="display:inline-block;font-size:12px;color:#4a9eff;margin-bottom:18px;text-decoration:none;">🗺 View on Google Maps →</a>
+      <div style="font-size:11px;color:#666;margin-bottom:18px;">${lat.toFixed(5)}, ${lng.toFixed(5)} · ${placeType}</div>
       <div style="display:flex;gap:10px;">
         <button onclick="this.closest('div[style*=fixed]').remove()" style="flex:1;padding:13px;border-radius:12px;border:none;background:#2a2a2a;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">Cancel</button>
         <button id="checkinConfirm" style="flex:2;padding:13px;border-radius:12px;border:none;background:#e67e22;color:#fff;font-size:14px;font-weight:800;cursor:pointer;">📍 Add to schedule</button>
