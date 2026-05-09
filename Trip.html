@@ -2016,6 +2016,11 @@ async function doAutoPush() {
   _autoPushTimer = null;
   if (_autoPushInFlight) { schedulePush(); return; }
   _autoPushInFlight = true;
+  // Always write to localStorage first — instant, survives network loss
+  try {
+    localStorage.setItem('trip_' + TRIP_ID + '_v1', JSON.stringify(getSaveData()));
+    localStorage.setItem('trip_' + TRIP_ID + '_config', JSON.stringify(getTripConfig()));
+  } catch(e) {}
   try {
     const ok = await cloudSave();
     if (ok) {
@@ -2033,6 +2038,11 @@ async function doAutoPush() {
 // Legacy names still used elsewhere in the file
 function saveToStorage() {
   if (!EDITOR_MODE) { showToast('Unlock editing to save changes (tap 🔒)', true); return; }
+  // Write to localStorage instantly — survives tab close, network outage
+  try {
+    localStorage.setItem('trip_' + TRIP_ID + '_v1', JSON.stringify(getSaveData()));
+    localStorage.setItem('trip_' + TRIP_ID + '_config', JSON.stringify(getTripConfig()));
+  } catch(e) {}
   doAutoPush();
   showToast('Saved ✓');
 }
