@@ -6866,10 +6866,15 @@ function populateDaySelects() {
 }
 
 function confirmResetAll() {
-  showConfirm('Reset ALL data? This clears all stops, reservations, and settings.', () => {
-    localStorage.clear();
-    location.reload();
-  });
+  const savedKey = APP_CONFIG.supabaseKey;
+  const savedUrl = APP_CONFIG.supabaseUrl;
+  localStorage.clear();
+  // Restore API credentials so the app stays connected
+  try {
+    const preserved = { supabaseUrl: savedUrl, supabaseKey: savedKey };
+    localStorage.setItem('app_config_v2', JSON.stringify(preserved));
+  } catch(e) {}
+  location.reload();
 }
 
 
