@@ -1765,22 +1765,30 @@ async function cloudSave(summary) {
     return false;
   }
   try {
+    const data = getSaveData();
     const payload = {
       id: TRIP_ID,
       title: APP_CONFIG.title,
       subtitle: APP_CONFIG.subtitle,
       config: getTripConfig(),
-      data: getSaveData()
+      data
     };
-    // Track the signature we're about to push — realtime events that match
-    // this signature are echoes of our own write and get silently ignored.
-    _lastKnownSignature = stateSignature({
-      config: payload.config, data: payload.data
-    });
-    _ourLastSavedAt = payload.data.savedAt || '';
-    
-    const { error } = await supa.from('trips').upsert(payload, { onConflict: 'id' });
-    if (error) { console.warn('cloudSave', error); showToast('Sync failed — ' + (error.message || 'check connection'), true); return false; }
+    _lastKnownSignature = stateSignature({ config: payload.config, data: payload.data });
+    _ourLastSavedAt = data.savedAt || '';
+
+    let { error } = await supa.from('trips').upsert(payload, { onConflict: 'id' });
+
+    // Timeout or size error — retry once without photos
+    if (error && (error.message || '').toLowerCase().includes('timeout')) {
+      console.warn('cloudSave timeout — retrying without photos');
+      const slimData = { ...data, days: data.days.map(d => ({ ...d, stops: d.stops.map(s => { const c = {...s}; delete c.userPhotos; return c; }) })) };
+      const slim = { ...payload, data: slimData };
+      const r2 = await supa.from('trips').upsert(slim, { onConflict: 'id' });
+      error = r2.error;
+      if (!error) showToast('⚠️ Saved without photos — connection was slow');
+    }
+
+    if (error) { console.warn('cloudSave', error); showToast('Sync failed — try again', true); return false; }
     const btn = document.getElementById('saveBtn');
     if (btn) { btn.textContent = '✓'; btn.style.color = '#1a7a3a'; setTimeout(() => { btn.textContent = '💾'; btn.style.color = '#88d8a0'; }, 1200); }
     return true;
