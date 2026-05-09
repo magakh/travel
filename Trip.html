@@ -3851,13 +3851,13 @@ async function identifyLandmark() {
 function _showCameraOverlay(stream) {
   const ov = document.createElement('div');
   ov.id = 'cameraOverlay';
-  ov.style.cssText = 'position:fixed;inset:0;background:#000;z-index:33000;display:flex;flex-direction:column;align-items:center;justify-content:center;';
+  ov.style.cssText = 'position:fixed;inset:0;background:#000;z-index:33000;display:flex;flex-direction:column;align-items:center;justify-content:center;touch-action:none;';
 
   const video = document.createElement('video');
-  video.style.cssText = 'width:100%;height:100%;object-fit:cover;position:absolute;inset:0;';
+  video.style.cssText = 'width:100%;height:100%;object-fit:cover;position:absolute;inset:0;transform-origin:center;transition:transform 0.05s;';
   video.srcObject = stream;
   video.autoplay = true;
-  video.playsInline = true;  // critical for iOS
+  video.playsInline = true;
 
   // Shutter button
   const shutter = document.createElement('button');
@@ -3877,9 +3877,66 @@ function _showCameraOverlay(stream) {
   label.style.cssText = 'position:absolute;bottom:130px;left:0;right:0;text-align:center;color:#fff;font-size:13px;font-weight:700;z-index:1;text-shadow:0 1px 4px rgba(0,0,0,0.8);';
   label.textContent = 'Point at landmark and tap to identify';
 
-  ov.append(video, shutter, cancel, aim, label);
+  // Zoom controls
+  const zoomBar = document.createElement('div');
+  zoomBar.style.cssText = 'position:absolute;bottom:50px;right:18px;display:flex;flex-direction:column;gap:8px;z-index:2;';
+  const zoomIn = document.createElement('button');
+  zoomIn.textContent = '+';
+  zoomIn.style.cssText = 'width:44px;height:44px;border-radius:50%;background:rgba(0,0,0,0.55);border:1px solid rgba(255,255,255,0.3);color:#fff;font-size:22px;font-weight:700;cursor:pointer;line-height:1;';
+  const zoomOut = document.createElement('button');
+  zoomOut.textContent = '−';
+  zoomOut.style.cssText = zoomIn.style.cssText;
+  const zoomLabel = document.createElement('div');
+  zoomLabel.style.cssText = 'color:#fff;font-size:11px;font-weight:700;text-align:center;text-shadow:0 1px 3px rgba(0,0,0,0.8);';
+  zoomLabel.textContent = '1×';
+  zoomBar.append(zoomIn, zoomLabel, zoomOut);
+
+  ov.append(video, shutter, cancel, aim, label, zoomBar);
   document.body.appendChild(ov);
   video.play();
+
+  // ── Zoom logic ──────────────────────────────────────────────────
+  let currentZoom = 1;
+  let minZoom = 1, maxZoom = 8;
+  const track = stream.getVideoTracks()[0];
+
+  // Check hardware zoom support
+  const caps = track.getCapabilities ? track.getCapabilities() : {};
+  const hwZoom = caps.zoom;
+  if (hwZoom) { minZoom = hwZoom.min || 1; maxZoom = hwZoom.max || 8; }
+
+  function applyZoom(z) {
+    currentZoom = Math.max(minZoom, Math.min(maxZoom, z));
+    zoomLabel.textContent = currentZoom.toFixed(1) + '×';
+    if (hwZoom) {
+      track.applyConstraints({ advanced: [{ zoom: currentZoom }] }).catch(() => {});
+      video.style.transform = 'scale(1)';
+    } else {
+      video.style.transform = 'scale(' + currentZoom + ')';
+    }
+  }
+
+  zoomIn.onclick = (e) => { e.stopPropagation(); applyZoom(currentZoom + 0.5); };
+  zoomOut.onclick = (e) => { e.stopPropagation(); applyZoom(currentZoom - 0.5); };
+
+  // Pinch-to-zoom
+  let lastPinchDist = null;
+  let pinchStartZoom = 1;
+  ov.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) {
+      lastPinchDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+      pinchStartZoom = currentZoom;
+      e.preventDefault();
+    }
+  }, { passive: false });
+  ov.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 2 && lastPinchDist) {
+      const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+      applyZoom(pinchStartZoom * (dist / lastPinchDist));
+      e.preventDefault();
+    }
+  }, { passive: false });
+  ov.addEventListener('touchend', () => { lastPinchDist = null; });
 
   function stopStream() {
     stream.getTracks().forEach(function(t) { t.stop(); });
@@ -3889,14 +3946,23 @@ function _showCameraOverlay(stream) {
   cancel.onclick = stopStream;
 
   shutter.onclick = function() {
-    // Flash effect
     ov.style.background = '#fff';
     setTimeout(function() { ov.style.background = '#000'; }, 80);
 
     const canvas = document.createElement('canvas');
     canvas.width = video.videoWidth || 1280;
     canvas.height = video.videoHeight || 720;
-    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+    const ctx = canvas.getContext('2d');
+    if (!hwZoom && currentZoom > 1) {
+      // Crop the center for digital zoom
+      const sw = canvas.width / currentZoom;
+      const sh = canvas.height / currentZoom;
+      const sx = (canvas.width - sw) / 2;
+      const sy = (canvas.height - sh) / 2;
+      ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+    } else {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    }
 
     stopStream();
 
