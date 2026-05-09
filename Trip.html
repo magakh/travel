@@ -2564,19 +2564,21 @@ function recalcTimesFrom(fromIdx) {
   if (!stops || fromIdx >= stops.length - 1) return;
   let cursor = timeStrToMins(stops[fromIdx].time) + parseDurationMins(stops[fromIdx].duration || '60 min');
   for (let i = fromIdx + 1; i < stops.length; i++) {
-    const _rKey = stops[i-1].lat.toFixed(4)+','+stops[i-1].lng.toFixed(4)+'->'+stops[i].lat.toFixed(4)+','+stops[i].lng.toFixed(4);
-    const walk = getTravelMinsForKey(_rKey, stops[i-1].lat, stops[i-1].lng, stops[i].lat, stops[i].lng);
+    const pLat = stops[i-1].lat || 0, pLng = stops[i-1].lng || 0;
+    const cLat = stops[i].lat || 0, cLng = stops[i].lng || 0;
+    // Skip walk calc if either stop has invalid coords (avoids 68733 min bug)
+    const walk = (pLat && pLng && cLat && cLng)
+      ? getTravelMinsForKey(pLat.toFixed(4)+','+pLng.toFixed(4)+'->'+cLat.toFixed(4)+','+cLng.toFixed(4), pLat, pLng, cLat, cLng)
+      : 0;
     cursor += walk;
-    if (stops[i].fixed || (stops[i].reservation && stops[i].reservation.time)) {
-      // Locked stop — check for AM/PM flip: if stored time is ~12h off from cascade, correct it
+    if (stops[i].fixed || stops[i].fixedTime || (stops[i].reservation && stops[i].reservation.time)) {
+      // Locked or passed-by stop — preserve its stored time, resync cursor
       const lockedMin = timeStrToMins(stops[i].time);
       const diff = lockedMin - cursor;
-      if (Math.abs(Math.abs(diff) - 720) <= 60) {
-        // Almost exactly 12h off — flip AM/PM on the stop time (not the reservation booking time)
+      if (!stops[i].fixedTime && Math.abs(Math.abs(diff) - 720) <= 60) {
         const corrected = (lockedMin + 720) % 1440;
         stops[i].time = minsToTimeStr(corrected);
       }
-      // Resync cursor to the (possibly corrected) locked time
       cursor = timeStrToMins(stops[i].time) + parseDurationMins(stops[i].duration || '60 min');
       continue;
     }
@@ -4442,6 +4444,7 @@ function _addIdentifyPassedBy() {
     time: timeStr,
     duration: '1 min',
     passedBy: true,
+    fixedTime: true,
     isUserAdded: true,
     color: '#5c4db1',
     tags: [], badges: []
@@ -5250,6 +5253,7 @@ async function liveWikiSearch(lat, lng, radius) {
         history: tldr || '',
         wikiUrl: wUrl || '',
         passedBy: true,
+    fixedTime: true,
         color: isBusiness ? '#e65100' : '#5c4db1',
         tags: [], badges: []
       });
@@ -5675,6 +5679,7 @@ function _addWalkPassedBy(idx) {
     time: timeStr,
     duration: '1 min',
     passedBy: true,
+    fixedTime: true,
     isUserAdded: true,
     color: '#5c4db1',
     tags: [], badges: []
