@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Trips</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #111; color: #fff; min-height: 100vh; }
+
+  .header {
+    background: #1a1a1a;
+    padding: 20px 16px 16px;
+    border-bottom: 1px solid #333;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .header h1 { font-size: 22px; font-weight: 800; }
+  .header p { font-size: 13px; color: #888; margin-top: 2px; }
+
+  .new-btn {
+    padding: 10px 18px; border-radius: 20px; border: none;
+    background: #1a73e8; color: #fff; font-size: 13px; font-weight: 700;
+    cursor: pointer; white-space: nowrap;
+  }
+
+  .trips-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 14px;
+    padding: 20px 16px;
+  }
+
+  .trip-card {
+    background: #1e1e1e;
+    border-radius: 16px;
+    border: 1px solid #333;
+    overflow: hidden;
+    transition: border-color 0.15s;
+    cursor: pointer;
+  }
+  .trip-card:hover { border-color: #555; }
+
+  .trip-card-body {
+    padding: 18px;
+  }
+  .trip-slug {
+    font-size: 10px; font-weight: 700; color: #666;
+    text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px;
+  }
+  .trip-title { font-size: 18px; font-weight: 800; color: #fff; margin-bottom: 4px; }
+  .trip-subtitle { font-size: 12px; color: #888; margin-bottom: 12px; }
+  .trip-meta {
+    display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px;
+  }
+  .trip-badge {
+    background: #2a2a2a; border: 1px solid #444; border-radius: 20px;
+    padding: 3px 10px; font-size: 11px; font-weight: 600; color: #ccc;
+  }
+  .trip-stops { font-size: 12px; color: #666; margin-bottom: 14px; }
+
+  .trip-actions {
+    display: flex; gap: 8px;
+    padding: 12px 18px;
+    background: #161616;
+    border-top: 1px solid #2a2a2a;
+  }
+  .btn-open {
+    flex: 1; padding: 10px; border-radius: 10px; border: none;
+    background: #1a73e8; color: #fff; font-size: 13px; font-weight: 700;
+    cursor: pointer;
+  }
+  .btn-delete {
+    padding: 10px 14px; border-radius: 10px;
+    border: 1px solid #c0392b; background: transparent;
+    color: #c0392b; font-size: 13px; font-weight: 700; cursor: pointer;
+  }
+  .btn-delete:hover { background: #2a0a0a; }
+
+  .loading {
+    text-align: center; padding: 60px 20px; color: #666; font-size: 14px;
+  }
+  .empty {
+    text-align: center; padding: 60px 20px;
+  }
+  .empty p { color: #666; font-size: 14px; margin-bottom: 16px; }
+
+  /* New trip modal */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+    display: flex; align-items: flex-end; justify-content: center;
+    z-index: 1000;
+  }
+  .modal {
+    background: #1e1e1e; border-radius: 20px 20px 0 0;
+    padding: 24px; width: 100%; max-width: 520px;
+  }
+  .modal h2 { font-size: 17px; font-weight: 800; margin-bottom: 18px; }
+  .form-label { font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 5px; margin-top: 12px; }
+  .form-input {
+    width: 100%; padding: 11px 14px; border: 1px solid #444; border-radius: 10px;
+    font-size: 14px; background: #111; color: #fff; outline: none;
+  }
+  .form-input:focus { border-color: #1a73e8; }
+  .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+  .modal-actions button { flex: 1; padding: 13px; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; border: none; }
+  .btn-cancel { background: #2a2a2a; color: #fff; }
+  .btn-create { background: #1a73e8; color: #fff; }
+
+  .confirm-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+    display: flex; align-items: center; justify-content: center; z-index: 1001;
+    padding: 20px;
+  }
+  .confirm-box {
+    background: #1e1e1e; border-radius: 16px; padding: 24px;
+    width: 100%; max-width: 320px; text-align: center;
+  }
+  .confirm-box p { font-size: 14px; color: #ccc; margin-bottom: 20px; line-height: 1.5; }
+  .confirm-box h3 { font-size: 16px; font-weight: 800; margin-bottom: 8px; }
+  .confirm-actions { display: flex; gap: 10px; }
+  .confirm-actions button { flex: 1; padding: 12px; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; border: none; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>✈️ My Trips</h1>
+    <p id="tripCount">Loading...</p>
+  </div>
+  <button class="new-btn" onclick="showNewTripModal()">+ New trip</button>
+</div>
+
+<div id="tripsContainer" class="loading">Loading trips...</div>
+
+<script>
+const SUPABASE_URL = 'https://wnpanbjzmcsvhfyjdczv.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InducGFuYmp6bWNzdmhmeWpkY3p2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0NzU4NjcsImV4cCI6MjA5MjA1MTg2N30.r3Vie2AAOfzYmLy4IRUk1s9mjkC6bDSoxAIYKfcz6jQ';
+const supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let allTrips = [];
+
+async function loadTrips() {
+  const { data, error } = await supa.from('trips').select('id, title, subtitle, config, data, updated_at').order('updated_at', { ascending: false });
+  if (error) { document.getElementById('tripsContainer').innerHTML = '<div class="loading">Failed to load trips.</div>'; return; }
+  allTrips = data || [];
+  renderTrips();
+}
+
+function renderTrips() {
+  const container = document.getElementById('tripsContainer');
+  document.getElementById('tripCount').textContent = allTrips.length + ' trip' + (allTrips.length !== 1 ? 's' : '');
+
+  if (allTrips.length === 0) {
+    container.innerHTML = '<div class="empty"><p>No trips yet. Create your first one!</p></div>';
+    return;
+  }
+
+  container.innerHTML = '<div class="trips-grid">' + allTrips.map(trip => {
+    const cfg = trip.config || {};
+    const data = trip.data || {};
+    const days = data.days || [];
+    const numDays = cfg.numDays || days.length || 0;
+    const totalStops = days.reduce((sum, d) => sum + (d.stops || []).length, 0);
+    const labels = cfg.dayLabels || [];
+    const dateRange = labels.length >= 2 ? labels[0] + ' – ' + labels[labels.length - 1] : (numDays + ' days');
+    const updated = trip.updated_at ? new Date(trip.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+
+    return `
+      <div class="trip-card" onclick="openTrip('${trip.id}')">
+        <div class="trip-card-body">
+          <div class="trip-slug">${trip.id}</div>
+          <div class="trip-title">${trip.title || trip.id}</div>
+          <div class="trip-subtitle">${trip.subtitle || cfg.subtitle || ''}</div>
+          <div class="trip-meta">
+            <span class="trip-badge">📅 ${dateRange}</span>
+            <span class="trip-badge">📍 ${totalStops} stops</span>
+          </div>
+          ${updated ? `<div class="trip-stops">Last updated ${updated}</div>` : ''}
+        </div>
+        <div class="trip-actions" onclick="event.stopPropagation()">
+          <button class="btn-open" onclick="openTrip('${trip.id}')">Open →</button>
+          <button class="btn-delete" onclick="confirmDelete('${trip.id}', '${(trip.title || trip.id).replace(/'/g, "\\'")}')">🗑</button>
+        </div>
+      </div>`;
+  }).join('') + '</div>';
+}
+
+function openTrip(id) {
+  window.location.href = 'Trip.html?trip=' + encodeURIComponent(id);
+}
+
+function confirmDelete(id, title) {
+  const overlay = document.createElement('div');
+  overlay.className = 'confirm-overlay';
+  overlay.innerHTML = `
+    <div class="confirm-box">
+      <h3>Delete trip?</h3>
+      <p>"${title}" and all its stops will be permanently deleted.</p>
+      <div class="confirm-actions">
+        <button style="background:#2a2a2a;color:#fff;" onclick="this.closest('.confirm-overlay').remove()">Cancel</button>
+        <button style="background:#c0392b;color:#fff;" onclick="deleteTrip('${id}', this.closest('.confirm-overlay'))">Delete</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+async function deleteTrip(id, overlay) {
+  overlay.querySelector('button:last-child').textContent = 'Deleting...';
+  const { error } = await supa.from('trips').delete().eq('id', id);
+  overlay.remove();
+  if (error) { alert('Delete failed: ' + error.message); return; }
+  allTrips = allTrips.filter(t => t.id !== id);
+  renderTrips();
+}
+
+function showNewTripModal() {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal" onclick="event.stopPropagation()">
+      <h2>✈️ New Trip</h2>
+      <label class="form-label">Trip ID (URL slug)</label>
+      <input class="form-input" id="nt-slug" placeholder="e.g. paris2026" oninput="this.value=this.value.toLowerCase().replace(/[^a-z0-9_-]/g,'')">
+      <label class="form-label">Title</label>
+      <input class="form-input" id="nt-title" placeholder="e.g. Paris Spring 2026">
+      <label class="form-label">Subtitle (optional)</label>
+      <input class="form-input" id="nt-subtitle" placeholder="e.g. museums & bistros">
+      <label class="form-label">Start date</label>
+      <input class="form-input" id="nt-start" type="date">
+      <label class="form-label">End date</label>
+      <input class="form-input" id="nt-end" type="date">
+      <div class="modal-actions">
+        <button class="btn-cancel" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
+        <button class="btn-create" onclick="createTrip(this)">Create →</button>
+      </div>
+    </div>`;
+  overlay.onclick = () => overlay.remove();
+  document.body.appendChild(overlay);
+  setTimeout(() => document.getElementById('nt-slug').focus(), 60);
+}
+
+async function createTrip(btn) {
+  const slug = document.getElementById('nt-slug').value.trim();
+  const title = document.getElementById('nt-title').value.trim();
+  const subtitle = document.getElementById('nt-subtitle').value.trim();
+  const startVal = document.getElementById('nt-start').value;
+  const endVal = document.getElementById('nt-end').value;
+
+  if (!slug || !title) { alert('Trip ID and title are required.'); return; }
+
+  let numDays = 4, dayLabels = [], dayTitles = [];
+  const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  if (startVal && endVal) {
+    const [sy, smo, sd] = startVal.split('-').map(Number);
+    const [ey, emo, ed] = endVal.split('-').map(Number);
+    numDays = Math.max(1, Math.round((new Date(ey, emo-1, ed) - new Date(sy, smo-1, sd)) / 86400000) + 1);
+    for (let i = 0; i < numDays; i++) {
+      const dt = new Date(sy, smo-1, sd+i);
+      const lbl = monthNames[dt.getMonth()] + ' ' + dt.getDate();
+      dayLabels.push(lbl);
+      dayTitles.push(lbl + ' · Day ' + (i+1));
+    }
+  } else {
+    for (let i = 0; i < numDays; i++) { dayLabels.push('Day '+(i+1)); dayTitles.push('Day '+(i+1)); }
+  }
+
+  btn.textContent = 'Creating...';
+  btn.disabled = true;
+
+  const days = dayLabels.map((lbl, i) => ({ title: dayTitles[i], note: '', stops: [] }));
+  const payload = {
+    id: slug, title, subtitle,
+    config: { title, subtitle, numDays, dayLabels, dayTitles, startDate: startVal || '' },
+    data: { days, completed: [], hotel: null, savedAt: new Date().toISOString() }
+  };
+
+  const { error } = await supa.from('trips').insert(payload);
+  if (error) { alert('Failed: ' + (error.message || 'Trip ID may already exist.')); btn.textContent = 'Create →'; btn.disabled = false; return; }
+
+  window.location.href = 'Trip.html?trip=' + encodeURIComponent(slug);
+}
+
+loadTrips();
+</script>
+</body>
+</html>
