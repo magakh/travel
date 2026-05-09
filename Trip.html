@@ -5160,7 +5160,7 @@ let _walkTourActive = false;
 let _walkTourWatchId = null;
 let _walkTourVisited = new Set();
 let _walkTourAlertOpen = false;
-const WALK_TRIGGER_METRES = 30;
+const WALK_TRIGGER_METRES = 40;
 
 function toggleWalkingGuide() {
   if (_walkTourActive) {
@@ -5244,11 +5244,11 @@ var _userStreetTs = 0;       // timestamp of last street name refresh
 
 async function liveWikiSearch(lat, lng, radius) {
   if (!_walkTourActive || _walkTourAlertOpen) return;
-  radius = radius || 30;
+  radius = radius || 40;
 
   // Throttle: re-search after moving 15m
   if (radius <= 100 && _walkLastSearchLat !== null) {
-    if (_haversineMetres(_walkLastSearchLat, _walkLastSearchLng, lat, lng) < 15) return;
+    if (_haversineMetres(_walkLastSearchLat, _walkLastSearchLng, lat, lng) < 20) return;
   }
   _walkLastSearchLat = lat;
   _walkLastSearchLng = lng;
@@ -5282,7 +5282,7 @@ async function liveWikiSearch(lat, lng, radius) {
 
     if (!nearby.length || _walkTourAlertOpen) {
       if (_walkTourAlertOpen) return;
-      if (radius > 100) { showToast('📍 No landmarks found within 30 m'); return; }
+      if (radius > 100) { showToast('📍 No landmarks found within 40 m'); return; }
 
       // Wikipedia found nothing — try OpenStreetMap Overpass for better local coverage
       try {
@@ -5318,7 +5318,7 @@ async function liveWikiSearch(lat, lng, radius) {
         }
       } catch(e) {}
 
-      showToast('📍 Nothing within 30 m');
+      showToast('📍 Nothing within 40 m');
       return;
     }
 
@@ -5557,7 +5557,7 @@ function buildDistLabel(pos) {
   if (metersAhead < -5) return fmt(Math.abs(metersAhead)) + ' behind you'; // passed it
   // Primarily ahead
   const aheadStr = metersAhead > 0 ? fmt(metersAhead) + ' ahead' : 'right here';
-  if (metersCross < 15) return aheadStr; // almost exactly ahead — no side needed
+  if (metersCross < 20) return aheadStr; // almost exactly ahead — no side needed
   return aheadStr + ' on your ' + side;
 }
 
