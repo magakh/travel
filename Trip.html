@@ -5395,6 +5395,7 @@ function showLandmarkAlert(lm, idx, dist) {
     + '<a href="'+lm.wikiUrl+'" target="_blank" rel="noopener" style="font-size:13px;font-weight:700;color:#1a73e8;text-decoration:none;">📖 Continue reading on Wikipedia →</a>'
     + '<button onclick="speakTourLandmark('+idx+')" style="padding:8px 12px;background:#f5f5f5;border:none;border-radius:10px;font-size:16px;cursor:pointer;">🔊</button>'
     + '</div>'
+    + '<button onclick="_addWalkLandmarkToDay('+idx+')" id="walkAddBtn_'+idx+'" style="width:100%;padding:12px;border-radius:12px;border:1.5px solid #1a7a3a;background:#e8f5e9;color:#1a7a3a;font-size:13px;font-weight:800;cursor:pointer;margin-bottom:8px;">✅ Add to today\'s schedule</button>'
     + '<button onclick="nextLandmark()" style="width:100%;padding:12px;border-radius:12px;border:none;background:#1a1a1a;color:#fff;font-size:14px;font-weight:800;cursor:pointer;">Next landmark ➡</button>'
     + '</div>';
 
@@ -5508,6 +5509,44 @@ function dismissLandmarkAlert() {
     var bar = document.getElementById('walkNextBar');
     if (bar && _walkTourActive && !_walkTourAlertOpen) bar.style.display = 'flex';
   }, 400);
+}
+
+function _addWalkLandmarkToDay(idx) {
+  const lm = (_walkTourLandmarks || [])[idx];
+  if (!lm) return;
+  const btn = document.getElementById('walkAddBtn_' + idx);
+
+  // Build time string from current time
+  const now = new Date();
+  const hh = now.getHours().toString().padStart(2, '0');
+  const mm = now.getMinutes().toString().padStart(2, '0');
+  const timeStr = hh + ':' + mm;
+
+  const stop = {
+    name: lm.name,
+    category: lm.category || 'Landmark',
+    note: lm.tldr || '',
+    time: timeStr,
+    duration: 15,
+    lat: lm.lat,
+    lng: lm.lng,
+    tags: ['walked by'],
+    wikiUrl: lm.wikiUrl || '',
+    completed: true
+  };
+
+  days[currentDay].stops.push(stop);
+  saveToStorage();
+  cloudSave('walked by: ' + lm.name);
+
+  if (btn) {
+    btn.textContent = '✅ Added — ' + lm.name;
+    btn.style.background = '#1a7a3a';
+    btn.style.color = '#fff';
+    btn.style.borderColor = '#1a7a3a';
+    btn.disabled = true;
+  }
+  showToast('Added "' + lm.name + '" to ' + (APP_CONFIG.dayLabels || [])[currentDay] || ('Day ' + (currentDay + 1)));
 }
 
 let _nextLandmarkIdx = 0; // tracks position for manual Next cycling
