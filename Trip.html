@@ -4151,7 +4151,7 @@ async function _processLandmarkPhoto(file) {
     const context = (wExtract || identified.name).slice(0, 600);
     const locationHint = locationContext ? '\nLocation: ' + locationContext : '';
     const aiPrompt = isBusiness
-      ? 'Return ONLY valid JSON (no markdown):\n{"tldr":"2-3 sentences about what makes this place special and what to expect when you walk in","whatToDo":"2-3 specific things to do or order here — detailed, concrete, like a knowledgeable friend","whatToOrder":"the 2-3 signature dishes or drinks this place is known for — be specific","funFact":"one surprising fact about this place"}\n\nRestaurant: "' + wTitle + '"' + locationHint + '\n' + context
+      ? 'Return ONLY valid JSON (no markdown):\n{"isFood":true/false,"tldr":"2-3 sentences about what makes this place special","whatToDo":"2-3 specific things to do here","whatToOrder":"if isFood=true: 2-3 signature dishes or drinks; otherwise omit or set null","funFact":"one surprising fact"}\n\nSet isFood=true ONLY if this is a restaurant, cafe, bar, pub, or food/drink venue. Set false for shops, museums, attractions, etc.\n\nPlace: "' + wTitle + '"' + locationHint + '\n' + context
       : 'Return ONLY valid JSON (no markdown):\n{"tldr":"2-3 vivid sentences a tourist standing here would love","funFact":"one surprising little-known fact","suggestion":"one specific thing to do RIGHT NOW"}\n\nAbout: "' + wTitle + '"' + locationHint + '\n' + context;
 
     callAnthropic({ prompt: aiPrompt, maxTokens: 400 }).then(function(aiRaw) {
@@ -4163,9 +4163,17 @@ async function _processLandmarkPhoto(file) {
         if (parsed.tldr) { const el=card.querySelector('#identifyTldr'); if(el) el.textContent=parsed.tldr; if(lm) lm.tldr=parsed.tldr; }
         if (parsed.funFact) { const fw=card.querySelector('#identifyFactWrap'),fe=card.querySelector('#identifyFact'); if(fe) fe.textContent=parsed.funFact; if(fw) fw.style.display=''; if(lm) lm.funFact=parsed.funFact; }
         if (parsed.suggestion) { const sw=card.querySelector('#identifySuggestWrap'),se=card.querySelector('#identifySuggest'); if(se) se.textContent=parsed.suggestion; if(sw) sw.style.display=''; if(lm) lm.suggestion=parsed.suggestion; }
-        // Restaurant-specific fields
+        // Food-venue-specific fields — hide entire order section if not a food place
+        const isFood = parsed.isFood !== false && isBusiness; // default true for backwards compat if field missing
+        if (lm) lm.isFood = isFood;
+        const orderWrap = card.querySelector('#identifyOrderWrap');
+        const menuRow = card.querySelector('#identifyMenuRow');
+        if (!isFood) {
+          if (orderWrap) orderWrap.style.display = 'none';
+          if (menuRow) menuRow.style.display = 'none';
+        }
         if (parsed.whatToDo) { const el=card.querySelector('#identifyWhatToDo'); if(el){ el.textContent=parsed.whatToDo; el.closest && el.closest('#identifyWhatToDoWrap') && (el.closest('#identifyWhatToDoWrap').style.display=''); } if(lm) lm.whatToDo=parsed.whatToDo; }
-        if (parsed.whatToOrder) { const el=card.querySelector('#identifyWhatToOrder'); if(el){ el.textContent=parsed.whatToOrder; el.closest && el.closest('#identifyOrderWrap') && (el.closest('#identifyOrderWrap').style.display=''); } if(lm) lm.whatToOrder=parsed.whatToOrder; }
+        if (isFood && parsed.whatToOrder) { const el=card.querySelector('#identifyWhatToOrder'); if(el){ el.textContent=parsed.whatToOrder; if(orderWrap) orderWrap.style.display=''; } if(lm) lm.whatToOrder=parsed.whatToOrder; }
         _speakIdentified();
       } catch(e) { console.warn('Identify AI:', e); }
     }).catch(function() {});
@@ -4252,7 +4260,7 @@ function _showIdentifyCard(lm) {
           + '<span id="identifyWhatToOrder" style="font-size:13px;color:#333;line-height:1.5;font-weight:600;">'+(lm.whatToOrder||'')+'</span>'
           + '</div>'
           // Menu + Reviews row
-          + '<div style="display:flex;gap:8px;margin-bottom:8px;">'
+          + '<div id="identifyMenuRow" style="display:flex;gap:8px;margin-bottom:8px;">'
           + (lm.menuUrl ? '<a href="'+lm.menuUrl+'" target="_blank" rel="noopener" style="flex:1;padding:9px;text-align:center;background:#fff8f0;border:1px solid #ffccbc;border-radius:12px;font-size:12px;font-weight:700;color:#e65100;text-decoration:none;">🍴 View menu</a>' : '')
           + (lm.reviewsUrl ? '<a href="'+lm.reviewsUrl+'" target="_blank" rel="noopener" style="flex:1;padding:9px;text-align:center;background:#fffde7;border:1px solid #fff176;border-radius:12px;font-size:12px;font-weight:700;color:#f57f17;text-decoration:none;">⭐ Reviews</a>' : '')
           + '<button onclick="_suggestWhatToOrder()" style="flex:1;padding:9px;background:#fce4ec;border:1px solid #f48fb1;border-radius:12px;font-size:12px;font-weight:700;color:#c62828;cursor:pointer;white-space:nowrap;">✨ Suggest order</button>'
