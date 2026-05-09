@@ -7337,8 +7337,10 @@ function buildRouteMapIframe(stops, color) {
 
 
 function renderAllMap() {
-  const dayColors = ['#1a73e8','#e65100','#1a7a3a','#7b1fa2'];
-  const dayNames = ['May 7','May 8','May 9','May 10'];
+  const allDayColors = ['#1a73e8','#e65100','#1a7a3a','#7b1fa2','#c2185b','#00796b','#5d4037'];
+  const n = APP_CONFIG.numDays || days.length;
+  const dayColors = allDayColors.slice(0, n);
+  const dayNames = (APP_CONFIG.dayLabels || []).slice(0, n).map((l,i) => l || ('Day '+(i+1)));
   const allLats = days.flatMap(d => d.stops.map(s => s.lat));
   const allLngs = days.flatMap(d => d.stops.map(s => s.lng));
   const cLat = (Math.min(...allLats)+Math.max(...allLats))/2;
