@@ -5262,16 +5262,14 @@ async function liveWikiSearch(lat, lng, radius) {
 
     var nearby = ((data.query && data.query.geosearch) || []).filter(function(p) {
       if (_walkLiveCache.has(p.pageid)) return false;
-      var d = _haversineMetres(lat, lng, p.lat, p.lon);
-      if (d > TRIGGER) return false;
-      if (!hasBearing) {
-        // No direction data — only show if practically on top of you
-        return d <= 12;
-      }
+      // Use Wikipedia's returned dist (more accurate than our haversine)
+      var d = p.dist !== undefined ? p.dist : _haversineMetres(lat, lng, p.lat, p.lon);
+      if (d > WALK_TRIGGER_METRES) return false;
+      if (!hasBearing) return d <= 12;
       var rp = getLandmarkRelativePos(lat, lng, p.lat, p.lon);
-      if (rp.metersAhead < -5) return false;        // behind you
-      if (rp.metersAhead > TRIGGER) return false;   // too far ahead
-      if (rp.metersCross > TRIGGER) return false;   // too far to the side
+      if (rp.metersAhead < -5) return false;
+      if (rp.metersAhead > WALK_TRIGGER_METRES) return false;
+      if (rp.metersCross > WALK_TRIGGER_METRES) return false;
       return true;
     });
 
@@ -5377,10 +5375,11 @@ async function liveWikiSearch(lat, lng, radius) {
     });
     if (factSentence) funFact = factSentence.trim();
 
-    // Re-verify: if we have bearing, abort if already passed during API calls
+    // Re-verify with latest GPS/bearing — abort if passed or now too far ahead
     if (_currentGpsLat !== null && hasBearing) {
       var recheck = getLandmarkRelativePos(_currentGpsLat, _currentGpsLng, hit.lat, hit.lon);
       if (recheck.metersAhead < -5) return;
+      if (recheck.metersAhead > WALK_TRIGGER_METRES) return; // bearing now shows too far
     }
 
     // Show card immediately with Wikipedia text
