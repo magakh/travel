@@ -4291,7 +4291,7 @@ async function _processLandmarkPhoto(file) {
         }
         if (parsed.whatToDo) { const el=card.querySelector('#identifyWhatToDo'); if(el){ el.textContent=parsed.whatToDo; el.closest && el.closest('#identifyWhatToDoWrap') && (el.closest('#identifyWhatToDoWrap').style.display=''); } if(lm) lm.whatToDo=parsed.whatToDo; }
         if (isFood && parsed.whatToOrder) { const el=card.querySelector('#identifyWhatToOrder'); if(el){ el.textContent=parsed.whatToOrder; if(orderWrap) orderWrap.style.display=''; } if(lm) lm.whatToOrder=parsed.whatToOrder; }
-        _speakIdentified();
+        _speakIdentified(true); // queue fun fact after initial read, don't restart
       } catch(e) { console.warn('Identify AI:', e); }
     }).catch(function() {});
 
@@ -4452,6 +4452,7 @@ function _showIdentifyCard(lm) {
 }
 
 function _closeIdentifyCard() {
+  if (window.speechSynthesis) window.speechSynthesis.cancel();
   if (_identifyMap) { try { _identifyMap.remove(); } catch(e) {} _identifyMap = null; }
   var c = document.getElementById('identifyCard');
   if (c) { c.style.transform = 'translateY(100%)'; setTimeout(function(){if(c.parentNode)c.remove();}, 380); }
@@ -4584,20 +4585,41 @@ function _suggestWhatToOrder() {
   }).catch(function() { if (btn) btn.textContent = '✨ Suggest order'; });
 }
 
-function _speakIdentified() {
+let _identifyHasSpoken = false;
+
+function _speakIdentified(onlyFact) {
   const lm = window._identifiedLandmark;
   if (!lm || !window.speechSynthesis) return;
+  if (!document.getElementById('identifyCard')) return; // card already closed
+
+  if (onlyFact) {
+    // AI enrichment finished — just read the fun fact as a second part
+    const fact = lm.funFact || lm.suggestion || '';
+    if (!fact || !_identifyHasSpoken) return; // don't interrupt if first read hasn't finished
+    const utt = new SpeechSynthesisUtterance(('Fun fact: ' + fact).slice(0, 600));
+    utt.lang = 'en-GB'; utt.rate = 0.95;
+    // Queue after current speech ends
+    if (window.speechSynthesis.speaking) {
+      window.speechSynthesis.addEventListener('end', function onEnd() {
+        window.speechSynthesis.removeEventListener('end', onEnd);
+        if (document.getElementById('identifyCard')) window.speechSynthesis.speak(utt);
+      });
+    } else {
+      window.speechSynthesis.speak(utt);
+    }
+    return;
+  }
+
+  // First read: name + location + tldr only
+  _identifyHasSpoken = false;
   window.speechSynthesis.cancel();
-  const parts = [
+  const intro = [
     lm.name + (lm.location ? ', ' + lm.location : '') + '.',
-    lm.tldr || '',
-    lm.whatToDo ? 'What to do: ' + lm.whatToDo : '',
-    lm.whatToOrder ? 'What to order: ' + lm.whatToOrder : '',
-    lm.funFact ? 'Fun fact: ' + lm.funFact : '',
-    lm.suggestion ? 'Suggestion: ' + lm.suggestion : ''
+    lm.tldr || ''
   ].filter(Boolean).join(' ');
-  const utt = new SpeechSynthesisUtterance(parts.slice(0, 1800));
+  const utt = new SpeechSynthesisUtterance(intro.slice(0, 900));
   utt.lang = 'en-GB'; utt.rate = 0.95;
+  utt.onend = function() { _identifyHasSpoken = true; };
   window.speechSynthesis.speak(utt);
 }
 
