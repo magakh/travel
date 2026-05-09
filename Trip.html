@@ -1757,6 +1757,7 @@ async function cloudSave(summary) {
     _lastKnownSignature = stateSignature({
       config: payload.config, data: payload.data
     });
+    _localSaveAt = Date.now();
     const { error } = await supa.from('trips').upsert(payload, { onConflict: 'id' });
     if (error) { console.warn('cloudSave', error); showToast('Sync failed — saved locally', true); return false; }
     return true;
@@ -1767,6 +1768,8 @@ async function cloudSave(summary) {
 // decide whether a realtime event actually changed anything vs. being an
 // echo of our own write.
 let _lastKnownSignature = '';
+let _localSaveAt = 0; // timestamp of last local write — realtime events within 5s are suppressed
+
 function stateSignature(row) {
   if (!row) return '';
   const cfg = row.config || {};
@@ -1799,8 +1802,10 @@ function startRealtime() {
         const row = payload.new;
         if (!row) return;
         const incomingSig = stateSignature(row);
-        // Echo of our own write, or no meaningful change → silent
+        // Ignore echo of our own write
         if (incomingSig === _lastKnownSignature) return;
+        // Suppress any remote update arriving within 5s of a local save — prevents bounce-back loop
+        if (Date.now() - _localSaveAt < 5000) return;
         // Password-only change (TRIP_PW_HASH changed but content identical)
         // applyRemoteData will still update it quietly; no toast needed.
         if (isUserBusy()) {
