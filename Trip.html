@@ -4501,6 +4501,11 @@ async function _processLandmarkPhoto(file) {
     // Step 4 — Show card immediately with Wikipedia text
     ov.remove();
     const tldr = wExtract ? wExtract.split(/[.!?]/)[0] + '.' : identified.name + '.';
+    // Compute precise distance + direction using GPS + bearing
+    const relPos = (snapLat && snapLng && wLat && wLng)
+      ? getLandmarkRelativePos(snapLat, snapLng, wLat, wLng)
+      : null;
+
     _showIdentifyCard({
       name: wTitle,
       location: locationContext,
@@ -4513,7 +4518,8 @@ async function _processLandmarkPhoto(file) {
       gmapsUrl: gmapsUrl,
       isBusiness: isBusiness,
       confidence: confidence,
-      side: identified.side || null,
+      side: identified.side || (relPos && relPos.side) || null,
+      relPos,
       menuUrl: isBusiness ? 'https://www.google.com/search?q=' + encodeURIComponent(wTitle + ' ' + identified.location + ' menu') : null,
       reviewsUrl: isBusiness ? 'https://www.google.com/search?q=' + encodeURIComponent(wTitle + ' ' + identified.location + ' reviews') : null,
       lmLat: wLat,
@@ -4590,19 +4596,42 @@ function _showIdentifyCard(lm) {
         + '</div>'
     : '';
 
-  // Distance badge
+  // Distance badge (simple fallback)
   let distStr = '';
   if (lm.userLat && lm.lmLat) {
     const d = _haversineMetres(lm.userLat, lm.userLng, lm.lmLat, lm.lmLng);
     distStr = d < 1000 ? Math.round(d) + 'm away' : (d/1000).toFixed(1) + 'km away';
   }
 
+  // Big prominent distance + direction banner
+  function fmtM(m) { return m < 1000 ? Math.round(m) + 'm' : (m/1000).toFixed(1) + 'km'; }
+  let locationBanner = '';
+  if (lm.relPos && lm.relPos.side) {
+    const rp = lm.relPos;
+    const sideEmoji = rp.side === 'LEFT' ? '⬅️' : rp.side === 'RIGHT' ? '➡️' : '⬆️';
+    const sideColor = rp.side === 'LEFT' ? '#1565c0' : rp.side === 'RIGHT' ? '#b71c1c' : '#2e7d32';
+    const sideBg   = rp.side === 'LEFT' ? '#e3f2fd' : rp.side === 'RIGHT' ? '#ffebee' : '#e8f5e9';
+    let label = '';
+    if (rp.metersAhead < -5) label = fmtM(Math.abs(rp.metersAhead)) + ' behind you';
+    else if (rp.metersCross < 15) label = fmtM(rp.metersAhead) + ' straight ahead';
+    else label = fmtM(rp.metersAhead) + ' ahead, ' + fmtM(rp.metersCross) + ' to your ' + rp.side;
+    locationBanner = '<div style="background:' + sideBg + ';border-radius:14px;padding:12px 16px;margin-bottom:12px;display:flex;align-items:center;gap:10px;">'
+      + '<span style="font-size:28px;">' + sideEmoji + '</span>'
+      + '<div><div style="font-size:18px;font-weight:900;color:' + sideColor + ';">On your ' + rp.side + '</div>'
+      + '<div style="font-size:13px;color:#555;margin-top:1px;">' + label + '</div></div>'
+      + '</div>';
+  } else if (distStr) {
+    locationBanner = '<div style="background:#f5f5f5;border-radius:14px;padding:12px 16px;margin-bottom:12px;">'
+      + '<div style="font-size:16px;font-weight:800;color:#1a1a1a;">📍 ' + distStr + '</div>'
+      + '</div>';
+  }
+
   el.innerHTML = '<div style="padding:12px 14px 32px;">'
-    // Header
+    // Prominent location banner — FIRST thing user sees
+    + locationBanner
+    // Header row
     + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">'
     + '<span style="background:#5c4db1;color:#fff;font-size:11px;font-weight:800;padding:4px 10px;border-radius:20px;letter-spacing:0.5px;">📷 IDENTIFIED</span>'
-    + (distStr ? '<span style="font-size:11px;color:#1a7a3a;font-weight:700;">'+distStr+'</span>' : '')
-    + (lm.side && lm.side !== 'null' ? '<span style="font-size:11px;font-weight:800;padding:3px 10px;border-radius:20px;background:' + (lm.side==='LEFT'?'#e3f2fd':lm.side==='RIGHT'?'#fce4ec':'#f3e5f5') + ';color:' + (lm.side==='LEFT'?'#1565c0':lm.side==='RIGHT'?'#b71c1c':'#6a1b9a') + ';">📍 On your ' + lm.side + '</span>' : '')
     + (lm.confidence ? '<span style="font-size:11px;font-weight:800;padding:3px 8px;border-radius:20px;background:' + (lm.confidence>=80?'#e8f5e9':lm.confidence>=60?'#fffbeb':'#fce4ec') + ';color:' + (lm.confidence>=80?'#1a7a3a':lm.confidence>=60?'#b45309':'#c62828') + ';">' + lm.confidence + '% match</span>' : '')
     + '<button onclick="_closeIdentifyCard()" style="margin-left:auto;background:#f0f0f0;border:none;border-radius:20px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;">✕</button>'
     + '</div>'
