@@ -739,6 +739,12 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
 .day-tab.active { background: #fff; color: #1a1a1a; border-color: #fff; }
 .day-tab.blue { background: #1a73e8; border-color: #1a73e8; color: #fff; }
 .day-tab.green-tab { background: #1a7a3a; border-color: #1a7a3a; color: #fff; }
+/* Story + Settings always pinned to the right, never scroll away */
+#dtabStory, #dtabSettings {
+  position: sticky; right: 0;
+  background: var(--bg, #1a1a1a);
+}
+#dtabStory { right: 0; }
 
 /* ── BOTTOM NAV ──────────────────────────────────────────────────── */
 .bottom-nav {
@@ -1288,6 +1294,7 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
           <div class="action-bar">
             <button onclick="optimizeRoute()">⚡ Optimize route</button>
             <button onclick="showRouteMap()">🗺 Route Map</button>
+            <button onclick="showStoryTab()" style="border-color:#c05621;color:#c05621;background:#fff8f5;">✍️ Story</button>
             <button class="blue-btn" onclick="showView('search')">+ Add location</button>
           </div>
         </div>
