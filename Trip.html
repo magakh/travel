@@ -1750,6 +1750,7 @@ async function cloudLoad() {
     if (error) { console.warn('cloudLoad', error); return false; }
     if (!data) return false;
     applyRemoteData(data);
+    window._tripCloudData = data.data || {};
     _lastKnownSignature = stateSignature(data);
     _ourLastSavedAt = (data.data && data.data.savedAt) || '';
     return true;
@@ -1986,9 +1987,9 @@ async function importLegacyJson() {
         savedAt: new Date().toISOString()
       }
     };
-    const { error } = await supa.from('trips').insert(payload);
-    if (error) { console.warn('import insert', error); return false; }
-    showToast('✨ Imported from legacy JSON');
+    const { error } = await supa.from('trips').upsert(payload, { onConflict: 'id' });
+    if (error) { console.warn('import upsert', error); return false; }
+    showToast('✨ Restored from backup JSON');
     return true;
   } catch(e) { console.warn('importLegacyJson', e); return false; }
 }
@@ -3321,11 +3322,26 @@ async function init() {
 
   // Try to load the trip from Supabase
   let loaded = await cloudLoad();
+  const cloudStopsOnLoad = days.reduce((n, d) => n + (d.stops||[]).length, 0);
+  const cloudSavedAt = new Date((window._tripCloudData && window._tripCloudData.savedAt) || 0).getTime();
 
-  // If not in Supabase, attempt to import from legacy JSON in the GitHub repo
-  if (!loaded) {
-    const imported = await importLegacyJson();
-    if (imported) loaded = await cloudLoad();
+  // Import from JSON if: not loaded, empty, or JSON is newer
+  try {
+    const jsonUrl = 'https://raw.githubusercontent.com/magakh/travel/main/sync_' + TRIP_ID + '.json?cb=' + Date.now();
+    const jsonResp = await fetch(jsonUrl, { cache: 'no-store' });
+    if (jsonResp.ok) {
+      const jsonData = await jsonResp.json();
+      const jsonSavedAt = new Date(jsonData.jsonVersion || jsonData.savedAt || 0).getTime();
+      if (!loaded || cloudStopsOnLoad === 0 || jsonSavedAt > cloudSavedAt) {
+        const imported = await importLegacyJson();
+        if (imported) loaded = await cloudLoad();
+      }
+    }
+  } catch(e) {
+    if (!loaded || cloudStopsOnLoad === 0) {
+      const imported = await importLegacyJson();
+      if (imported) loaded = await cloudLoad();
+    }
   }
 
   // Even if cloud loaded, check if localStorage has MORE stops (cloud may have been wiped)
