@@ -9218,51 +9218,51 @@ function _storyPlainText() {
 
 function _startReadAloud() {
   const synth = window.speechSynthesis;
-  if (!synth) { showToast('❌ Text-to-speech not supported on this browser'); return; }
+  if (!synth) { showToast('❌ Text-to-speech not supported'); return; }
 
   const text = _storyPlainText();
-  if (!text) { showToast('❌ No story text to read — generate a story first'); return; }
+  if (!text) { showToast('❌ No story text — generate a story first'); return; }
 
   synth.cancel();
-  _readAloudActive = true;
-  _setReadBtnState(true);
 
-  const go = () => {
-    const utt = new SpeechSynthesisUtterance(text);
-    utt.rate = 0.92;
-    utt.pitch = 1;
-    utt.lang = 'en-US';
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.rate = 0.9;
+  utt.pitch = 1;
+  utt.lang = 'en-US';
 
-    // Pick an English voice explicitly (critical on iOS)
+  // Try to pick an English voice — but never block speak() on this
+  try {
     const voices = synth.getVoices();
     const pick = voices.find(v => v.lang === 'en-US' && v.localService)
                || voices.find(v => v.lang.startsWith('en') && v.localService)
-               || voices.find(v => v.lang.startsWith('en'))
-               || voices[0];
+               || voices.find(v => v.lang.startsWith('en'));
     if (pick) utt.voice = pick;
+  } catch(e) {}
 
-    utt.onend   = () => _stopReadAloud();
-    utt.onerror = (e) => { if (e.error !== 'interrupted') { showToast('⚠️ Read aloud stopped'); _stopReadAloud(); } };
-
-    synth.speak(utt);
-
-    // iOS pauses synthesis after ~15s — kick it every 8s
-    clearInterval(_readAloudTimer);
-    _readAloudTimer = setInterval(() => {
-      if (!_readAloudActive) { clearInterval(_readAloudTimer); return; }
-      if (synth.paused) synth.resume();
-    }, 8000);
+  utt.onend   = () => _stopReadAloud();
+  utt.onerror = (e) => {
+    console.log('TTS error:', e.error);
+    // 'interrupted' = our own cancel(), ignore it
+    if (e.error && e.error !== 'interrupted' && e.error !== 'canceled') {
+      _stopReadAloud();
+    }
   };
 
-  // Voices may not be loaded yet (especially on first use)
-  const voices = synth.getVoices();
-  if (voices.length) {
-    go();
-  } else {
-    synth.onvoiceschanged = () => { synth.onvoiceschanged = null; go(); };
-    // Fallback: if onvoiceschanged never fires (some browsers), try after 500ms
-    setTimeout(() => { if (_readAloudActive && !synth.speaking) go(); }, 500);
-  }
+  // MUST call speak() synchronously within the tap gesture (iOS requirement)
+  synth.speak(utt);
+
+  // Set state immediately — don't wait for onstart which may not fire on iOS
+  _readAloudActive = true;
+  _setReadBtnState(true);
+
+  // iOS fix: synthesis silently pauses after ~15s — kick it every 8s
+  clearInterval(_readAloudTimer);
+  _readAloudTimer = setInterval(() => {
+    if (!_readAloudActive) { clearInterval(_readAloudTimer); return; }
+    if (synth.paused) synth.resume();
+    // iOS sometimes stops without firing onend — detect and clean up
+    if (!synth.speaking && !synth.pending) _stopReadAloud();
+  }, 8000);
 }
 
 function _stopReadAloud() {
