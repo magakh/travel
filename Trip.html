@@ -1505,7 +1505,8 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
           <button onclick="exportFile()" style="flex:1;padding:11px;border-radius:10px;border:1px solid #444;background:#1e1e1e;color:#ccc;font-size:13px;font-weight:700;cursor:pointer;">📤 Export JSON</button>
           <button onclick="document.getElementById('import-input').click()" style="flex:1;padding:11px;border-radius:10px;border:1px solid #444;background:#1e1e1e;color:#ccc;font-size:13px;font-weight:700;cursor:pointer;">📥 Import JSON</button>
         </div>
-        <button onclick="forcePushToSupabase()" style="width:100%;padding:12px;border-radius:10px;border:2px solid #1a7a3a;background:#0d2e18;color:#4caf50;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:8px;">☁️ Force push everything to Supabase</button>
+        <button onclick="forcePushToSupabase()" style="width:100%;padding:12px;border-radius:10px;border:2px solid #1a7a3a;background:#0d2e18;color:#4caf50;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:6px;">☁️ Force push everything to Supabase</button>
+        <button onclick="forceLoadFromSupabase()" style="width:100%;padding:12px;border-radius:10px;border:2px solid #1a73e8;background:#0d1e3a;color:#64b5f6;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:8px;">🔄 Force load fresh from Supabase</button>
       </div>
 
       <!-- ── DANGER ZONE ── -->
@@ -2266,12 +2267,31 @@ function saveToStorage() {
 }
 async function forcePushToSupabase() {
   if (!EDITOR_MODE) { showToast('🔒 Unlock editing first', true); return; }
+  const stopCount = days.reduce((n, d) => n + (d.stops||[]).length, 0);
+  if (stopCount === 0) {
+    showToast('⚠️ No data loaded yet — wait for the app to finish loading first', true);
+    return;
+  }
   _syncFailCount = 0;
   clearTimeout(_syncBackoffTimer);
   saveToStorage();
-  showToast('☁️ Pushing all data to Supabase…');
+  showToast('☁️ Pushing ' + stopCount + ' stops to Supabase…');
   const ok = await cloudSave('force-push');
-  if (ok) showToast('✅ Everything pushed to Supabase successfully!');
+  if (ok) showToast('✅ ' + stopCount + ' stops pushed to Supabase!');
+}
+
+async function forceLoadFromSupabase() {
+  showToast('🔄 Loading fresh from Supabase…');
+  try { localStorage.removeItem('trip_' + TRIP_ID + '_v1'); } catch(e) {}
+  const ok = await cloudLoad();
+  if (ok) {
+    renderAll();
+    switchDay(currentDay);
+    const n = days.reduce((s, d) => s + (d.stops||[]).length, 0);
+    showToast('✅ Loaded ' + n + ' stops from Supabase');
+  } else {
+    showToast('❌ Could not reach Supabase — check connection', true);
+  }
 }
 
 async function syncSave() { await doAutoPush(); }
