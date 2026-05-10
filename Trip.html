@@ -8329,22 +8329,25 @@ function getApiKey() {
   return APP_CONFIG.anthropicKey || '';
 }
 
-function saveApiKey() {
+async function saveApiKey() {
   const v = (document.getElementById('setApiKey')?.value || '').trim();
   const status = document.getElementById('apiKeyStatus');
-  if (!v) {
-    if (status) status.innerHTML = '<span style="color:#c0392b;">Paste a key first.</span>';
-    return;
-  }
-  if (!v.startsWith('sk-ant-')) {
-    if (status) status.innerHTML = '<span style="color:#c0392b;">Doesn\'t look like an Anthropic key (should start with <code>sk-ant-</code>).</span>';
-    return;
-  }
+  if (!v) { if (status) status.innerHTML = '<span style="color:#c0392b;">Paste a key first.</span>'; return; }
+  if (!v.startsWith('sk-ant-')) { if (status) status.innerHTML = '<span style="color:#c0392b;">Should start with <code>sk-ant-</code></span>'; return; }
+  if (status) status.innerHTML = '<span style="color:#888;">Testing key…</span>';
+  // Quick test call
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json','x-api-key':v,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true' },
+      body: JSON.stringify({ model:'claude-haiku-4-5-20251001', max_tokens:10, messages:[{role:'user',content:'hi'}] })
+    });
+    if (!res.ok) { const t=await res.text(); if (status) status.innerHTML='<span style="color:#c0392b;">Key rejected: '+res.status+' — '+t.slice(0,80)+'</span>'; return; }
+  } catch(e) { if (status) status.innerHTML='<span style="color:#c0392b;">Network error testing key</span>'; return; }
   APP_CONFIG.anthropicKey = v;
-  cloudSave('Saved API key').then(() => {
-    refreshApiKeyStatus();
-    showToast('API key saved — synced across all your devices ✓');
-  });
+  // Save to localStorage immediately as backup
+  try { localStorage.setItem('trip_'+TRIP_ID+'_config', JSON.stringify(getTripConfig())); } catch(e) {}
+  cloudSave('Saved API key').then(() => { refreshApiKeyStatus(); showToast('API key saved ✓'); });
   document.getElementById('setApiKey').value = '';
 }
 
