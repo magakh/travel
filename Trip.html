@@ -3826,8 +3826,9 @@ function openPhotoGallery(stopIdx, dayIdx, startIdx) {
         <button onclick="galleryNav(${stopIdx},${dayIdx},${cur-1})" ${cur===0?'disabled':''} style="flex:1;background:rgba(255,255,255,${cur===0?'0.1':'0.25'});border:none;color:#fff;padding:14px;border-radius:24px;font-size:15px;font-weight:700;cursor:pointer;opacity:${cur===0?'0.4':'1'};">← Prev</button>
         <button onclick="galleryNav(${stopIdx},${dayIdx},${cur+1})" ${cur===photos.length-1?'disabled':''} style="flex:1;background:rgba(255,255,255,${cur===photos.length-1?'0.1':'0.25'});border:none;color:#fff;padding:14px;border-radius:24px;font-size:15px;font-weight:700;cursor:pointer;opacity:${cur===photos.length-1?'0.4':'1'};">Next →</button>
       </div>
-      ${EDITOR_MODE ? `<div style="position:absolute;bottom:16px;right:16px;">
-        <button onclick="deleteGalleryPhoto(${stopIdx},${dayIdx},${cur})" style="background:rgba(192,57,43,0.85);border:none;color:#fff;padding:8px 14px;border-radius:20px;font-size:12px;font-weight:800;cursor:pointer;">🗑</button>
+      ${EDITOR_MODE ? `<div style="position:absolute;bottom:16px;left:0;right:0;display:flex;gap:10px;justify-content:center;padding:0 20px;">
+        <button onclick="showMovePhotoSheet(${stopIdx},${dayIdx},${cur})" style="flex:1;max-width:180px;background:rgba(255,255,255,0.18);border:none;color:#fff;padding:11px 14px;border-radius:22px;font-size:13px;font-weight:700;cursor:pointer;">↔️ Move to event</button>
+        <button onclick="deleteGalleryPhoto(${stopIdx},${dayIdx},${cur})" style="background:rgba(192,57,43,0.75);border:none;color:#fff;padding:11px 16px;border-radius:22px;font-size:13px;font-weight:700;cursor:pointer;">🗑</button>
       </div>` : ''}`;
   };
 
@@ -3901,6 +3902,7 @@ function renderDetail() {
           + s.userPhotos.map(function(p,pi){ return '<div style="position:relative;aspect-ratio:1;">'
             + '<img src="'+p+'" onclick="viewStopPhoto(\''+p.replace(/'/g,"\\'")+'\'+\'\')" style="width:100%;height:100%;object-fit:cover;border-radius:8px;cursor:pointer;">'
             + '<button onclick="event.stopPropagation();deleteStopPhoto('+currentStop+','+currentDay+','+pi+')" style="position:absolute;top:3px;right:3px;background:rgba(0,0,0,0.6);border:none;color:#fff;border-radius:50%;width:22px;height:22px;font-size:11px;cursor:pointer;line-height:1;">✕</button>'
+            + (EDITOR_MODE ? '<button onclick="event.stopPropagation();showMovePhotoSheet('+currentStop+','+currentDay+','+pi+')" style="position:absolute;bottom:3px;right:3px;background:rgba(26,115,232,0.85);border:none;color:#fff;border-radius:50%;width:22px;height:22px;font-size:13px;cursor:pointer;line-height:22px;text-align:center;" title="Move to another event">⇄</button>' : '')
             + '</div>'; }).join('')
           + '</div>'
         : '<div style="text-align:center;padding:16px;color:#aaa;font-size:13px;border:1.5px dashed #ddd;border-radius:10px;">No photos yet — tap + Add to upload</div>'
@@ -9199,6 +9201,93 @@ function _stopReadAloud() {
   window.speechSynthesis && window.speechSynthesis.cancel();
   _readAloudActive = false;
   _setReadBtnState(false);
+}
+
+// ── MOVE PHOTO BETWEEN EVENTS ─────────────────────────────────────
+function showMovePhotoSheet(fromStop, fromDay, photoIdx) {
+  const photo = days[fromDay] && days[fromDay].stops[fromStop] && days[fromDay].stops[fromStop].userPhotos && days[fromDay].stops[fromStop].userPhotos[photoIdx];
+  if (!photo) return;
+
+  const ov = document.createElement('div');
+  ov.id = 'movePhotoSheet';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:50000;display:flex;flex-direction:column;justify-content:flex-end;';
+  ov.innerHTML = `
+    <div onclick="document.getElementById('movePhotoSheet').remove()" style="flex:1;background:rgba(0,0,0,0.5);"></div>
+    <div style="background:#fff;border-radius:24px 24px 0 0;padding:0 0 env(safe-area-inset-bottom,16px);max-height:80vh;display:flex;flex-direction:column;">
+      <div style="padding:16px 20px 12px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #eee;">
+        <div>
+          <div style="font-size:16px;font-weight:800;color:#1a1a1a;">Move photo to…</div>
+          <div style="font-size:12px;color:#888;margin-top:2px;">Same day shown first</div>
+        </div>
+        <button onclick="document.getElementById('movePhotoSheet').remove()" style="background:#f0f0ec;border:none;border-radius:50%;width:32px;height:32px;font-size:18px;cursor:pointer;color:#555;">✕</button>
+      </div>
+      <div style="overflow-y:auto;padding:16px 16px 8px;" id="movePhotoBody"></div>
+    </div>`;
+  document.body.appendChild(ov);
+
+  const body = document.getElementById('movePhotoBody');
+  const stopTypeEmoji = t => ({'restaurant':'🍽️','cafe':'☕','pub':'🍺','bar':'🍸','museum':'🏛️','church':'⛪','hotel':'🏨','shop':'🛍️','theatre':'🎭','monument':'🗿','park':'🌳','market':'🛒','gallery':'🖼️'}[t] || '📍');
+
+  const doMove = (toDay, toStop) => {
+    if (toDay === fromDay && toStop === fromStop) { document.getElementById('movePhotoSheet').remove(); return; }
+    // Move photo
+    const src = days[fromDay].stops[fromStop].userPhotos;
+    const [moved] = src.splice(photoIdx, 1);
+    if (!days[toDay].stops[toStop].userPhotos) days[toDay].stops[toStop].userPhotos = [];
+    days[toDay].stops[toStop].userPhotos.push(moved);
+    saveToStorage(); schedulePush();
+    renderDetail();
+    document.getElementById('movePhotoSheet').remove();
+    // Close gallery if open
+    const g = document.getElementById('photoGalleryOv');
+    if (g) g.remove();
+    showToast('📷 Moved to ' + days[toDay].stops[toStop].name);
+  };
+
+  // ── Same day ──
+  const sameDayStops = days[fromDay].stops;
+  let html = `<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#888;margin-bottom:10px;">📅 ${days[fromDay].title || 'Day '+(fromDay+1)} — same day</div>`;
+  html += `<div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:12px;scrollbar-width:none;">`;
+  sameDayStops.forEach((stop, si) => {
+    const isCurrent = si === fromStop;
+    html += `<div onclick="${isCurrent ? '' : 'document.getElementById(\'movePhotoSheet\')._doMove('+fromDay+','+si+')'}" style="flex-shrink:0;width:110px;border-radius:14px;border:2px solid ${isCurrent?'#ddd':'#1a73e8'};padding:10px 8px;cursor:${isCurrent?'default':'pointer'};background:${isCurrent?'#f7f7f5':'#e8f0fd'};text-align:center;opacity:${isCurrent?'0.4':'1'};">
+      <div style="font-size:22px;margin-bottom:4px;">${stopTypeEmoji(stop.type)}</div>
+      <div style="font-size:11px;font-weight:800;color:#1a1a1a;line-height:1.3;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${stop.name}</div>
+      ${stop.time ? `<div style="font-size:10px;color:#888;margin-top:3px;">${stop.time}</div>` : ''}
+      ${isCurrent ? '<div style="font-size:10px;color:#999;margin-top:2px;">current</div>' : ''}
+    </div>`;
+  });
+  html += `</div>`;
+
+  // ── Other days ──
+  html += `<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:#888;margin:4px 0 10px;">📆 Other days</div>`;
+  days.forEach((day, di) => {
+    if (di === fromDay || !day.stops || !day.stops.length) return;
+    html += `<details style="margin-bottom:8px;border:1px solid #eee;border-radius:12px;overflow:hidden;">
+      <summary style="padding:12px 14px;font-size:13px;font-weight:700;cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;background:#fafafa;">
+        <span>${day.title || 'Day '+(di+1)}</span>
+        <span style="color:#1a73e8;font-size:12px;">${day.stops.length} stops ›</span>
+      </summary>
+      <div style="padding:10px;display:flex;flex-direction:column;gap:6px;">`;
+    day.stops.forEach((stop, si) => {
+      html += `<div onclick="document.getElementById('movePhotoSheet')._doMove(${di},${si})" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;background:#f5f5f5;cursor:pointer;">
+        <span style="font-size:18px;">${stopTypeEmoji(stop.type)}</span>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:#1a1a1a;">${stop.name}</div>
+          ${stop.time ? `<div style="font-size:11px;color:#888;">${stop.time}</div>` : ''}
+        </div>
+      </div>`;
+    });
+    html += `</div></details>`;
+  });
+
+  body.innerHTML = html;
+  ov._doMove = doMove;
+  // Wire up same-day card clicks via ._doMove
+  body.querySelectorAll('[onclick*="_doMove"]').forEach(el => {
+    const m = el.getAttribute('onclick').match(/_doMove\((\d+),(\d+)\)/);
+    if (m) el.onclick = () => doMove(parseInt(m[1]), parseInt(m[2]));
+  });
 }
 
 // Stop reading if user navigates away from story — hooked in showView()
