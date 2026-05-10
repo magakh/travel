@@ -740,11 +740,6 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
 .day-tab.blue { background: #1a73e8; border-color: #1a73e8; color: #fff; }
 .day-tab.green-tab { background: #1a7a3a; border-color: #1a7a3a; color: #fff; }
 /* Story + Settings always pinned to the right, never scroll away */
-#dtabStory, #dtabSettings {
-  position: sticky; right: 0;
-  background: var(--bg, #1a1a1a);
-}
-#dtabStory { right: 0; }
 
 /* ── BOTTOM NAV ──────────────────────────────────────────────────── */
 .bottom-nav {
@@ -1258,13 +1253,13 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
       <button class="prebook-pill" onclick="checkInHere()" title="Check in at current location" style="border-color:#e67e22;color:#e67e22;font-size:16px;padding:4px 8px;">📍</button>
       <button class="prebook-pill" onclick="identifyLandmark()" title="Identify landmark from photo" style="border-color:#5c4db1;color:#5c4db1;font-size:16px;padding:4px 8px;">📷</button>
       <button class="prebook-pill" onclick="showView('prebook')">Book list</button>
+      <button class="prebook-pill" onclick="showStoryTab()" style="border-color:#c05621;color:#c05621;">✍️ Story</button>
       <a href="index.html" class="prebook-pill" style="border-color:#666;color:#ccc;text-decoration:none;white-space:nowrap;">← All Trips</a>
     </div>
   </div>
   <div class="day-tabs" id="dayTabs">
     <button class="day-tab green-tab" onclick="showAllMap()" id="dtabAll">All Days Map</button>
     <button class="day-tab" onclick="showView('search')" id="dtabSearch" style="border-color:#1a73e8;color:#1a73e8;">+ Add / Search</button>
-    <button class="day-tab" onclick="showStoryTab()" id="dtabStory" style="border-color:#c05621;color:#c05621;">✍️ Story</button>
     <button class="day-tab" onclick="showView('settings')" id="dtabSettings" style="border-color:#666;color:#ccc;">⚙ Settings</button>
   </div>
 </div>
@@ -1294,7 +1289,6 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
           <div class="action-bar">
             <button onclick="optimizeRoute()">⚡ Optimize route</button>
             <button onclick="showRouteMap()">🗺 Route Map</button>
-            <button onclick="showStoryTab()" style="border-color:#c05621;color:#c05621;background:#fff8f5;">✍️ Story</button>
             <button class="blue-btn" onclick="showView('search')">+ Add location</button>
           </div>
         </div>
@@ -3543,10 +3537,10 @@ function showView(v) {
 }
 
 function updateTabHighlight() {
-  ['dtab0','dtab1','dtab2','dtab3','dtab4','dtab5','dtab6','dtabMap','dtabAll','dtabSearch','dtabSettings','dtabStory'].forEach(id => {
+  ['dtab0','dtab1','dtab2','dtab3','dtab4','dtab5','dtab6','dtabMap','dtabAll','dtabSearch','dtabSettings'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
-    if (['dtabMap','dtabAll','dtabSearch','dtabSettings','dtabStory'].includes(id)) return;
+    if (['dtabMap','dtabAll','dtabSearch','dtabSettings'].includes(id)) return;
     el.classList.remove('active');
   });
   if (currentView === 'list' || currentView === 'detail') {
