@@ -3516,6 +3516,8 @@ function updateHeaderHeight() {
 function showView(v) {
   // Hotel tab merged into Settings — redirect any legacy calls
   if (v === 'hotel') v = 'settings';
+  // Stop reading if navigating away from story
+  if (v !== 'story' && typeof _stopReadAloud === 'function') _stopReadAloud();
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   const panelEl = document.getElementById('panel-' + v);
   if (!panelEl) { console.warn('No panel:', v); return; }
@@ -8905,6 +8907,7 @@ function _renderStoryOutput(container) {
   <div class="story-regen-row">
     <button class="story-regen-btn" onclick="_storyShowing='form';_renderStory();">🔄 Re-generate</button>
     <button class="story-regen-btn" onclick="_toggleStoryEdit()" id="storyEditBtn" style="${editMode?'background:#fff3e0;border-color:#e07a3a;color:#c05621;':''}">${editMode ? '✓ Done editing' : '✏️ Edit'}</button>
+    <button class="story-regen-btn" style="background:#fff8f5;border-color:#c05621;color:#c05621;" onclick="_toggleReadAloud()" id="storyReadBtn">🔊 Read</button>
     <button class="story-regen-btn" style="background:#fff8f5;border-color:#c05621;color:#c05621;" onclick="_copyAllStory()">📋 Copy all</button>
   </div>
 
@@ -9128,6 +9131,61 @@ function _copyAllStory() {
   ].join('\n');
   navigator.clipboard.writeText(all).then(() => showToast('📋 All copied!')).catch(() => showToast('❌ Copy failed'));
 }
+
+// ── READ ALOUD ────────────────────────────────────────────────────
+let _readAloudActive = false;
+
+function _toggleReadAloud() {
+  if (_readAloudActive) {
+    _stopReadAloud();
+  } else {
+    _startReadAloud();
+  }
+}
+
+function _startReadAloud() {
+  if (!window.speechSynthesis) { showToast('❌ Text-to-speech not supported on this browser'); return; }
+  window.speechSynthesis.cancel();
+
+  // Get plain text: title + blog body
+  const titleEl = document.getElementById('storyTitleEl');
+  const blogEl  = document.getElementById('storyBlogEl');
+  if (!blogEl) return;
+
+  const title = titleEl ? titleEl.value : '';
+  // Strip HTML tags to get clean readable text
+  const tmp = document.createElement('div');
+  tmp.innerHTML = blogEl.innerHTML;
+  const blogText = tmp.innerText || tmp.textContent || '';
+  const fullText = (title ? title + '. ' : '') + blogText;
+
+  const utterance = new SpeechSynthesisUtterance(fullText);
+  utterance.rate = 0.92;
+  utterance.pitch = 1;
+  utterance.lang = 'en-US';
+
+  utterance.onstart = () => {
+    _readAloudActive = true;
+    const btn = document.getElementById('storyReadBtn');
+    if (btn) { btn.textContent = '⏹ Stop'; btn.style.background = '#fff0f0'; btn.style.borderColor = '#e74c3c'; btn.style.color = '#e74c3c'; }
+  };
+  utterance.onend = utterance.onerror = () => {
+    _readAloudActive = false;
+    const btn = document.getElementById('storyReadBtn');
+    if (btn) { btn.textContent = '🔊 Read'; btn.style.background = ''; btn.style.borderColor = ''; btn.style.color = ''; }
+  };
+
+  window.speechSynthesis.speak(utterance);
+}
+
+function _stopReadAloud() {
+  window.speechSynthesis && window.speechSynthesis.cancel();
+  _readAloudActive = false;
+  const btn = document.getElementById('storyReadBtn');
+  if (btn) { btn.textContent = '🔊 Read'; btn.style.background = ''; btn.style.borderColor = ''; btn.style.color = ''; }
+}
+
+// Stop reading if user navigates away from story — hooked in showView()
 
 init();
 </script>
