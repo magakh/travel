@@ -1775,6 +1775,7 @@ async function cloudSave(summary) {
     };
     _lastKnownSignature = stateSignature({ config: payload.config, data: payload.data });
     _ourLastSavedAt = data.savedAt || '';
+    _localChangeAt = 0; // allow realtime again after successful save
 
     let { error } = await supa.from('trips').upsert(payload, { onConflict: 'id' });
 
@@ -1802,7 +1803,8 @@ async function cloudSave(summary) {
 // decide whether a realtime event actually changed anything vs. being an
 // echo of our own write.
 let _lastKnownSignature = '';
-let _ourLastSavedAt = '';  // ISO timestamp of our last successful push
+let _ourLastSavedAt = '';
+let _localChangeAt = 0; // timestamp of last local edit — realtime blocked for 10s after
 
 function stateSignature(row) {
   if (!row) return '';
@@ -1836,13 +1838,12 @@ function startRealtime() {
         const row = payload.new;
         if (!row) return;
         const incomingSig = stateSignature(row);
-        // Ignore echo of our own write
         if (incomingSig === _lastKnownSignature) return;
-        // Reject stale delayed events — if incoming savedAt is older than our last push, ignore it
         const incomingSavedAt = row.data && row.data.savedAt;
         if (_ourLastSavedAt && incomingSavedAt && incomingSavedAt < _ourLastSavedAt) return;
-        // Don't let realtime overwrite a pending local change
         if (_autoPushInFlight || _autoPushTimer) return;
+        // Block realtime for 10s after any local edit to protect unsaved changes
+        if (Date.now() - _localChangeAt < 10000) return;
         // Foreign change — apply immediately
         if (isUserBusy()) {
           applyRemoteData(row);
@@ -1993,6 +1994,7 @@ async function importLegacyJson() {
 
 // ── LOCAL FALLBACK ───────────────────────────────────────────────
 function autoSave() {
+  _localChangeAt = Date.now();
   try { localStorage.setItem('trip_' + TRIP_ID + '_v1', JSON.stringify(getSaveData())); } catch(e) {}
   if (window.HOTEL_DATA) try { localStorage.setItem('hotel_data_' + TRIP_ID, JSON.stringify(window.HOTEL_DATA)); } catch(e) {}
   schedulePush();
