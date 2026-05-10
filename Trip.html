@@ -1907,7 +1907,8 @@ async function cloudSave(summary) {
 
     // PHOTO MERGE: fetch what's currently in Supabase and merge photos
     // so Device A and Device B photos are combined, not overwritten
-    try {
+    // Skip if offline (navigator.onLine is false) to avoid blocking
+    if (navigator.onLine !== false) try {
       const { data: remote } = await supa.from('trips').select('data').eq('id', TRIP_ID).single();
       if (remote && remote.data && remote.data.days) {
         remote.data.days.forEach((dd, i) => {
@@ -3570,13 +3571,11 @@ async function init() {
       '<p style="font-size:13px;color:#666;margin-top:12px;">Unlock with 🔒 and add stops, or create a new trip in ⚙ Settings.</p>' +
       '</div>';
   }
+
+  // Always render — never leave stuck on "Loading…"
+  try { renderAll(); } catch(e) { console.warn('renderAll:', e); }
   switchDay(getTodayDayIndex());
-  if (document.getElementById('stopList').innerHTML.includes('Loading')) {
-    // Fallback: loading state never cleared — render directly
-    renderAll();
-    showView('list');
-  }
-  renderPrebook();
+  try { renderPrebook(); } catch(e) {}
   window.addEventListener('resize', updateHeaderHeight);
   // Auto-save every 10 seconds — only pushes if there are unsaved changes
   setInterval(() => {
