@@ -1717,8 +1717,6 @@ function getSaveData() {
     days: days,
     completed: completed,
     hotel: window.HOTEL_DATA || null,
-    story: _storyState || null,
-    storyParams: _storyParams || null,
     savedAt: new Date().toISOString()
   };
 }
@@ -1789,7 +1787,18 @@ function applyRemoteData(row) {
   if (d.days && d.days.length) {
     d.days.forEach((dd, i) => {
       if (!days[i]) days[i] = { title: '', note: '', stops: [] };
-      days[i].stops = (dd.stops || []).map(sanitizeStop);
+      const incoming = (dd.stops || []).map(sanitizeStop);
+      // CRITICAL: if the incoming stops are missing photos, preserve the ones
+      // already in memory (protects against slim-save overwrites stripping photos)
+      incoming.forEach((s, si) => {
+        if (!s.userPhotos || !s.userPhotos.length) {
+          const cur = days[i].stops && days[i].stops[si];
+          if (cur && cur.userPhotos && cur.userPhotos.length) {
+            s.userPhotos = cur.userPhotos;
+          }
+        }
+      });
+      days[i].stops = incoming;
       if (dd.title) days[i].title = dd.title;
       if (dd.note) days[i].note = dd.note;
     });
@@ -1800,8 +1809,9 @@ function applyRemoteData(row) {
     HOTEL.name = d.hotel.name; HOTEL.address = d.hotel.address;
     HOTEL.lat = d.hotel.lat; HOTEL.lng = d.hotel.lng;
   }
-  if (d.story) { _storyState = d.story; _saveStoryState(); }
-  if (d.storyParams) { _storyParams = d.storyParams; _saveStoryState(); }
+  // Story: just update variables — never trigger a cloud push from here
+  if (d.story) { _storyState = d.story; try { localStorage.setItem('story_' + TRIP_ID, JSON.stringify({ state: _storyState, params: _storyParams })); } catch(e) {} }
+  if (d.storyParams) { _storyParams = d.storyParams; }
 }
 
 function sanitizeStop(s) {
@@ -1822,6 +1832,34 @@ function sanitizeStop(s) {
 }
 
 // Load this trip from Supabase; return true on success
+// PHOTO RECOVERY — if cloud data lost photos (slim-save), restore from localStorage
+function _recoverPhotosFromLocal() {
+  try {
+    const raw = localStorage.getItem('trip_' + TRIP_ID + '_v1');
+    if (!raw) return;
+    const local = JSON.parse(raw);
+    if (!local.days) return;
+    let recovered = 0;
+    local.days.forEach((ld, di) => {
+      if (!ld.stops) return;
+      ld.stops.forEach((ls, si) => {
+        if (!ls.userPhotos || !ls.userPhotos.length) return;
+        const cur = days[di] && days[di].stops && days[di].stops[si];
+        if (cur && (!cur.userPhotos || !cur.userPhotos.length)) {
+          cur.userPhotos = ls.userPhotos;
+          recovered += ls.userPhotos.length;
+        }
+      });
+    });
+    if (recovered > 0) {
+      console.log('[recovery] Restored', recovered, 'photos from localStorage');
+      saveToStorage();
+      schedulePush();
+      showToast('📷 Restored ' + recovered + ' photo' + (recovered > 1 ? 's' : '') + ' from local backup');
+    }
+  } catch(e) { console.warn('photo recovery error', e); }
+}
+
 async function cloudLoad() {
   if (!supabaseReady()) return false;
   try {
@@ -1831,6 +1869,8 @@ async function cloudLoad() {
     if (error) { console.warn('cloudLoad', error); return false; }
     if (!data) return false;
     applyRemoteData(data);
+    // PHOTO RECOVERY: if Supabase has stops missing photos, restore from localStorage
+    _recoverPhotosFromLocal();
     window._tripCloudData = data.data || {};
     _lastKnownSignature = stateSignature(data);
     _ourLastSavedAt = (data.data && data.data.savedAt) || '';
@@ -8804,10 +8844,9 @@ function _loadStoryState() {
   } catch(e) {}
 }
 function _saveStoryState() {
+  // Story is localStorage-only — never push to Supabase to avoid bloating
+  // the photo payload and risking a slim-save that strips all photos
   try { localStorage.setItem('story_' + TRIP_ID, JSON.stringify({ state: _storyState, params: _storyParams })); } catch(e) {}
-  // Also persist to Supabase so story syncs across all devices
-  saveToStorage();
-  schedulePush();
 }
 
 function showStoryTab() {
