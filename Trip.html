@@ -9302,7 +9302,19 @@ function _copyAllStory() {
   navigator.clipboard.writeText(all).then(() => showToast('📋 All copied!')).catch(() => showToast('❌ Copy failed'));
 }
 
-// ── READ ALOUD ────────────────────────────────────────────────────
+// ── SERVICE WORKER CLEAR ─────────────────────────────────────────
+// Adding ?sw=clear to the URL unregisters all SWs and reloads clean
+if (location.search.includes('sw=clear')) {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(regs => {
+      Promise.all(regs.map(r => r.unregister())).then(() => {
+        caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k)))).then(() => {
+          location.replace(location.href.replace(/[?&]sw=clear/, ''));
+        });
+      });
+    });
+  }
+}
 let _readAloudActive = false;
 let _readAloudTimer = null;
 
