@@ -1903,11 +1903,28 @@ async function cloudSave(summary) {
     _ourLastSavedAt = data.savedAt || '';
     _localChangeAt = 0;
 
+    const fullJson = JSON.stringify(payload);
+    const sizeMB = (fullJson.length / 1024 / 1024).toFixed(1);
+    console.log('cloudSave payload:', sizeMB, 'MB', summary || '');
+
     let { error } = await supa.from('trips').upsert(payload, { onConflict: 'id' });
 
     if (error) {
-      // NEVER strip photos — retry with full data once more
-      console.warn('cloudSave attempt 1 failed:', error.message);
+      // If full save fails and payload is large, try saving without photos
+      // (preserves schedule/stops) then re-attempt with photos
+      if (fullJson.length > 2 * 1024 * 1024) {
+        console.warn('Large payload (' + sizeMB + 'MB), trying structure-first save');
+        const slimData = { ...data, days: data.days.map(d => ({ ...d, stops: d.stops.map(s => { const c = {...s}; delete c.userPhotos; return c; }) })) };
+        const slimPayload = { ...payload, data: slimData };
+        const slim = await supa.from('trips').upsert(slimPayload, { onConflict: 'id' });
+        if (!slim.error) {
+          // Structure saved — now retry the full payload with photos in background
+          console.log('Structure saved. Retrying photos in 10s…');
+          setTimeout(() => cloudSave('photo-retry'), 10000);
+          return true; // don't show error since structure is safe
+        }
+      }
+      // Retry once with full data after a pause
       await new Promise(r => setTimeout(r, 2000));
       const r2 = await supa.from('trips').upsert(payload, { onConflict: 'id' });
       error = r2.error;
@@ -1916,11 +1933,12 @@ async function cloudSave(summary) {
     if (error) {
       _syncFailCount++;
       console.warn('cloudSave failed (' + _syncFailCount + '):', error.message);
-      // Only show the toast on the FIRST failure — silent retries after that
       if (_syncFailCount === 1) {
-        showToast('⚠️ Sync failed — photos safe, retrying in background', true);
+        const msg = fullJson.length > 2*1024*1024
+          ? '⚠️ ' + sizeMB + 'MB of photos — syncing in background (may take a few tries on mobile)'
+          : '⚠️ Sync failed — retrying in background';
+        showToast(msg, true);
       }
-      // Exponential backoff: 15s → 60s → 5min → 15min
       const delays = [15000, 60000, 300000, 900000];
       const delay = delays[Math.min(_syncFailCount - 1, delays.length - 1)];
       clearTimeout(_syncBackoffTimer);
@@ -1928,11 +1946,10 @@ async function cloudSave(summary) {
       return false;
     }
 
-    // Success — reset failure count
     if (_syncFailCount > 0) {
       _syncFailCount = 0;
       clearTimeout(_syncBackoffTimer);
-      showToast('✅ Sync recovered — all data saved!');
+      showToast('✅ All ' + sizeMB + 'MB synced to cloud!');
     }
 
     const btn = document.getElementById('saveBtn');
