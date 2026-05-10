@@ -5391,7 +5391,7 @@ let _walkTourActive = false;
 let _walkTourWatchId = null;
 let _walkTourVisited = new Set();
 let _walkTourAlertOpen = false;
-const WALK_TRIGGER_METRES = 40;
+const WALK_TRIGGER_METRES = 80;
 
 function toggleWalkingGuide() {
   if (_walkTourActive) {
@@ -5476,9 +5476,9 @@ var _userStreetTs = 0;       // timestamp of last street name refresh
 
 async function liveWikiSearch(lat, lng, radius) {
   if (!_walkTourActive || _walkTourAlertOpen) return;
-  radius = radius || 40;
+  radius = radius || 80;
 
-  // Project 40m ahead in walking direction to find what's coming up
+  // Project ahead in walking direction to find what's coming up
   const bearing = getWalkingBearing();
   let searchLat = lat, searchLng = lng;
   if (bearing !== null && radius <= 100) {
@@ -5509,12 +5509,13 @@ async function liveWikiSearch(lat, lng, radius) {
     var nearby = ((data.query && data.query.geosearch) || []).filter(function(p) {
       if (_walkLiveCache.has(p.pageid)) return false;
       var d = _haversineMetres(lat, lng, p.lat, p.lon); // user position, not search point
-      if (d > TRIGGER) return false; // TRIGGER = radius when wide, 40 when live
-      if (!hasBearing) return d <= (TRIGGER > 100 ? TRIGGER : 12);
+      if (d > TRIGGER) return false;
+      if (!hasBearing) return d <= (TRIGGER > 100 ? TRIGGER : WALK_TRIGGER_METRES);
       var rp = getLandmarkRelativePos(lat, lng, p.lat, p.lon);
-      if (rp.metersAhead < -5) return false;
+      if (rp.metersAhead < -10) return false;
       if (rp.metersAhead > TRIGGER) return false;
-      if (rp.metersCross > TRIGGER) return false;
+      // Large buildings (Parliament, cathedrals) are across streets — be generous with cross-track
+      if (rp.metersCross > TRIGGER * 1.5) return false;
       return true;
     });
 
@@ -5527,24 +5528,39 @@ async function liveWikiSearch(lat, lng, radius) {
 
     if (!nearby.length || _walkTourAlertOpen) {
       if (_walkTourAlertOpen) return;
-      if (radius > 100) { showToast('📍 No landmarks found within 40 m'); return; }
+      if (radius > 100) { showToast('📍 No landmarks found nearby'); return; }
 
       // Wikipedia found nothing — try OpenStreetMap Overpass for better local coverage
       try {
-        const r2 = radius || 80;
-        const overpassQ = `[out:json][timeout:5];(node["tourism"~"attraction|artwork|viewpoint|monument"](around:${r2},${lat},${lng});node["historic"~"monument|memorial|gate|castle|ruins"](around:${r2},${lat},${lng});node["amenity"~"place_of_worship"](around:${r2},${lat},${lng}););out 5;`;
+        const r2 = Math.max(radius || 80, 80);
+        // Search both nodes AND ways (large buildings like Parliament are ways)
+        const overpassQ = `[out:json][timeout:8];(
+node["tourism"~"attraction|artwork|viewpoint|monument"](around:${r2},${lat},${lng});
+node["historic"~"monument|memorial|gate|castle|ruins|building"](around:${r2},${lat},${lng});
+node["amenity"~"place_of_worship|government"](around:${r2},${lat},${lng});
+node["building"~"parliament|government|cathedral|church|palace"](around:${r2},${lat},${lng});
+way["tourism"~"attraction|monument"](around:${r2},${lat},${lng});
+way["historic"](around:${r2},${lat},${lng});
+way["amenity"~"place_of_worship|government"](around:${r2},${lat},${lng});
+way["building"~"parliament|government|cathedral|palace"](around:${r2},${lat},${lng});
+);out center 8;`;
         const resp = await fetch('https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(overpassQ));
         const osmData = await resp.json();
         const osmHits = (osmData.elements || []).filter(el => {
           if (!el.tags || !el.tags.name) return false;
           if (_walkLiveCache.has('osm-' + el.id)) return false;
-          const d = _haversineMetres(lat, lng, el.lat, el.lon);
-          if (d > WALK_TRIGGER_METRES) return false;
+          // Use center coords for ways
+          const elLat = el.lat || (el.center && el.center.lat);
+          const elLon = el.lon || (el.center && el.center.lon);
+          if (!elLat || !elLon) return false;
+          el.lat = elLat; el.lon = elLon;
+          const d = _haversineMetres(lat, lng, elLat, elLon);
+          if (d > r2) return false;
           if (hasBearing) {
-            const rp = getLandmarkRelativePos(lat, lng, el.lat, el.lon);
-            if (rp.metersAhead < -5) return false;
-            if (rp.metersAhead > WALK_TRIGGER_METRES) return false;
-            if (rp.metersCross > WALK_TRIGGER_METRES) return false;
+            const rp = getLandmarkRelativePos(lat, lng, elLat, elLon);
+            if (rp.metersAhead < -10) return false;
+            // Be generous with cross-track — large buildings are often across the street
+            if (rp.metersCross > r2 * 1.5) return false;
           }
           return true;
         });
@@ -5624,7 +5640,7 @@ async function liveWikiSearch(lat, lng, radius) {
     if (_currentGpsLat !== null && hasBearing) {
       var recheck = getLandmarkRelativePos(_currentGpsLat, _currentGpsLng, hit.lat, hit.lon);
       if (recheck.metersAhead < -5) return;
-      if (recheck.metersAhead > WALK_TRIGGER_METRES) return; // bearing now shows too far
+      if (recheck.metersAhead > WALK_TRIGGER_METRES * 1.5) return; // bearing now shows too far
     }
 
     // Show card immediately with Wikipedia text
