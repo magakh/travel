@@ -1288,7 +1288,6 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
           <div class="action-bar">
             <button onclick="optimizeRoute()">⚡ Optimize route</button>
             <button onclick="showRouteMap()">🗺 Route Map</button>
-            <button onclick="showStoryTab()" style="border-color:#c05621;color:#c05621;">✍️ Story</button>
             <button class="blue-btn" onclick="showView('search')">+ Add location</button>
           </div>
         </div>
@@ -8786,11 +8785,12 @@ const STORY_TYPES = [
   { id:'custom',  emoji:'✏️', label:'Other / Custom' },
 ];
 
-let _storyStyle  = 'warm';
+let _storyStyles = ['warm'];  // array, up to 3
 let _storyType   = 'couple';
 let _storyState  = null;   // { title, blogHtml, fbPost, igCaption }
 let _storyParams = null;   // { names, tripType, style, notes }
 let _storyShowing = 'form'; // 'form' | 'output'
+let _storyEditMode = false; // read-only by default
 
 function _loadStoryState() {
   try {
@@ -8819,14 +8819,16 @@ function _renderStory() {
   else _renderStoryOutput(el);
   // Re-select active style/type buttons
   if (_storyShowing === 'form') {
-    (_storyParams ? _storyParams.style : _storyStyle) && _storySelectStyle(_storyParams ? _storyParams.style : _storyStyle);
+    const savedStyles = (_storyParams && _storyParams.styles) ? _storyParams.styles : _storyStyles;
+    _storyStyles = Array.isArray(savedStyles) ? savedStyles : [savedStyles];
+    _storyStyles.forEach(s => _storySelectStyle(s, true));
     (_storyParams ? _storyParams.tripType : _storyType) && _storySelectType(_storyParams ? _storyParams.tripType : _storyType);
   }
 }
 
 function _buildStoryFormHtml() {
   const styleGrid = STORY_STYLES.map(s =>
-    `<div class="story-style-btn${s.id===_storyStyle?' active':''}" onclick="_storySelectStyle('${s.id}')" id="ssbtn_${s.id}">
+    `<div class="story-style-btn${_storyStyles.includes(s.id)?' active':''}" onclick="_storySelectStyle('${s.id}')" id="ssbtn_${s.id}">
       <div style="font-size:20px;margin-bottom:3px;">${s.emoji}</div>
       <div style="font-size:11px;font-weight:800;">${s.label}</div>
       <div style="font-size:10px;color:inherit;opacity:.7;margin-top:2px;">${s.desc}</div>
@@ -8846,7 +8848,7 @@ function _buildStoryFormHtml() {
 
   <div class="story-form-card">
     <h3>👥 Who's on this trip?</h3>
-    <input class="form-input" id="storyNames" placeholder="e.g. Margarit &amp; Levon, or just your name" value="${savedNames}" style="margin:0;">
+    <input class="form-input" id="storyNames" placeholder="e.g. Maga &amp; Vardges, or just your name" value="${savedNames}" style="margin:0;">
     <div class="story-triptype-row" style="margin-top:10px;">${typePills}</div>
     <div id="customTypeWrap" style="margin-top:8px;display:${_storyType==='custom'?'block':'none'};">
       <input class="form-input" id="storyCustomType" placeholder="Describe the trip type (e.g. anniversary, honeymoon…)" value="${savedCustomType}" style="margin:0;font-size:13px;">
@@ -8854,7 +8856,7 @@ function _buildStoryFormHtml() {
   </div>
 
   <div class="story-form-card">
-    <h3>🎭 Writing style</h3>
+    <h3>🎭 Writing style <span style="font-weight:500;text-transform:none;letter-spacing:0;color:var(--muted);font-size:11px;">— pick up to 3</span></h3>
     <div class="story-style-grid">${styleGrid}</div>
   </div>
 
@@ -8868,11 +8870,20 @@ function _buildStoryFormHtml() {
   `;
 }
 
-function _storySelectStyle(id) {
-  _storyStyle = id;
+function _storySelectStyle(id, forceOn) {
+  if (forceOn) {
+    if (!_storyStyles.includes(id)) _storyStyles.push(id);
+  } else {
+    if (_storyStyles.includes(id)) {
+      // Deselect — but keep at least 1
+      if (_storyStyles.length > 1) _storyStyles = _storyStyles.filter(s => s !== id);
+    } else {
+      if (_storyStyles.length >= 3) { showToast('Max 3 styles — deselect one first'); return; }
+      _storyStyles.push(id);
+    }
+  }
   document.querySelectorAll('.story-style-btn').forEach(b => b.classList.remove('active'));
-  const el = document.getElementById('ssbtn_' + id);
-  if (el) el.classList.add('active');
+  _storyStyles.forEach(s => { const el = document.getElementById('ssbtn_' + s); if (el) el.classList.add('active'); });
 }
 function _storySelectType(id) {
   _storyType = id;
@@ -8887,35 +8898,72 @@ function _renderStoryOutput(container) {
   if (!_storyState) { _storyShowing = 'form'; _renderStory(); return; }
   const { title, blogHtml, fbPost, igCaption } = _storyState;
   const blogWithPhotos = _injectStoryPhotos(blogHtml);
+  const socialPhotosHtml = _buildSocialPhotosHtml();
+  const editMode = _storyEditMode;
   container.innerHTML = `
   <div class="story-regen-row">
     <button class="story-regen-btn" onclick="_storyShowing='form';_renderStory();">🔄 Re-generate</button>
+    <button class="story-regen-btn" onclick="_toggleStoryEdit()" id="storyEditBtn" style="${editMode?'background:#fff3e0;border-color:#e07a3a;color:#c05621;':''}">${editMode ? '✓ Done editing' : '✏️ Edit'}</button>
     <button class="story-regen-btn" style="background:#fff8f5;border-color:#c05621;color:#c05621;" onclick="_copyAllStory()">📋 Copy all</button>
   </div>
 
-  <input id="storyTitleEl" class="story-output-title" value="${_escHtml(title)}" onchange="_storyState.title=this.value;_saveStoryState();" placeholder="Story title…">
+  <input id="storyTitleEl" class="story-output-title" value="${_escHtml(title)}"
+    ${editMode ? '' : 'readonly style="pointer-events:none;"'}
+    onchange="_storyState.title=this.value;_saveStoryState();" placeholder="Story title…">
 
   <div class="story-section-label">
     📰 Blog Post
     <button class="story-copy-btn" onclick="_copyEl('storyBlogEl')">Copy</button>
   </div>
-  <div id="storyBlogEl" class="story-blog-body" contenteditable="true" oninput="_debounceSaveBlog()">${blogWithPhotos}</div>
-  <div class="story-edit-note">✏️ Click anywhere above to edit</div>
+  <div id="storyBlogEl" class="story-blog-body" ${editMode ? 'contenteditable="true" oninput="_debounceSaveBlog()"' : ''}>${blogWithPhotos}</div>
+  ${editMode ? '<div class="story-edit-note">✏️ Tap to edit</div>' : ''}
 
   <div class="story-section-label">
     <span style="color:#1877f2;">𝔽 Facebook Post</span>
     <button class="story-copy-btn" onclick="_copyEl('storyFbEl')">Copy</button>
   </div>
-  <div id="storyFbEl" class="story-social-box story-fb-box" contenteditable="true" oninput="_debounceSaveSocial()">${_escHtml(fbPost)}</div>
+  <div id="storyFbEl" class="story-social-box story-fb-box" ${editMode ? 'contenteditable="true" oninput="_debounceSaveSocial()"' : ''}>${_escHtml(fbPost)}</div>
+  ${socialPhotosHtml ? `<div style="margin-top:8px;"><div style="font-size:10px;font-weight:700;color:#1877f2;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">📎 Photos to attach</div>${socialPhotosHtml}</div>` : ''}
 
   <div class="story-section-label">
     <span style="background:linear-gradient(90deg,#c13584,#e1306c,#f77737);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">📸 Instagram Caption</span>
     <button class="story-copy-btn" onclick="_copyEl('storyIgEl')">Copy</button>
   </div>
-  <div id="storyIgEl" class="story-social-box story-ig-box" contenteditable="true" oninput="_debounceSaveSocial()">${_escHtml(igCaption)}</div>
+  <div id="storyIgEl" class="story-social-box story-ig-box" ${editMode ? 'contenteditable="true" oninput="_debounceSaveSocial()"' : ''}>${_escHtml(igCaption)}</div>
+  ${socialPhotosHtml ? `<div style="margin-top:8px;"><div style="font-size:10px;font-weight:700;color:#c13584;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">📎 Photos to attach</div>${socialPhotosHtml}</div>` : ''}
 
   <div style="height:24px;"></div>
   `;
+}
+
+function _toggleStoryEdit() {
+  _storyEditMode = !_storyEditMode;
+  const blog = document.getElementById('storyBlogEl');
+  const fb = document.getElementById('storyFbEl');
+  const ig = document.getElementById('storyIgEl');
+  const t = document.getElementById('storyTitleEl');
+  if (_storyState) {
+    if (blog) _storyState.blogHtml = blog.innerHTML;
+    if (fb) _storyState.fbPost = fb.innerText;
+    if (ig) _storyState.igCaption = ig.innerText;
+    if (t) _storyState.title = t.value;
+    _saveStoryState();
+  }
+  const container = document.getElementById('story-content');
+  if (container) _renderStoryOutput(container);
+}
+
+function _buildSocialPhotosHtml() {
+  const photos = [];
+  days.forEach(day => {
+    (day.stops || []).forEach(stop => {
+      (stop.userPhotos || []).forEach(p => { if (photos.length < 6) photos.push(p); });
+    });
+  });
+  if (!photos.length) return '';
+  return '<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;">' +
+    photos.map(p => `<img src="${p}" style="width:80px;height:80px;object-fit:cover;border-radius:10px;flex-shrink:0;">`).join('') +
+    '</div>';
 }
 
 function _escHtml(s) {
@@ -8965,9 +9013,9 @@ async function generateStory() {
   const customType = (document.getElementById('storyCustomType') || {}).value || '';
   const tripTypeObj = STORY_TYPES.find(t => t.id === _storyType) || STORY_TYPES[0];
   const tripTypeLabel = _storyType === 'custom' ? (customType || 'Trip') : tripTypeObj.label;
-  const styleObj = STORY_STYLES.find(s => s.id === _storyStyle) || STORY_STYLES[0];
+  const styleLabels = _storyStyles.map(id => { const s = STORY_STYLES.find(x => x.id === id); return s ? s.label + ' (' + s.desc + ')' : id; }).join(' + ');
 
-  _storyParams = { names, tripType: _storyType, customType, style: _storyStyle, notes };
+  _storyParams = { names, tripType: _storyType, customType, styles: _storyStyles, notes };
 
   const btn = document.getElementById('storyGenBtn');
   if (btn) { btn.disabled = true; btn.textContent = '✨ Generating your story…'; }
@@ -8993,7 +9041,7 @@ async function generateStory() {
 TRIP: ${tripName} / ${cityName}
 TRAVELERS: ${names || 'the travelers'}
 TRIP TYPE: ${tripTypeLabel}
-WRITING STYLE: ${styleObj.label} — ${styleObj.desc}
+WRITING STYLE: ${styleLabels}
 EXTRA NOTES FROM TRAVELER: ${notes || 'none'}
 
 ITINERARY:${daySummaries}
