@@ -1751,6 +1751,7 @@ async function cloudLoad() {
     if (!data) return false;
     applyRemoteData(data);
     _lastKnownSignature = stateSignature(data);
+    _ourLastSavedAt = (data.data && data.data.savedAt) || '';
     return true;
   } catch(e) {
     console.warn('cloudLoad', e);
