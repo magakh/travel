@@ -1094,11 +1094,11 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
 .story-blog-body p { margin: 0 0 14px; }
 .story-blog-body em { font-style: italic; }
 .story-blog-body strong { font-weight: 700; }
-.story-photo-block { margin: 16px 0; border-radius: 14px; overflow: hidden; }
-.story-photo-block img { width: 100%; max-height: 260px; object-fit: cover; display: block; }
-.story-photo-caption { font-size: 11px; color: #888; padding: 6px 10px 2px; font-style: italic; }
-.story-photo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin: 12px 0; border-radius: 12px; overflow: hidden; }
-.story-photo-grid img { width:100%; height:140px; object-fit:cover; display:block; }
+.story-photo-block { margin: 12px 0; border-radius: 12px; overflow: hidden; background: #f5f5f0; }
+.story-photo-block img { width: 100%; max-height: 200px; object-fit: contain; display: block; background: #f5f5f0; }
+.story-photo-caption { font-size: 11px; color: #888; padding: 4px 10px 6px; font-style: italic; }
+.story-photo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin: 10px 0; border-radius: 10px; overflow: hidden; background: #f5f5f0; }
+.story-photo-grid img { width:100%; height: auto; max-height: 120px; object-fit: contain; display:block; background: #f5f5f0; }
 .story-social-box {
   border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px;
   margin-top: 4px; font-size: 14px; line-height: 1.65; color: #333;
@@ -8907,13 +8907,14 @@ function _renderStoryOutput(container) {
   <div class="story-regen-row">
     <button class="story-regen-btn" onclick="_storyShowing='form';_renderStory();">🔄 Re-generate</button>
     <button class="story-regen-btn" onclick="_toggleStoryEdit()" id="storyEditBtn" style="${editMode?'background:#fff3e0;border-color:#e07a3a;color:#c05621;':''}">${editMode ? '✓ Done editing' : '✏️ Edit'}</button>
-    <button class="story-regen-btn" style="background:#fff8f5;border-color:#c05621;color:#c05621;" onclick="_toggleReadAloud()" id="storyReadBtn">🔊 Read</button>
     <button class="story-regen-btn" style="background:#fff8f5;border-color:#c05621;color:#c05621;" onclick="_copyAllStory()">📋 Copy all</button>
   </div>
 
   <input id="storyTitleEl" class="story-output-title" value="${_escHtml(title)}"
     ${editMode ? '' : 'readonly style="pointer-events:none;"'}
     onchange="_storyState.title=this.value;_saveStoryState();" placeholder="Story title…">
+
+  <button id="storyReadBtn" onclick="_toggleReadAloud()" style="width:100%;padding:13px;margin:12px 0 4px;border-radius:12px;border:2px solid #555;background:transparent;color:#ccc;font-size:14px;font-weight:700;cursor:pointer;letter-spacing:.01em;">🔊 Read aloud</button>
 
   <div class="story-section-label">
     📰 Blog Post
@@ -9134,6 +9135,7 @@ function _copyAllStory() {
 
 // ── READ ALOUD ────────────────────────────────────────────────────
 let _readAloudActive = false;
+let _readAloudTimer = null;
 
 function _toggleReadAloud() {
   if (_readAloudActive) {
@@ -9143,46 +9145,60 @@ function _toggleReadAloud() {
   }
 }
 
+function _readBtn() { return document.getElementById('storyReadBtn'); }
+function _setReadBtnState(reading) {
+  const btn = _readBtn();
+  if (!btn) return;
+  if (reading) {
+    btn.textContent = '⏹ Stop reading';
+    btn.style.background = '#fff0f0'; btn.style.borderColor = '#e74c3c'; btn.style.color = '#e74c3c';
+  } else {
+    btn.textContent = '🔊 Read aloud';
+    btn.style.background = 'transparent'; btn.style.borderColor = '#555'; btn.style.color = '#ccc';
+  }
+}
+
 function _startReadAloud() {
   if (!window.speechSynthesis) { showToast('❌ Text-to-speech not supported on this browser'); return; }
   window.speechSynthesis.cancel();
 
-  // Get plain text: title + blog body
   const titleEl = document.getElementById('storyTitleEl');
   const blogEl  = document.getElementById('storyBlogEl');
   if (!blogEl) return;
 
   const title = titleEl ? titleEl.value : '';
-  // Strip HTML tags to get clean readable text
   const tmp = document.createElement('div');
   tmp.innerHTML = blogEl.innerHTML;
   const blogText = tmp.innerText || tmp.textContent || '';
-  const fullText = (title ? title + '. ' : '') + blogText;
+  const fullText = (title ? title + '. ' : '') + blogText.replace(/\s+/g, ' ').trim();
 
   const utterance = new SpeechSynthesisUtterance(fullText);
   utterance.rate = 0.92;
   utterance.pitch = 1;
   utterance.lang = 'en-US';
 
-  utterance.onstart = () => {
-    _readAloudActive = true;
-    const btn = document.getElementById('storyReadBtn');
-    if (btn) { btn.textContent = '⏹ Stop'; btn.style.background = '#fff0f0'; btn.style.borderColor = '#e74c3c'; btn.style.color = '#e74c3c'; }
-  };
-  utterance.onend = utterance.onerror = () => {
-    _readAloudActive = false;
-    const btn = document.getElementById('storyReadBtn');
-    if (btn) { btn.textContent = '🔊 Read'; btn.style.background = ''; btn.style.borderColor = ''; btn.style.color = ''; }
-  };
+  _readAloudActive = true;
+  _setReadBtnState(true);
+
+  utterance.onend = () => { _stopReadAloud(); };
+  utterance.onerror = (e) => { if (e.error !== 'interrupted') _stopReadAloud(); };
 
   window.speechSynthesis.speak(utterance);
+
+  // iOS Safari fix: synthesis silently pauses after ~15s — resume it every 10s
+  clearInterval(_readAloudTimer);
+  _readAloudTimer = setInterval(() => {
+    if (!_readAloudActive) { clearInterval(_readAloudTimer); return; }
+    if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+  }, 10000);
 }
 
 function _stopReadAloud() {
+  clearInterval(_readAloudTimer);
+  _readAloudTimer = null;
   window.speechSynthesis && window.speechSynthesis.cancel();
   _readAloudActive = false;
-  const btn = document.getElementById('storyReadBtn');
-  if (btn) { btn.textContent = '🔊 Read'; btn.style.background = ''; btn.style.borderColor = ''; btn.style.color = ''; }
+  _setReadBtnState(false);
 }
 
 // Stop reading if user navigates away from story — hooked in showView()
