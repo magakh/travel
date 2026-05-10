@@ -5878,6 +5878,8 @@ function wikiThumb(url, size) {
 }
 
 let _walkAlertMap = null; // Leaflet mini-map instance inside the landmark alert
+let _walkAlertUserMarker = null; // live-updating user dot
+let _walkAlertPolyline = null;   // dashed line user→landmark
 
 // Returns "Baker Street (100–199 block)" — just the street the user is currently on
 async function getUserStreet(lat, lng) {
@@ -5905,6 +5907,7 @@ function showLandmarkAlert(lm, idx, dist) {
     clearTimeout(old._timer);
     if (old._approachInterval) clearInterval(old._approachInterval);
     if (_walkAlertMap) { try { _walkAlertMap.remove(); } catch(e) {} _walkAlertMap = null; }
+    _walkAlertUserMarker = null; _walkAlertPolyline = null;
     old.remove();
   }
 
@@ -5923,12 +5926,20 @@ function showLandmarkAlert(lm, idx, dist) {
     ? '<span style="margin-left:auto;background:#fff3cd;padding:3px 8px;border-radius:8px;font-size:12px;font-weight:800;color:#856404;">' + side + ' ' + sideEmoji + '</span>'
     : '';
 
-  function makeApproachLabel(rp) {
-    if (!rp) return '';
-    if (rp.metersAhead <= 5) return '📍 You\'re here';
-    if (rp.side === null) return ''; // no direction info — show nothing
-    const m = Math.round(rp.metersAhead);
-    return 'Walk ' + m + 'm' + (rp.side ? ', look ' + rp.side : '');
+  function makeApproachBannerHtml(rp) {
+    if (!rp) return '<div style="background:#f5f5f5;border-radius:14px;padding:14px;text-align:center;color:#888;font-size:13px;">Locating…</div>';
+    const dist = rp.totalDist < 1000 ? Math.round(rp.totalDist) + 'm' : (rp.totalDist/1000).toFixed(1) + 'km';
+    if (rp.totalDist <= 10) return '<div style="background:#e8f5e9;border-radius:14px;padding:14px;text-align:center;font-size:20px;font-weight:900;color:#1a7a3a;">📍 You\'re right here!</div>';
+    const sideBg    = rp.side === 'LEFT' ? '#e3f2fd' : rp.side === 'RIGHT' ? '#ffebee' : '#e8f5e9';
+    const sideColor = rp.side === 'LEFT' ? '#1565c0' : rp.side === 'RIGHT' ? '#b71c1c' : '#2e7d32';
+    const arrow     = rp.side === 'LEFT' ? '⬅️' : rp.side === 'RIGHT' ? '➡️' : '⬆️';
+    const dist2 = rp.metersAhead > 5 ? Math.round(rp.metersAhead) + 'm ahead' : 'right here';
+    const cross = rp.metersCross > 5 ? ' · ' + Math.round(rp.metersCross) + 'm to your ' + rp.side : '';
+    return '<div style="background:' + sideBg + ';border-radius:14px;padding:12px 16px;display:flex;align-items:center;gap:10px;">'
+      + '<span style="font-size:30px;">' + arrow + '</span>'
+      + '<div><div style="font-size:22px;font-weight:900;color:' + sideColor + ';line-height:1.1;">On your ' + (rp.side || 'WAY') + '</div>'
+      + '<div style="font-size:13px;color:#555;margin-top:2px;">' + dist2 + cross + ' · ' + dist + ' total</div></div>'
+      + '</div>';
   }
 
   // Photo + map sit side-by-side at the top of the card
@@ -5954,8 +5965,8 @@ function showLandmarkAlert(lm, idx, dist) {
     + sideHtml
     + '</div>'
     // Approach guidance bar — live-updating
-    + '<div id="walkApproachBar" style="background:#e8f5e9;border-radius:10px;padding:9px 14px;margin-bottom:8px;font-size:13px;font-weight:800;color:#1a7a3a;text-align:center;letter-spacing:0.2px;">'
-    + makeApproachLabel(relPos)
+    + '<div id="walkApproachBar" style="margin-bottom:12px;">'
+    + makeApproachBannerHtml(relPos)
     + '</div>'
     // Header row
     + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'
@@ -6009,19 +6020,21 @@ function showLandmarkAlert(lm, idx, dist) {
       L.marker([lm.lat, lm.lng], {icon: lmIcon}).addTo(_walkAlertMap);
 
       if (hasGps) {
-        // User — blue dot, no tooltip
-        const meIcon = L.divIcon({
-          html: '<div style="width:14px;height:14px;background:#1a73e8;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 4px rgba(26,115,232,0.25);"></div>',
-          className: '', iconSize: [14,14], iconAnchor: [7,7]
-        });
-        L.marker([_currentGpsLat, _currentGpsLng], {icon: meIcon}).addTo(_walkAlertMap);
-        L.polyline([[_currentGpsLat, _currentGpsLng], [lm.lat, lm.lng]], {
-          color: '#1a73e8', weight: 2, dashArray: '5,7', opacity: 0.65
-        }).addTo(_walkAlertMap);
-        _walkAlertMap.fitBounds(
-          [[_currentGpsLat, _currentGpsLng], [lm.lat, lm.lng]],
-          {padding: [24, 24]}
-        );
+        // Live user dot
+        const meIcon = L.divIcon({html:'<div style="width:14px;height:14px;background:#1a73e8;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 4px rgba(26,115,232,0.25);"></div>',className:'',iconSize:[14,14],iconAnchor:[7,7]});
+        _walkAlertUserMarker = L.marker([_currentGpsLat, _currentGpsLng], {icon: meIcon, zIndexOffset: 1000}).addTo(_walkAlertMap);
+        _walkAlertPolyline = L.polyline([[_currentGpsLat, _currentGpsLng], [lm.lat, lm.lng]], {color:'#1a73e8',weight:2,dashArray:'5,7',opacity:0.65}).addTo(_walkAlertMap);
+        // Previous landmark (grey)
+        if (idx > 0 && _tourLandmarks[idx-1]) {
+          var prev = _tourLandmarks[idx-1];
+          L.marker([prev.lat,prev.lng],{icon:L.divIcon({html:'<div style="width:10px;height:10px;background:#999;border:2px solid #fff;border-radius:50%;"></div>',className:'',iconSize:[10,10],iconAnchor:[5,5]})}).addTo(_walkAlertMap).bindTooltip('\u2190 ' + prev.name,{direction:'top'});
+        }
+        // Next landmark (orange)
+        if (idx >= 0 && _tourLandmarks[idx+1]) {
+          var next = _tourLandmarks[idx+1];
+          L.marker([next.lat,next.lng],{icon:L.divIcon({html:'<div style="width:10px;height:10px;background:#f39c12;border:2px solid #fff;border-radius:50%;"></div>',className:'',iconSize:[10,10],iconAnchor:[5,5]})}).addTo(_walkAlertMap).bindTooltip('Next: ' + next.name,{direction:'top'});
+        }
+        _walkAlertMap.fitBounds([[_currentGpsLat,_currentGpsLng],[lm.lat,lm.lng]],{padding:[24,24]});
       }
     } catch(mapErr) { console.warn('Walk map error:', mapErr); }
   }
@@ -6064,7 +6077,7 @@ function showLandmarkAlert(lm, idx, dist) {
   const t = setTimeout(function() { dismissLandmarkAlert(); }, 90000);
   el._timer = t;
 
-  // Live approach guidance — updates every 2s, auto-dismisses if >30m behind
+  // Live approach guidance — updates every 2s
   el._approachInterval = setInterval(function() {
     if (!_currentGpsLat || !document.getElementById('walkAlert')) {
       clearInterval(el._approachInterval); return;
@@ -6072,8 +6085,15 @@ function showLandmarkAlert(lm, idx, dist) {
     var rp = getLandmarkRelativePos(_currentGpsLat, _currentGpsLng, lm.lat, lm.lng);
     // Auto-dismiss if landmark is more than 30m behind (user walked past)
     if (rp.metersAhead < -30) { dismissLandmarkAlert(); return; }
+    // Update approach banner
     var bar = document.getElementById('walkApproachBar');
-    if (bar) bar.textContent = makeApproachLabel(rp);
+    if (bar) bar.innerHTML = makeApproachBannerHtml(rp);
+    // Update live user position on map
+    if (_walkAlertMap && _walkAlertUserMarker) {
+      _walkAlertUserMarker.setLatLng([_currentGpsLat, _currentGpsLng]);
+      if (_walkAlertPolyline) _walkAlertPolyline.setLatLngs([[_currentGpsLat, _currentGpsLng], [lm.lat, lm.lng]]);
+      try { _walkAlertMap.fitBounds([[_currentGpsLat, _currentGpsLng], [lm.lat, lm.lng]], {padding: [20, 20], animate: true, duration: 0.5}); } catch(e) {}
+    }
   }, 2000);
 
   if (idx >= 0) highlightTourMarker(idx);
@@ -6083,6 +6103,7 @@ function dismissLandmarkAlert() {
   _walkTourAlertOpen = false;
   if (window.speechSynthesis) window.speechSynthesis.cancel();
   if (_walkAlertMap) { try { _walkAlertMap.remove(); } catch(e) {} _walkAlertMap = null; }
+  _walkAlertUserMarker = null; _walkAlertPolyline = null;
   const el = document.getElementById('walkAlert'); if (!el) return;
   clearTimeout(el._timer);
   if (el._approachInterval) clearInterval(el._approachInterval);
