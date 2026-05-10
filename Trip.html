@@ -4214,6 +4214,8 @@ function _showCameraOverlay(stream) {
   ov.append(video, shutter, cancel, aim, label, zoomBar);
   document.body.appendChild(ov);
   video.play();
+  // Start compass so we know which direction user is facing when they shoot
+  _startCompassWatch();
 
   // ── Zoom logic ──────────────────────────────────────────────────
   let currentZoom = 1;
@@ -4349,9 +4351,18 @@ async function _callVision(base64, prompt) {
 }
 
 async function _processLandmarkPhoto(file) {
-  // Snapshot GPS the moment the user fires the shutter
+  // Snapshot GPS + bearing at the moment the shutter fires
   const snapLat = _currentGpsLat;
   const snapLng = _currentGpsLng;
+  const snapBearing = getWalkingBearing(); // null if unknown
+
+  function compassDir(deg) {
+    const dirs = ['N','NE','E','SE','S','SW','W','NW'];
+    return dirs[Math.round(deg / 45) % 8];
+  }
+
+  const leftDir  = snapBearing !== null ? compassDir((snapBearing - 90 + 360) % 360) : null;
+  const rightDir = snapBearing !== null ? compassDir((snapBearing + 90) % 360) : null;
 
   // Overlay spinner
   const ov = document.createElement('div');
@@ -4377,14 +4388,22 @@ async function _processLandmarkPhoto(file) {
         + 'If what you see cannot be matched to a real place near these coordinates with high confidence, return confidence below 50.'
       : '';
 
+    const dirHint = snapBearing !== null
+      ? '\nWalking direction: ' + Math.round(snapBearing) + '° (' + compassDir(snapBearing) + '). '
+        + 'Camera pointing approximately ' + compassDir(snapBearing) + '. '
+        + 'Left side of street = ' + leftDir + ', Right side = ' + rightDir + '. '
+        + 'Use this to determine which side of the street the identified place is on.'
+      : '';
+
     // Step 1 — Vision with GPS context and confidence
     const visionText = await _callVision(base64,
-      'Look at this photo. Identify the BUSINESS, RESTAURANT, PUB, CAFE, BAR, SHOP or LANDMARK visible. Read any visible signage first.' + gpsHint
-      + '\nReturn ONLY valid JSON (no markdown):\n{"name":"exact name from sign or known place","location":"city, country","type":"restaurant|cafe|pub|bar|hotel|shop|museum|church|theatre|monument|building|other","is_business":true,"confidence":0-100,"google_query":"name + location for Google Maps","wiki_query":"Wikipedia article title if notable else empty","confidence_reason":"why this confidence level"}'
+      'Look at this photo. Identify the BUSINESS, RESTAURANT, PUB, CAFE, BAR, SHOP or LANDMARK visible. Read any visible signage first.' + gpsHint + dirHint
+      + '\nReturn ONLY valid JSON (no markdown):\n{"name":"exact name from sign or known place","location":"city, country","type":"restaurant|cafe|pub|bar|hotel|shop|museum|church|theatre|monument|building|other","is_business":true,"confidence":0-100,"side":"LEFT|RIGHT|AHEAD|null","google_query":"name + location for Google Maps","wiki_query":"Wikipedia article title if notable else empty","confidence_reason":"why this confidence level"}'
       + '\nconfidence 90-100: sign clearly readable or unmistakable landmark. 70-89: recognisable but some uncertainty. 50-69: best guess. Below 50: cannot reliably identify.'
+      + '\nside: based on walking direction provided, which side of the street is this on? LEFT, RIGHT, AHEAD, or null if unknown.'
       + '\nIf unidentifiable set name to empty string and confidence to 0.'
     );
-    let identified = { name: '', location: '', type: 'other', is_business: false, confidence: 0, google_query: '', wiki_query: '' };
+    let identified = { name: '', location: '', type: 'other', is_business: false, confidence: 0, side: null, google_query: '', wiki_query: '' };
     try { identified = JSON.parse(visionText.replace(/```json|```/g, '').trim()); } catch(e) {}
 
     const confidence = Math.min(100, Math.max(0, parseInt(identified.confidence) || 0));
@@ -4494,6 +4513,7 @@ async function _processLandmarkPhoto(file) {
       gmapsUrl: gmapsUrl,
       isBusiness: isBusiness,
       confidence: confidence,
+      side: identified.side || null,
       menuUrl: isBusiness ? 'https://www.google.com/search?q=' + encodeURIComponent(wTitle + ' ' + identified.location + ' menu') : null,
       reviewsUrl: isBusiness ? 'https://www.google.com/search?q=' + encodeURIComponent(wTitle + ' ' + identified.location + ' reviews') : null,
       lmLat: wLat,
@@ -4579,9 +4599,10 @@ function _showIdentifyCard(lm) {
 
   el.innerHTML = '<div style="padding:12px 14px 32px;">'
     // Header
-    + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">'
+    + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">'
     + '<span style="background:#5c4db1;color:#fff;font-size:11px;font-weight:800;padding:4px 10px;border-radius:20px;letter-spacing:0.5px;">📷 IDENTIFIED</span>'
     + (distStr ? '<span style="font-size:11px;color:#1a7a3a;font-weight:700;">'+distStr+'</span>' : '')
+    + (lm.side && lm.side !== 'null' ? '<span style="font-size:11px;font-weight:800;padding:3px 10px;border-radius:20px;background:' + (lm.side==='LEFT'?'#e3f2fd':lm.side==='RIGHT'?'#fce4ec':'#f3e5f5') + ';color:' + (lm.side==='LEFT'?'#1565c0':lm.side==='RIGHT'?'#b71c1c':'#6a1b9a') + ';">📍 On your ' + lm.side + '</span>' : '')
     + (lm.confidence ? '<span style="font-size:11px;font-weight:800;padding:3px 8px;border-radius:20px;background:' + (lm.confidence>=80?'#e8f5e9':lm.confidence>=60?'#fffbeb':'#fce4ec') + ';color:' + (lm.confidence>=80?'#1a7a3a':lm.confidence>=60?'#b45309':'#c62828') + ';">' + lm.confidence + '% match</span>' : '')
     + '<button onclick="_closeIdentifyCard()" style="margin-left:auto;background:#f0f0f0;border:none;border-radius:20px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;">✕</button>'
     + '</div>'
@@ -5398,6 +5419,7 @@ function startLiveWalkingTour() {
         var lat = pos2.coords.latitude, lng = pos2.coords.longitude;
         _prevGpsLat = _currentGpsLat; _prevGpsLng = _currentGpsLng;
         _currentGpsLat = lat; _currentGpsLng = lng;
+        _pushGpsHistory(lat, lng);
         // Capture device GPS heading if available (accurate on mobile)
         if (pos2.coords.heading !== null && !isNaN(pos2.coords.heading) && pos2.coords.speed > 0.3) {
           _gpsHeading = pos2.coords.heading;
@@ -5704,6 +5726,39 @@ function checkNearbyLandmarks(lat, lng) {
 let _currentGpsLat = null, _currentGpsLng = null;
 let _prevGpsLat = null, _prevGpsLng = null;
 let _gpsHeading = null; // degrees 0-360 from device GPS, null if unavailable
+let _gpsHistory = []; // [{lat,lng,ts}] rolling buffer for stable bearing
+const _GPS_HIST_MAX = 30;
+
+// Add a position to history, keeping only the last _GPS_HIST_MAX entries
+function _pushGpsHistory(lat, lng) {
+  _gpsHistory.push({ lat, lng, ts: Date.now() });
+  if (_gpsHistory.length > _GPS_HIST_MAX) _gpsHistory.shift();
+}
+
+// Compass heading captured from DeviceOrientation (works while stationary)
+let _compassHeading = null;
+let _compassWatching = false;
+
+function _startCompassWatch() {
+  if (_compassWatching) return;
+  const handler = (e) => {
+    // iOS uses webkitCompassHeading, Android uses alpha (needs adjustment)
+    if (typeof e.webkitCompassHeading === 'number' && !isNaN(e.webkitCompassHeading)) {
+      _compassHeading = e.webkitCompassHeading;
+    } else if (e.absolute && typeof e.alpha === 'number') {
+      _compassHeading = (360 - e.alpha) % 360;
+    }
+  };
+  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+    DeviceOrientationEvent.requestPermission().then(state => {
+      if (state === 'granted') { window.addEventListener('deviceorientationabsolute', handler, true); window.addEventListener('deviceorientation', handler, true); _compassWatching = true; }
+    }).catch(() => {});
+  } else {
+    window.addEventListener('deviceorientationabsolute', handler, true);
+    window.addEventListener('deviceorientation', handler, true);
+    _compassWatching = true;
+  }
+}
 
 // True bearing (0-360°) from point A to point B
 function bearingBetween(lat1, lng1, lat2, lng2) {
@@ -5716,12 +5771,22 @@ function bearingBetween(lat1, lng1, lat2, lng2) {
 }
 
 // Get current walking direction in degrees (0=N, 90=E, 180=S, 270=W)
-// Prefers GPS hardware heading; falls back to computed prev→current bearing
+// Priority: GPS hardware heading → device compass → GPS history bearing
 function getWalkingBearing() {
   if (_gpsHeading !== null && !isNaN(_gpsHeading)) return _gpsHeading;
+  if (_compassHeading !== null && !isNaN(_compassHeading)) return _compassHeading;
+  // Use history: find oldest point ≥10m away for a stable bearing
+  if (_gpsHistory.length >= 2) {
+    const latest = _gpsHistory[_gpsHistory.length - 1];
+    for (let i = _gpsHistory.length - 2; i >= 0; i--) {
+      const old = _gpsHistory[i];
+      const dist = _haversineMetres(old.lat, old.lng, latest.lat, latest.lng);
+      if (dist >= 8) return bearingBetween(old.lat, old.lng, latest.lat, latest.lng);
+    }
+  }
   if (_prevGpsLat === null || _currentGpsLat === null) return null;
   const moved = _haversineMetres(_prevGpsLat, _prevGpsLng, _currentGpsLat, _currentGpsLng);
-  if (moved < 4) return null; // too close — unreliable
+  if (moved < 4) return null;
   return bearingBetween(_prevGpsLat, _prevGpsLng, _currentGpsLat, _currentGpsLng);
 }
 
