@@ -1505,6 +1505,10 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
           <button onclick="exportFile()" style="flex:1;padding:11px;border-radius:10px;border:1px solid #444;background:#1e1e1e;color:#ccc;font-size:13px;font-weight:700;cursor:pointer;">📤 Export</button>
           <button onclick="document.getElementById('import-input').click()" style="flex:1;padding:11px;border-radius:10px;border:1px solid #444;background:#1e1e1e;color:#ccc;font-size:13px;font-weight:700;cursor:pointer;">📥 Import</button>
         </div>
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <button onclick="forceUploadToSupabase()" style="flex:1;padding:11px;border-radius:10px;border:2px solid #1a7a3a;background:#0d2e18;color:#4caf50;font-size:13px;font-weight:700;cursor:pointer;">☁️ Force upload to cloud</button>
+          <button onclick="forceReloadFromSupabase()" style="flex:1;padding:11px;border-radius:10px;border:2px solid #1a73e8;background:#0d1e3a;color:#64b5f6;font-size:13px;font-weight:700;cursor:pointer;">🔄 Force reload from cloud</button>
+        </div>
       </div>
 
       <!-- ── DANGER ZONE ── -->
@@ -2194,6 +2198,32 @@ function saveToStorage() {
 }
 async function syncSave() { await doAutoPush(); }
 async function syncLoad() { return await cloudLoad(); }
+
+async function forceUploadToSupabase() {
+  if (!EDITOR_MODE) { showToast('🔒 Unlock editing first', true); return; }
+  showToast('☁️ Uploading everything to cloud…');
+  saveToStorage(); // make sure localStorage is current
+  const ok = await cloudSave('force-upload');
+  if (ok) {
+    showToast('✅ Everything uploaded to cloud successfully!');
+  } else {
+    showToast('❌ Upload failed — check your connection and try again', true);
+  }
+}
+
+async function forceReloadFromSupabase() {
+  showToast('🔄 Loading fresh data from cloud…');
+  // Clear localStorage so it can't win over cloud on next comparison
+  try { localStorage.removeItem('trip_' + TRIP_ID + '_v1'); } catch(e) {}
+  const ok = await cloudLoad();
+  if (ok) {
+    renderAll();
+    showView('list');
+    showToast('✅ Reloaded from cloud — all data is current!');
+  } else {
+    showToast('❌ Could not reach cloud — check your connection', true);
+  }
+}
 function tryLoadSaved() { return tryLoadLocal(); }
 function startSyncPolling() { /* realtime handles this now */ }
 
@@ -3471,15 +3501,18 @@ async function init() {
     }
   }
 
-  // Even if cloud loaded, check if localStorage has MORE stops (cloud may have been wiped)
+  // Only prefer localStorage if it has more stops AND is newer than what Supabase has.
+  // Never let old local data override fresh cloud data.
   try {
     const localRaw = localStorage.getItem('trip_' + TRIP_ID + '_v1');
     if (localRaw) {
       const localData = JSON.parse(localRaw);
       const cloudStops = days.reduce((n, d) => n + (d.stops||[]).length, 0);
       const localStops = (localData.days||[]).reduce((n, d) => n + (d.stops||[]).length, 0);
-      if (localStops > cloudStops) {
-        // localStorage has more data — restore it and push back to Supabase
+      const localSavedAt = new Date(localData.savedAt || 0).getTime();
+      const isLocalNewer = localSavedAt > cloudSavedAt;
+      if (localStops > cloudStops && isLocalNewer) {
+        // localStorage is genuinely newer and has more data — restore and push
         tryLoadLocal();
         showToast('📦 Restored from device backup — saving to cloud…');
         setTimeout(() => doAutoPush(), 1000);
