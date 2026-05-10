@@ -4380,8 +4380,10 @@ async function _processLandmarkPhoto(file) {
 
   try {
     const base64 = await _resizeToBase64(file, 1024);
-    // Store photo so "Passed by" can attach it to the stop
-    window._identifyBase64 = base64;
+    // Store a properly-sized data URL for attaching to stop photos
+    const photoDataUrl = await resizeStopPhoto(file, 400);
+    window._identifyBase64 = photoDataUrl; // data URL, displayable
+    window._identifyBase64Raw = base64; // raw base64 for vision API
 
     // Build GPS context for the prompt
     const gpsHint = (snapLat && snapLng)
@@ -4752,6 +4754,7 @@ function _closeIdentifyCard() {
   if (c) { c.style.transform = 'translateY(100%)'; setTimeout(function(){if(c.parentNode)c.remove();}, 380); }
   // Discard photo if user didn't tap "Passed by"
   window._identifyBase64 = null;
+  window._identifyBase64Raw = null;
 }
 
 function _addIdentifyPassedBy() {
