@@ -8961,25 +8961,32 @@ function _renderStoryOutput(container) {
     ${editMode ? '' : 'readonly style="pointer-events:none;"'}
     onchange="_storyState.title=this.value;_saveStoryState();" placeholder="Story title…">
 
-  <button id="storyReadBtn" onclick="_toggleReadAloud()" style="width:100%;padding:13px;margin:12px 0 4px;border-radius:12px;border:2px solid #555;background:transparent;color:#ccc;font-size:14px;font-weight:700;cursor:pointer;letter-spacing:.01em;">🔊 Read aloud</button>
-
   <div class="story-section-label">
     📰 Blog Post
-    <button class="story-copy-btn" onclick="_copyEl('storyBlogEl')">Copy</button>
+    <div style="display:flex;gap:6px;">
+      <button id="readBtn_blog" class="story-copy-btn" onclick="_readSection('blog')" title="Read aloud">🔊</button>
+      <button class="story-copy-btn" onclick="_copyEl('storyBlogEl')">Copy</button>
+    </div>
   </div>
   <div id="storyBlogEl" class="story-blog-body" ${editMode ? 'contenteditable="true" oninput="_debounceSaveBlog()"' : ''}>${blogWithPhotos}</div>
   ${editMode ? '<div class="story-edit-note">✏️ Tap to edit</div>' : ''}
 
   <div class="story-section-label">
     <span style="color:#1877f2;">𝔽 Facebook Post</span>
-    <button class="story-copy-btn" onclick="_copyEl('storyFbEl')">Copy</button>
+    <div style="display:flex;gap:6px;">
+      <button id="readBtn_fb" class="story-copy-btn" onclick="_readSection('fb')" title="Read aloud">🔊</button>
+      <button class="story-copy-btn" onclick="_copyEl('storyFbEl')">Copy</button>
+    </div>
   </div>
   <div id="storyFbEl" class="story-social-box story-fb-box" ${editMode ? 'contenteditable="true" oninput="_debounceSaveSocial()"' : ''}>${_escHtml(fbPost)}</div>
   ${socialPhotosHtml ? `<div style="margin-top:8px;"><div style="font-size:10px;font-weight:700;color:#1877f2;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">📎 Photos to attach</div>${socialPhotosHtml}</div>` : ''}
 
   <div class="story-section-label">
     <span style="background:linear-gradient(90deg,#c13584,#e1306c,#f77737);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">📸 Instagram Caption</span>
-    <button class="story-copy-btn" onclick="_copyEl('storyIgEl')">Copy</button>
+    <div style="display:flex;gap:6px;">
+      <button id="readBtn_ig" class="story-copy-btn" onclick="_readSection('ig')" title="Read aloud">🔊</button>
+      <button class="story-copy-btn" onclick="_copyEl('storyIgEl')">Copy</button>
+    </div>
   </div>
   <div id="storyIgEl" class="story-social-box story-ig-box" ${editMode ? 'contenteditable="true" oninput="_debounceSaveSocial()"' : ''}>${_escHtml(igCaption)}</div>
   ${socialPhotosHtml ? `<div style="margin-top:8px;"><div style="font-size:10px;font-weight:700;color:#c13584;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">📎 Photos to attach</div>${socialPhotosHtml}</div>` : ''}
@@ -9202,75 +9209,83 @@ function _setReadBtnState(reading) {
   }
 }
 
-function _storyPlainText() {
-  // Use stored HTML (has {{PHOTO:...}} placeholders, NO base64 blobs) — fast and clean
+function _storyPlainText(section) {
   if (!_storyState) return '';
+  if (section === 'fb') return (_storyState.fbPost || '').replace(/\s+/g,' ').trim();
+  if (section === 'ig') return (_storyState.igCaption || '').replace(/#\S+/g,'').replace(/\s+/g,' ').trim();
   const title = _storyState.title || '';
   let html = _storyState.blogHtml || '';
-  // Remove photo placeholders
   html = html.replace(/\{\{PHOTO:\d+:\d+\}\}/g, ' ');
-  // Strip HTML tags
   const tmp = document.createElement('div');
   tmp.innerHTML = html;
-  const body = (tmp.innerText || tmp.textContent || '').replace(/\s+/g, ' ').trim();
+  const body = (tmp.innerText || tmp.textContent || '').replace(/\s+/g,' ').trim();
   return (title ? title + '. ' : '') + body;
 }
 
-function _startReadAloud() {
+function _chunkText(text) {
+  const MAX = 1200;
+  if (text.length <= MAX) return [text];
+  const chunks = [];
+  let rem = text;
+  while (rem.length > MAX) {
+    let cut = rem.lastIndexOf('. ', MAX);
+    if (cut < MAX * 0.5) cut = rem.lastIndexOf(' ', MAX);
+    if (cut < 0) cut = MAX;
+    else cut++;
+    chunks.push(rem.slice(0, cut).trim());
+    rem = rem.slice(cut).trim();
+  }
+  if (rem) chunks.push(rem);
+  return chunks;
+}
+
+let _readChunks = [], _readChunkIdx = 0, _readAloudSection = null;
+
+function _speakChunk() {
+  if (!_readAloudActive || _readChunkIdx >= _readChunks.length) { _stopReadAloud(); return; }
+  const utt = new SpeechSynthesisUtterance(_readChunks[_readChunkIdx]);
+  utt.lang = 'en-GB'; utt.rate = 0.95;
+  utt.onend = () => { _readChunkIdx++; if (_readAloudActive) _speakChunk(); };
+  utt.onerror = (e) => { if (e.error !== 'interrupted' && e.error !== 'canceled') _stopReadAloud(); };
+  window.speechSynthesis.speak(utt);
+}
+
+function _readSection(section) {
   const synth = window.speechSynthesis;
-  if (!synth) { showToast('❌ Text-to-speech not supported'); return; }
-
-  const text = _storyPlainText();
-  if (!text) { showToast('❌ No story text — generate a story first'); return; }
-
+  if (!synth) { showToast('\u274c Text-to-speech not supported'); return; }
+  if (_readAloudActive) { _stopReadAloud(); return; }
+  const text = _storyPlainText(section);
+  if (!text) { showToast('\u274c No text to read'); return; }
   synth.cancel();
-
-  const utt = new SpeechSynthesisUtterance(text);
-  utt.rate = 0.9;
-  utt.pitch = 1;
-  utt.lang = 'en-US';
-
-  // Try to pick an English voice — but never block speak() on this
-  try {
-    const voices = synth.getVoices();
-    const pick = voices.find(v => v.lang === 'en-US' && v.localService)
-               || voices.find(v => v.lang.startsWith('en') && v.localService)
-               || voices.find(v => v.lang.startsWith('en'));
-    if (pick) utt.voice = pick;
-  } catch(e) {}
-
-  utt.onend   = () => _stopReadAloud();
-  utt.onerror = (e) => {
-    console.log('TTS error:', e.error);
-    // 'interrupted' = our own cancel(), ignore it
-    if (e.error && e.error !== 'interrupted' && e.error !== 'canceled') {
-      _stopReadAloud();
-    }
-  };
-
-  // MUST call speak() synchronously within the tap gesture (iOS requirement)
-  synth.speak(utt);
-
-  // Set state immediately — don't wait for onstart which may not fire on iOS
+  _readChunks = _chunkText(text);
+  _readChunkIdx = 0;
   _readAloudActive = true;
-  _setReadBtnState(true);
-
-  // iOS fix: synthesis silently pauses after ~15s — kick it every 8s
+  _readAloudSection = section;
+  _setAllReadIcons();
+  _speakChunk();
   clearInterval(_readAloudTimer);
   _readAloudTimer = setInterval(() => {
     if (!_readAloudActive) { clearInterval(_readAloudTimer); return; }
     if (synth.paused) synth.resume();
-    // iOS sometimes stops without firing onend — detect and clean up
-    if (!synth.speaking && !synth.pending) _stopReadAloud();
   }, 8000);
 }
 
 function _stopReadAloud() {
-  clearInterval(_readAloudTimer);
-  _readAloudTimer = null;
+  clearInterval(_readAloudTimer); _readAloudTimer = null;
   window.speechSynthesis && window.speechSynthesis.cancel();
-  _readAloudActive = false;
-  _setReadBtnState(false);
+  _readAloudActive = false; _readAloudSection = null;
+  _setAllReadIcons();
+}
+
+function _setAllReadIcons() {
+  ['blog','fb','ig'].forEach(s => {
+    const btn = document.getElementById('readBtn_' + s);
+    if (!btn) return;
+    const active = _readAloudActive && _readAloudSection === s;
+    btn.textContent = active ? '\u23f9' : '\ud83d\udd0a';
+    btn.style.color = active ? '#e74c3c' : '';
+    btn.style.borderColor = active ? '#e74c3c' : '';
+  });
 }
 
 // ── MOVE PHOTO BETWEEN EVENTS ─────────────────────────────────────
