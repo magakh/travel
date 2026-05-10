@@ -1505,6 +1505,7 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
           <button onclick="exportFile()" style="flex:1;padding:11px;border-radius:10px;border:1px solid #444;background:#1e1e1e;color:#ccc;font-size:13px;font-weight:700;cursor:pointer;">📤 Export JSON</button>
           <button onclick="document.getElementById('import-input').click()" style="flex:1;padding:11px;border-radius:10px;border:1px solid #444;background:#1e1e1e;color:#ccc;font-size:13px;font-weight:700;cursor:pointer;">📥 Import JSON</button>
         </div>
+        <button onclick="forcePushToSupabase()" style="width:100%;padding:12px;border-radius:10px;border:2px solid #1a7a3a;background:#0d2e18;color:#4caf50;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:8px;">☁️ Force push everything to Supabase</button>
       </div>
 
       <!-- ── DANGER ZONE ── -->
@@ -2263,6 +2264,16 @@ function saveToStorage() {
   doAutoPush();
   showToast('Saved ✓');
 }
+async function forcePushToSupabase() {
+  if (!EDITOR_MODE) { showToast('🔒 Unlock editing first', true); return; }
+  _syncFailCount = 0;
+  clearTimeout(_syncBackoffTimer);
+  saveToStorage();
+  showToast('☁️ Pushing all data to Supabase…');
+  const ok = await cloudSave('force-push');
+  if (ok) showToast('✅ Everything pushed to Supabase successfully!');
+}
+
 async function syncSave() { await doAutoPush(); }
 async function syncLoad() { return await cloudLoad(); }
 
@@ -2330,14 +2341,26 @@ function importFile(input) {
       if (!data.days || data.days.length < 1) throw new Error('Invalid format');
       data.days.forEach((d, i) => {
         if (!days[i]) days[i] = { title: '', note: '', stops: [] };
-        days[i].stops = d.stops;
+        // Merge photos rather than replace
+        d.stops.forEach((s, si) => {
+          if (!days[i].stops[si]) { days[i].stops[si] = s; return; }
+          days[i].stops[si] = { ...s, userPhotos: _mergePhotos(days[i].stops[si].userPhotos, s.userPhotos) };
+        });
+        // If imported has more stops than current, append them
+        if (d.stops.length > days[i].stops.length) {
+          days[i].stops = d.stops.map((s, si) => days[i].stops[si] || s);
+        }
       });
       completed = data.completed || [];
       if (data.hotel) { window.HOTEL_DATA = data.hotel; HOTEL.name = data.hotel.name; HOTEL.address = data.hotel.address; HOTEL.lat = data.hotel.lat; HOTEL.lng = data.hotel.lng; }
-      autoSave();
+      saveToStorage();
       switchDay(currentDay);
       renderPrebook();
-      showToast('Plan imported ✓');
+      showToast('Imported ✓ — pushing to Supabase…');
+      // Force push to Supabase immediately after import
+      _syncFailCount = 0;
+      clearTimeout(_syncBackoffTimer);
+      setTimeout(() => cloudSave('post-import'), 500);
     } catch(err) { showToast('Could not read file — check format', true); }
   };
   reader.readAsText(file);
