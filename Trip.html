@@ -1502,12 +1502,8 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
       <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
         <p style="font-size:12px;color:#888;margin-bottom:8px;">Data</p>
         <div style="display:flex;gap:8px;margin-bottom:8px;">
-          <button onclick="exportFile()" style="flex:1;padding:11px;border-radius:10px;border:1px solid #444;background:#1e1e1e;color:#ccc;font-size:13px;font-weight:700;cursor:pointer;">📤 Export</button>
-          <button onclick="document.getElementById('import-input').click()" style="flex:1;padding:11px;border-radius:10px;border:1px solid #444;background:#1e1e1e;color:#ccc;font-size:13px;font-weight:700;cursor:pointer;">📥 Import</button>
-        </div>
-        <div style="display:flex;gap:8px;margin-bottom:8px;">
-          <button onclick="forceUploadToSupabase()" style="flex:1;padding:11px;border-radius:10px;border:2px solid #1a7a3a;background:#0d2e18;color:#4caf50;font-size:13px;font-weight:700;cursor:pointer;">☁️ Force upload to cloud</button>
-          <button onclick="forceReloadFromSupabase()" style="flex:1;padding:11px;border-radius:10px;border:2px solid #1a73e8;background:#0d1e3a;color:#64b5f6;font-size:13px;font-weight:700;cursor:pointer;">🔄 Force reload from cloud</button>
+          <button onclick="exportFile()" style="flex:1;padding:11px;border-radius:10px;border:1px solid #444;background:#1e1e1e;color:#ccc;font-size:13px;font-weight:700;cursor:pointer;">📤 Export JSON</button>
+          <button onclick="document.getElementById('import-input').click()" style="flex:1;padding:11px;border-radius:10px;border:1px solid #444;background:#1e1e1e;color:#ccc;font-size:13px;font-weight:700;cursor:pointer;">📥 Import JSON</button>
         </div>
       </div>
 
@@ -3457,7 +3453,6 @@ async function init() {
   updateLockUI();
   document.getElementById('stopList').innerHTML = '<div style="text-align:center;padding:40px;color:#888;">⏳ Loading…</div>';
 
-  // If Supabase not configured yet, prompt the user to set it up
   if (!APP_CONFIG.supabaseUrl || !APP_CONFIG.supabaseKey) {
     document.getElementById('stopList').innerHTML =
       '<div style="text-align:center;padding:40px;color:#333;">' +
@@ -3465,7 +3460,6 @@ async function init() {
       '<p style="font-size:13px;color:#666;margin:0 0 18px 0;">Open <strong>Settings</strong> and paste your Supabase URL + anon key to get started.</p>' +
       '<button onclick="showView(&quot;settings&quot;)" style="padding:10px 18px;background:#1a1a1a;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer;">Open Settings</button>' +
       '</div>';
-    // Still load local fallback if we have one
     tryLoadLocal();
     window.addEventListener('resize', updateHeaderHeight);
     return;
@@ -3477,62 +3471,35 @@ async function init() {
     return;
   }
 
-  // Try to load the trip from Supabase
+  // ── SUPABASE IS THE SINGLE SOURCE OF TRUTH ──────────────────────
+  // Cloud always wins. localStorage is only a silent offline fallback.
   let loaded = await cloudLoad();
-  const cloudStopsOnLoad = days.reduce((n, d) => n + (d.stops||[]).length, 0);
-  const cloudSavedAt = new Date((window._tripCloudData && window._tripCloudData.savedAt) || 0).getTime();
 
-  // Import from JSON if: not loaded, empty, or JSON is newer
-  try {
-    const jsonUrl = 'https://raw.githubusercontent.com/magakh/travel/main/sync_' + TRIP_ID + '.json?cb=' + Date.now();
-    const jsonResp = await fetch(jsonUrl, { cache: 'no-store' });
-    if (jsonResp.ok) {
-      const jsonData = await jsonResp.json();
-      const jsonSavedAt = new Date(jsonData.jsonVersion || jsonData.savedAt || 0).getTime();
-      if (!loaded || cloudStopsOnLoad === 0 || jsonSavedAt > cloudSavedAt) {
+  if (!loaded) {
+    // Cloud unreachable — use localStorage as offline cache only
+    loaded = tryLoadLocal();
+    if (loaded) showToast('📡 Offline — showing cached data');
+  }
+
+  // One-time migration: import legacy JSON if Supabase is empty
+  if (!loaded || days.reduce((n, d) => n + (d.stops||[]).length, 0) === 0) {
+    try {
+      const jsonUrl = 'https://raw.githubusercontent.com/magakh/travel/main/sync_' + TRIP_ID + '.json?cb=' + Date.now();
+      const jsonResp = await fetch(jsonUrl, { cache: 'no-store' });
+      if (jsonResp.ok) {
         const imported = await importLegacyJson();
         if (imported) loaded = await cloudLoad();
       }
-    }
-  } catch(e) {
-    if (!loaded || cloudStopsOnLoad === 0) {
-      const imported = await importLegacyJson();
-      if (imported) loaded = await cloudLoad();
-    }
+    } catch(e) {}
   }
 
-  // Only prefer localStorage if it has more stops AND is newer than what Supabase has.
-  // Never let old local data override fresh cloud data.
-  try {
-    const localRaw = localStorage.getItem('trip_' + TRIP_ID + '_v1');
-    if (localRaw) {
-      const localData = JSON.parse(localRaw);
-      const cloudStops = days.reduce((n, d) => n + (d.stops||[]).length, 0);
-      const localStops = (localData.days||[]).reduce((n, d) => n + (d.stops||[]).length, 0);
-      const localSavedAt = new Date(localData.savedAt || 0).getTime();
-      const isLocalNewer = localSavedAt > cloudSavedAt;
-      if (localStops > cloudStops && isLocalNewer) {
-        // localStorage is genuinely newer and has more data — restore and push
-        tryLoadLocal();
-        showToast('📦 Restored from device backup — saving to cloud…');
-        setTimeout(() => doAutoPush(), 1000);
-        loaded = true;
-      }
-    }
-  } catch(e) {}
-
-  // If still nothing, fall back to local copy
   if (!loaded) {
-    const localOk = tryLoadLocal();
-    if (!localOk) {
-      document.getElementById('stopList').innerHTML =
-        '<div style="text-align:center;padding:40px;color:#333;">' +
-        '<p>No data found for trip <strong>' + TRIP_ID + '</strong>.</p>' +
-        '<p style="font-size:13px;color:#666;margin-top:12px;">Unlock with 🔒 and add stops, or create a new trip in ⚙ Settings.</p>' +
-        '</div>';
-    }
+    document.getElementById('stopList').innerHTML =
+      '<div style="text-align:center;padding:40px;color:#333;">' +
+      '<p>No data found for trip <strong>' + TRIP_ID + '</strong>.</p>' +
+      '<p style="font-size:13px;color:#666;margin-top:12px;">Unlock with 🔒 and add stops, or create a new trip in ⚙ Settings.</p>' +
+      '</div>';
   }
-
   switchDay(getTodayDayIndex());
   if (document.getElementById('stopList').innerHTML.includes('Loading')) {
     // Fallback: loading state never cleared — render directly
