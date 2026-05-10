@@ -1882,6 +1882,9 @@ async function cloudLoad() {
 }
 
 // Push current state to Supabase (upsert)
+let _syncFailCount = 0;
+let _syncBackoffTimer = null;
+
 async function cloudSave(summary) {
   if (!supabaseReady() || !EDITOR_MODE) {
     if (!EDITOR_MODE) showToast('Not in edit mode — unlock first', true);
@@ -1903,29 +1906,47 @@ async function cloudSave(summary) {
     let { error } = await supa.from('trips').upsert(payload, { onConflict: 'id' });
 
     if (error) {
-      // NEVER strip photos — retry with full data up to 2 more times
+      // NEVER strip photos — retry with full data once more
       console.warn('cloudSave attempt 1 failed:', error.message);
-      await new Promise(r => setTimeout(r, 1500));
+      await new Promise(r => setTimeout(r, 2000));
       const r2 = await supa.from('trips').upsert(payload, { onConflict: 'id' });
       error = r2.error;
-      if (error) {
-        await new Promise(r => setTimeout(r, 3000));
-        const r3 = await supa.from('trips').upsert(payload, { onConflict: 'id' });
-        error = r3.error;
-      }
     }
 
     if (error) {
-      console.warn('cloudSave failed after 3 attempts:', error);
-      showToast('⚠️ Sync failed — photos safe locally, will retry', true);
-      schedulePush();
+      _syncFailCount++;
+      console.warn('cloudSave failed (' + _syncFailCount + '):', error.message);
+      // Only show the toast on the FIRST failure — silent retries after that
+      if (_syncFailCount === 1) {
+        showToast('⚠️ Sync failed — photos safe, retrying in background', true);
+      }
+      // Exponential backoff: 15s → 60s → 5min → 15min
+      const delays = [15000, 60000, 300000, 900000];
+      const delay = delays[Math.min(_syncFailCount - 1, delays.length - 1)];
+      clearTimeout(_syncBackoffTimer);
+      _syncBackoffTimer = setTimeout(() => cloudSave('background-retry'), delay);
       return false;
+    }
+
+    // Success — reset failure count
+    if (_syncFailCount > 0) {
+      _syncFailCount = 0;
+      clearTimeout(_syncBackoffTimer);
+      showToast('✅ Sync recovered — all data saved!');
     }
 
     const btn = document.getElementById('saveBtn');
     if (btn) { btn.textContent = '✓'; btn.style.color = '#1a7a3a'; setTimeout(() => { btn.textContent = '💾'; btn.style.color = '#88d8a0'; }, 1200); }
     return true;
-  } catch(e) { console.warn('cloudSave', e); schedulePush(); return false; }
+  } catch(e) {
+    _syncFailCount++;
+    console.warn('cloudSave exception:', e);
+    if (_syncFailCount === 1) showToast('⚠️ Sync failed — photos safe locally', true);
+    const delay = Math.min(60000, 15000 * _syncFailCount);
+    clearTimeout(_syncBackoffTimer);
+    _syncBackoffTimer = setTimeout(() => cloudSave('background-retry'), delay);
+    return false;
+  }
 }
 
 // Build a stable JSON signature of the "meaningful" trip state. Used to
