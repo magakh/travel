@@ -9140,11 +9140,8 @@ let _readAloudActive = false;
 let _readAloudTimer = null;
 
 function _toggleReadAloud() {
-  if (_readAloudActive) {
-    _stopReadAloud();
-  } else {
-    _startReadAloud();
-  }
+  if (_readAloudActive) { _stopReadAloud(); return; }
+  _startReadAloud();
 }
 
 function _readBtn() { return document.getElementById('storyReadBtn'); }
@@ -9160,39 +9157,67 @@ function _setReadBtnState(reading) {
   }
 }
 
-function _startReadAloud() {
-  if (!window.speechSynthesis) { showToast('❌ Text-to-speech not supported on this browser'); return; }
-  window.speechSynthesis.cancel();
-
-  const titleEl = document.getElementById('storyTitleEl');
-  const blogEl  = document.getElementById('storyBlogEl');
-  if (!blogEl) return;
-
-  const title = titleEl ? titleEl.value : '';
+function _storyPlainText() {
+  // Use stored HTML (has {{PHOTO:...}} placeholders, NO base64 blobs) — fast and clean
+  if (!_storyState) return '';
+  const title = _storyState.title || '';
+  let html = _storyState.blogHtml || '';
+  // Remove photo placeholders
+  html = html.replace(/\{\{PHOTO:\d+:\d+\}\}/g, ' ');
+  // Strip HTML tags
   const tmp = document.createElement('div');
-  tmp.innerHTML = blogEl.innerHTML;
-  const blogText = tmp.innerText || tmp.textContent || '';
-  const fullText = (title ? title + '. ' : '') + blogText.replace(/\s+/g, ' ').trim();
+  tmp.innerHTML = html;
+  const body = (tmp.innerText || tmp.textContent || '').replace(/\s+/g, ' ').trim();
+  return (title ? title + '. ' : '') + body;
+}
 
-  const utterance = new SpeechSynthesisUtterance(fullText);
-  utterance.rate = 0.92;
-  utterance.pitch = 1;
-  utterance.lang = 'en-US';
+function _startReadAloud() {
+  const synth = window.speechSynthesis;
+  if (!synth) { showToast('❌ Text-to-speech not supported on this browser'); return; }
 
+  const text = _storyPlainText();
+  if (!text) { showToast('❌ No story text to read — generate a story first'); return; }
+
+  synth.cancel();
   _readAloudActive = true;
   _setReadBtnState(true);
 
-  utterance.onend = () => { _stopReadAloud(); };
-  utterance.onerror = (e) => { if (e.error !== 'interrupted') _stopReadAloud(); };
+  const go = () => {
+    const utt = new SpeechSynthesisUtterance(text);
+    utt.rate = 0.92;
+    utt.pitch = 1;
+    utt.lang = 'en-US';
 
-  window.speechSynthesis.speak(utterance);
+    // Pick an English voice explicitly (critical on iOS)
+    const voices = synth.getVoices();
+    const pick = voices.find(v => v.lang === 'en-US' && v.localService)
+               || voices.find(v => v.lang.startsWith('en') && v.localService)
+               || voices.find(v => v.lang.startsWith('en'))
+               || voices[0];
+    if (pick) utt.voice = pick;
 
-  // iOS Safari fix: synthesis silently pauses after ~15s — resume it every 10s
-  clearInterval(_readAloudTimer);
-  _readAloudTimer = setInterval(() => {
-    if (!_readAloudActive) { clearInterval(_readAloudTimer); return; }
-    if (window.speechSynthesis.paused) window.speechSynthesis.resume();
-  }, 10000);
+    utt.onend   = () => _stopReadAloud();
+    utt.onerror = (e) => { if (e.error !== 'interrupted') { showToast('⚠️ Read aloud stopped'); _stopReadAloud(); } };
+
+    synth.speak(utt);
+
+    // iOS pauses synthesis after ~15s — kick it every 8s
+    clearInterval(_readAloudTimer);
+    _readAloudTimer = setInterval(() => {
+      if (!_readAloudActive) { clearInterval(_readAloudTimer); return; }
+      if (synth.paused) synth.resume();
+    }, 8000);
+  };
+
+  // Voices may not be loaded yet (especially on first use)
+  const voices = synth.getVoices();
+  if (voices.length) {
+    go();
+  } else {
+    synth.onvoiceschanged = () => { synth.onvoiceschanged = null; go(); };
+    // Fallback: if onvoiceschanged never fires (some browsers), try after 500ms
+    setTimeout(() => { if (_readAloudActive && !synth.speaking) go(); }, 500);
+  }
 }
 
 function _stopReadAloud() {
