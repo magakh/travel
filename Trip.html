@@ -2189,7 +2189,7 @@ function schedulePush() {
   if (!EDITOR_MODE) return;
   if (!supabaseReady()) return;
   if (_autoPushTimer) clearTimeout(_autoPushTimer);
-  _autoPushTimer = setTimeout(doAutoPush, 500);
+  _autoPushTimer = setTimeout(doAutoPush, 3000); // batch rapid edits
 }
 
 async function doAutoPush() {
@@ -3581,13 +3581,14 @@ async function init() {
   switchDay(getTodayDayIndex());
   try { renderPrebook(); } catch(e) {}
   window.addEventListener('resize', updateHeaderHeight);
-  // Auto-save every 10 seconds — only pushes if there are unsaved changes
+  // Auto-save every 90 seconds — only pushes if there are unsaved changes
+  // (was 10s — with 5MB photo payloads that was 1.8GB IO/hour, exhausting Supabase budget)
   setInterval(() => {
     if (EDITOR_MODE && !_autoPushInFlight && _autoPushTimer === null) {
       const currentSig = stateSignature({ config: getTripConfig(), data: getSaveData() });
       if (currentSig !== _lastKnownSignature) doAutoPush();
     }
-  }, 10000);
+  }, 90000);
   // Show feature highlights to first-time visitors
   setTimeout(() => {
     if (!localStorage.getItem('trip_tour_v1')) showFeatureTour();
@@ -3896,7 +3897,7 @@ function addStopPhotos(stopIdx, dayIdx) {
     let added = 0;
     for (const file of files) {
       try {
-        const b64 = await resizeStopPhoto(file, 400);
+        const b64 = await resizeStopPhoto(file, 250);
         s.userPhotos.push(b64);
         added++;
       } catch(e) {
