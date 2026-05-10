@@ -4380,6 +4380,8 @@ async function _processLandmarkPhoto(file) {
 
   try {
     const base64 = await _resizeToBase64(file, 1024);
+    // Store photo so "Passed by" can attach it to the stop
+    window._identifyBase64 = base64;
 
     // Build GPS context for the prompt
     const gpsHint = (snapLat && snapLng)
@@ -4748,6 +4750,8 @@ function _closeIdentifyCard() {
   if (_identifyMap) { try { _identifyMap.remove(); } catch(e) {} _identifyMap = null; }
   var c = document.getElementById('identifyCard');
   if (c) { c.style.transform = 'translateY(100%)'; setTimeout(function(){if(c.parentNode)c.remove();}, 380); }
+  // Discard photo if user didn't tap "Passed by"
+  window._identifyBase64 = null;
 }
 
 function _addIdentifyPassedBy() {
@@ -4779,8 +4783,11 @@ function _addIdentifyPassedBy() {
     fixedTime: true,
     isUserAdded: true,
     color: '#5c4db1',
-    tags: [], badges: []
+    tags: [], badges: [],
+    // Attach the photo taken to identify this landmark
+    userPhotos: window._identifyBase64 ? [window._identifyBase64] : []
   };
+  window._identifyBase64 = null; // consumed
 
   const targetDay = days[currentDay];
   if (!targetDay) { showToast('No active day', true); return; }
@@ -6162,8 +6169,11 @@ function _addWalkPassedBy(idx) {
     fixedTime: true,
     isUserAdded: true,
     color: '#5c4db1',
-    tags: [], badges: []
+    tags: [], badges: [],
+    // Attach any photo taken just before tapping Passed By
+    userPhotos: window._identifyBase64 ? [window._identifyBase64] : []
   };
+  window._identifyBase64 = null;
 
   // Insert in chronological order using 24h minutes for comparison
   const targetDay = days[currentDay];
