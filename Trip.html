@@ -1716,6 +1716,8 @@ function getSaveData() {
     days: days,
     completed: completed,
     hotel: window.HOTEL_DATA || null,
+    story: _storyState || null,
+    storyParams: _storyParams || null,
     savedAt: new Date().toISOString()
   };
 }
@@ -1797,6 +1799,8 @@ function applyRemoteData(row) {
     HOTEL.name = d.hotel.name; HOTEL.address = d.hotel.address;
     HOTEL.lat = d.hotel.lat; HOTEL.lng = d.hotel.lng;
   }
+  if (d.story) { _storyState = d.story; _saveStoryState(); }
+  if (d.storyParams) { _storyParams = d.storyParams; _saveStoryState(); }
 }
 
 function sanitizeStop(s) {
@@ -8795,6 +8799,9 @@ function _loadStoryState() {
 }
 function _saveStoryState() {
   try { localStorage.setItem('story_' + TRIP_ID, JSON.stringify({ state: _storyState, params: _storyParams })); } catch(e) {}
+  // Also persist to Supabase so story syncs across all devices
+  saveToStorage();
+  schedulePush();
 }
 
 function showStoryTab() {
