@@ -3865,16 +3865,16 @@ function openPhotoGallery(stopIdx, dayIdx, startIdx) {
     ov.innerHTML = `
       <div style="position:absolute;top:0;left:0;right:0;display:flex;align-items:center;justify-content:space-between;padding:16px;z-index:1;">
         <span style="color:#fff;font-size:13px;font-weight:700;opacity:0.7;">${cur+1} / ${photos.length}</span>
-        <div style="display:flex;gap:10px;align-items:center;">
-          ${EDITOR_MODE ? `<button onclick="deleteGalleryPhoto(${stopIdx},${dayIdx},${cur})" style="background:rgba(192,57,43,0.8);border:none;color:#fff;width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:16px;">🗑</button>` : ''}
-          <button onclick="document.getElementById('photoGalleryOv').remove()" style="background:rgba(255,255,255,0.15);border:none;color:#fff;font-size:20px;width:40px;height:40px;border-radius:50%;cursor:pointer;">✕</button>
-        </div>
+        <button onclick="document.getElementById('photoGalleryOv').remove()" style="background:rgba(255,255,255,0.15);border:none;color:#fff;font-size:20px;width:40px;height:40px;border-radius:50%;cursor:pointer;">✕</button>
       </div>
-      <img src="${photos[cur]}" style="max-width:100%;max-height:72vh;object-fit:contain;">
-      <div style="display:flex;align-items:center;gap:8px;margin-top:16px;padding:0 16px;width:100%;max-width:480px;">
-        <button onclick="galleryNav(${stopIdx},${dayIdx},${cur-1})" ${cur===0?'disabled':''} style="background:rgba(255,255,255,${cur===0?'0.1':'0.25'});border:none;color:#fff;padding:14px 18px;border-radius:24px;font-size:15px;font-weight:700;cursor:pointer;opacity:${cur===0?'0.4':'1'};">←</button>
-        ${EDITOR_MODE ? `<button onclick="showMovePhotoSheet(${stopIdx},${dayIdx},${cur})" style="flex:1;background:rgba(255,255,255,0.18);border:none;color:#fff;padding:14px;border-radius:24px;font-size:13px;font-weight:700;cursor:pointer;">↔️ Move to event</button>` : '<div style="flex:1"></div>'}
-        <button onclick="galleryNav(${stopIdx},${dayIdx},${cur+1})" ${cur===photos.length-1?'disabled':''} style="background:rgba(255,255,255,${cur===photos.length-1?'0.1':'0.25'});border:none;color:#fff;padding:14px 18px;border-radius:24px;font-size:15px;font-weight:700;cursor:pointer;opacity:${cur===photos.length-1?'0.4':'1'};">→</button>
+      <img src="${photos[cur]}" style="max-width:100%;max-height:74vh;object-fit:contain;">
+      <div style="display:flex;align-items:center;width:100%;max-width:480px;padding:0 12px;margin-top:14px;gap:8px;">
+        ${EDITOR_MODE ? `<button onclick="showMovePhotoSheet(${stopIdx},${dayIdx},${cur})" style="background:rgba(255,255,255,0.14);border:none;color:#fff;padding:10px 12px;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;">↔️ Move</button>` : '<div style="width:70px;flex-shrink:0;"></div>'}
+        <div style="flex:1;display:flex;justify-content:center;gap:12px;">
+          <button onclick="galleryNav(${stopIdx},${dayIdx},${cur-1})" ${cur===0?'disabled':''} style="background:rgba(255,255,255,${cur===0?'0.1':'0.25'});border:none;color:#fff;width:48px;height:48px;border-radius:50%;font-size:20px;font-weight:700;cursor:pointer;opacity:${cur===0?'0.35':'1'};">←</button>
+          <button onclick="galleryNav(${stopIdx},${dayIdx},${cur+1})" ${cur===photos.length-1?'disabled':''} style="background:rgba(255,255,255,${cur===photos.length-1?'0.1':'0.25'});border:none;color:#fff;width:48px;height:48px;border-radius:50%;font-size:20px;font-weight:700;cursor:pointer;opacity:${cur===photos.length-1?'0.35':'1'};">→</button>
+        </div>
+        ${EDITOR_MODE ? `<button onclick="deleteGalleryPhoto(${stopIdx},${dayIdx},${cur})" style="background:rgba(192,57,43,0.8);border:none;color:#fff;width:40px;height:40px;border-radius:50%;font-size:16px;cursor:pointer;flex-shrink:0;">🗑</button>` : '<div style="width:40px;flex-shrink:0;"></div>'}
       </div>`;
   };
 
