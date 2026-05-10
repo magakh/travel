@@ -5296,6 +5296,19 @@ async function liveWikiSearch(lat, lng, radius) {
   if (!_walkTourActive || _walkTourAlertOpen) return;
   radius = radius || 40;
 
+  // Project 40m ahead in walking direction to find what's coming up
+  const bearing = getWalkingBearing();
+  let searchLat = lat, searchLng = lng;
+  if (bearing !== null && radius <= 100) {
+    const LOOK_AHEAD = 40; // metres to project ahead
+    const R = 6371000;
+    const bearRad = bearing * Math.PI / 180;
+    const dLat = (LOOK_AHEAD / R) * Math.cos(bearRad) * 180 / Math.PI;
+    const dLng = (LOOK_AHEAD / R) * Math.sin(bearRad) / Math.cos(lat * Math.PI / 180) * 180 / Math.PI;
+    searchLat = lat + dLat;
+    searchLng = lng + dLng;
+  }
+
   // Throttle: re-search after moving 15m
   if (radius <= 100 && _walkLastSearchLat !== null) {
     if (_haversineMetres(_walkLastSearchLat, _walkLastSearchLng, lat, lng) < 20) return;
@@ -5304,7 +5317,7 @@ async function liveWikiSearch(lat, lng, radius) {
   _walkLastSearchLng = lng;
 
   try {
-    var res = await fetch('https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=' + lat + '|' + lng + '&gsradius=' + radius + '&gslimit=25&format=json&origin=*');
+    var res = await fetch('https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=' + searchLat + '|' + searchLng + '&gsradius=' + radius + '&gslimit=25&format=json&origin=*');
     var data = await res.json();
 
     var TRIGGER = radius > 100 ? radius : WALK_TRIGGER_METRES;
@@ -5936,8 +5949,9 @@ async function nextLandmark() {
   // Small delay so old card finishes sliding out before new one appears
   await new Promise(function(r) { setTimeout(r, 420); });
 
-  // Use magic tour landmarks if available — cycle through ALL of them in order
-  if (_tourLandmarks && _tourLandmarks.length) {
+  // Use magic tour landmarks only if NOT in live walking mode
+  // In live walking mode, tour landmarks are often far away — do live GPS search instead
+  if (_tourLandmarks && _tourLandmarks.length && !_walkTourActive) {
     var startIdx = _nextLandmarkIdx % _tourLandmarks.length;
     var lm = _tourLandmarks[startIdx];
     _nextLandmarkIdx = (startIdx + 1) % _tourLandmarks.length;
