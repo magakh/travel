@@ -1775,6 +1775,23 @@ function getTripCenter() {
   return null;
 }
 
+// Merge two photo arrays — deduplicate by first 60 chars of base64 (fast fingerprint)
+function _mergePhotos(a, b) {
+  const arr1 = Array.isArray(a) ? a : [];
+  const arr2 = Array.isArray(b) ? b : [];
+  if (!arr1.length) return arr2;
+  if (!arr2.length) return arr1;
+  const seen = new Set(arr1.map(p => (p || '').slice(0, 60)));
+  const merged = [...arr1];
+  for (const p of arr2) {
+    if (p && !seen.has(p.slice(0, 60))) {
+      merged.push(p);
+      seen.add(p.slice(0, 60));
+    }
+  }
+  return merged;
+}
+
 // Apply remote data to local state (from cloudLoad or realtime event)
 function applyRemoteData(row) {
   if (!row) return;
@@ -1788,15 +1805,10 @@ function applyRemoteData(row) {
     d.days.forEach((dd, i) => {
       if (!days[i]) days[i] = { title: '', note: '', stops: [] };
       const incoming = (dd.stops || []).map(sanitizeStop);
-      // CRITICAL: if the incoming stops are missing photos, preserve the ones
-      // already in memory (protects against slim-save overwrites stripping photos)
+      // MERGE photos: combine Supabase photos with in-memory photos (both directions)
       incoming.forEach((s, si) => {
-        if (!s.userPhotos || !s.userPhotos.length) {
-          const cur = days[i].stops && days[i].stops[si];
-          if (cur && cur.userPhotos && cur.userPhotos.length) {
-            s.userPhotos = cur.userPhotos;
-          }
-        }
+        const cur = days[i].stops && days[i].stops[si];
+        s.userPhotos = _mergePhotos(cur ? cur.userPhotos : [], s.userPhotos);
       });
       days[i].stops = incoming;
       if (dd.title) days[i].title = dd.title;
@@ -1845,9 +1857,9 @@ function _recoverPhotosFromLocal() {
       ld.stops.forEach((ls, si) => {
         if (!ls.userPhotos || !ls.userPhotos.length) return;
         const cur = days[di] && days[di].stops && days[di].stops[si];
-        if (cur && (!cur.userPhotos || !cur.userPhotos.length)) {
-          cur.userPhotos = ls.userPhotos;
-          recovered += ls.userPhotos.length;
+        if (cur && ls.userPhotos && ls.userPhotos.length) {
+          cur.userPhotos = _mergePhotos(cur.userPhotos, ls.userPhotos);
+          recovered += (cur.userPhotos.length - (cur.userPhotos.length - ls.userPhotos.length));
         }
       });
     });
@@ -1892,6 +1904,26 @@ async function cloudSave(summary) {
   }
   try {
     const data = getSaveData();
+
+    // PHOTO MERGE: fetch what's currently in Supabase and merge photos
+    // so Device A and Device B photos are combined, not overwritten
+    try {
+      const { data: remote } = await supa.from('trips').select('data').eq('id', TRIP_ID).single();
+      if (remote && remote.data && remote.data.days) {
+        remote.data.days.forEach((dd, i) => {
+          if (!dd.stops || !data.days[i]) return;
+          dd.stops.forEach((rs, si) => {
+            if (!rs.userPhotos || !rs.userPhotos.length) return;
+            if (!data.days[i].stops[si]) return;
+            data.days[i].stops[si].userPhotos = _mergePhotos(
+              data.days[i].stops[si].userPhotos,
+              rs.userPhotos
+            );
+          });
+        });
+      }
+    } catch(e) { console.log('Photo merge pre-fetch skipped:', e.message); }
+
     const payload = {
       id: TRIP_ID,
       title: APP_CONFIG.title,
