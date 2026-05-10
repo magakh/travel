@@ -1898,28 +1898,34 @@ async function cloudSave(summary) {
     };
     _lastKnownSignature = stateSignature({ config: payload.config, data: payload.data });
     _ourLastSavedAt = data.savedAt || '';
-    _localChangeAt = 0; // allow realtime again after successful save
+    _localChangeAt = 0;
 
     let { error } = await supa.from('trips').upsert(payload, { onConflict: 'id' });
 
     if (error) {
-      const isTimeout = (error.message || '').toLowerCase().includes('timeout');
-      // Retry without photos for timeout/size errors
-      const slimData = { ...data, days: data.days.map(d => ({ ...d, stops: d.stops.map(s => { const c = {...s}; delete c.userPhotos; return c; }) })) };
-      const slim = { ...payload, data: slimData };
-      const r2 = await supa.from('trips').upsert(slim, { onConflict: 'id' });
+      // NEVER strip photos — retry with full data up to 2 more times
+      console.warn('cloudSave attempt 1 failed:', error.message);
+      await new Promise(r => setTimeout(r, 1500));
+      const r2 = await supa.from('trips').upsert(payload, { onConflict: 'id' });
       error = r2.error;
-      if (!error) {
-        if (!isTimeout) showToast('⚠️ Saved without photos — connection was slow');
-        // timeout: silent retry succeeded, no toast needed
+      if (error) {
+        await new Promise(r => setTimeout(r, 3000));
+        const r3 = await supa.from('trips').upsert(payload, { onConflict: 'id' });
+        error = r3.error;
       }
     }
 
-    if (error) { console.warn('cloudSave', error); schedulePush(); return false; } // retry in 500ms, no toast
+    if (error) {
+      console.warn('cloudSave failed after 3 attempts:', error);
+      showToast('⚠️ Sync failed — photos safe locally, will retry', true);
+      schedulePush();
+      return false;
+    }
+
     const btn = document.getElementById('saveBtn');
     if (btn) { btn.textContent = '✓'; btn.style.color = '#1a7a3a'; setTimeout(() => { btn.textContent = '💾'; btn.style.color = '#88d8a0'; }, 1200); }
     return true;
-  } catch(e) { console.warn('cloudSave', e); return false; }
+  } catch(e) { console.warn('cloudSave', e); schedulePush(); return false; }
 }
 
 // Build a stable JSON signature of the "meaningful" trip state. Used to
@@ -3794,7 +3800,7 @@ async function resizeStopPhoto(file, maxPx) {
       c.width = Math.round(img.width * scale);
       c.height = Math.round(img.height * scale);
       c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-      resolve(c.toDataURL('image/jpeg', 0.72));
+      resolve(c.toDataURL('image/jpeg', 0.65));
     };
     img.onerror = reject;
     img.src = url;
@@ -3817,7 +3823,7 @@ function addStopPhotos(stopIdx, dayIdx) {
     let added = 0;
     for (const file of files) {
       try {
-        const b64 = await resizeStopPhoto(file, 600);
+        const b64 = await resizeStopPhoto(file, 400);
         s.userPhotos.push(b64);
         added++;
       } catch(e) {
