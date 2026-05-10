@@ -1043,6 +1043,76 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
 .prebook-view { padding: 20px 16px; }
 .prebook-view h2 { font-size: 20px; font-weight: 800; margin-bottom: 4px; }
 .prebook-view > p { font-size: 13px; color: var(--muted); margin-bottom: 16px; }
+
+/* ── STORY PANEL ─────────────────────────────────────────────────── */
+.story-form-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+  padding: 20px; margin-bottom: 14px;
+}
+.story-form-card h3 { font-size: 13px; font-weight: 800; color: var(--hint); text-transform: uppercase; letter-spacing: .06em; margin: 0 0 12px; }
+.story-style-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.story-style-btn {
+  background: #f7f7f5; border: 2px solid #e8e8e4; border-radius: 12px;
+  padding: 10px 8px; text-align: center; cursor: pointer; transition: all .15s;
+  font-size: 12px; font-weight: 700; color: #555; line-height: 1.4;
+}
+.story-style-btn.active { background: #1a1a1a; border-color: #1a1a1a; color: #fff; }
+.story-triptype-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 4px; }
+.story-type-pill {
+  background: #f0f0ec; border: 2px solid #e0e0da; border-radius: 20px;
+  padding: 6px 12px; font-size: 12px; font-weight: 700; color: #555; cursor: pointer; transition: all .15s;
+}
+.story-type-pill.active { background: #c05621; border-color: #c05621; color: #fff; }
+.story-gen-btn {
+  width: 100%; padding: 16px; background: linear-gradient(135deg,#c05621,#e07a3a);
+  color: #fff; border: none; border-radius: 14px; font-size: 16px; font-weight: 800;
+  cursor: pointer; margin-top: 8px; letter-spacing: -.01em;
+}
+.story-gen-btn:disabled { background: #999; cursor: not-allowed; }
+.story-output-title {
+  font-size: 24px; font-weight: 900; line-height: 1.25; color: #1a1a1a;
+  margin: 0 0 20px; border: none; outline: none; width: 100%; background: transparent;
+  font-family: inherit;
+}
+.story-section-label {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--hint); margin: 24px 0 8px;
+}
+.story-copy-btn {
+  background: #f0f0ec; border: 1px solid #ddd; border-radius: 8px;
+  padding: 4px 10px; font-size: 11px; font-weight: 700; color: #555; cursor: pointer;
+}
+.story-copy-btn:active { background: #1a1a1a; color: #fff; }
+.story-blog-body {
+  font-size: 15px; line-height: 1.75; color: #2d2d2d;
+  border: none; outline: none; width: 100%; background: transparent;
+  font-family: inherit; min-height: 200px;
+}
+.story-blog-body h2 { font-size: 17px; font-weight: 800; margin: 20px 0 6px; color: #1a1a1a; }
+.story-blog-body p { margin: 0 0 14px; }
+.story-blog-body em { font-style: italic; }
+.story-blog-body strong { font-weight: 700; }
+.story-photo-block { margin: 16px 0; border-radius: 14px; overflow: hidden; }
+.story-photo-block img { width: 100%; max-height: 260px; object-fit: cover; display: block; }
+.story-photo-caption { font-size: 11px; color: #888; padding: 6px 10px 2px; font-style: italic; }
+.story-photo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin: 12px 0; border-radius: 12px; overflow: hidden; }
+.story-photo-grid img { width:100%; height:140px; object-fit:cover; display:block; }
+.story-social-box {
+  border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px;
+  margin-top: 4px; font-size: 14px; line-height: 1.65; color: #333;
+  min-height: 80px; outline: none; white-space: pre-wrap; background: var(--surface);
+}
+.story-fb-box { border-color: #1877f2; border-width: 2px; }
+.story-ig-box { border-color: #c13584; border-width: 2px; }
+.story-regen-row { display: flex; gap: 8px; margin-bottom: 20px; }
+.story-regen-btn {
+  flex: 1; padding: 12px; background: #f7f5f0; border: 2px solid #e0ddd6;
+  border-radius: 12px; font-size: 13px; font-weight: 700; color: #555; cursor: pointer;
+}
+.story-regen-btn:active { background: #ece9e0; }
+.story-edit-note { font-size: 11px; color: #bbb; text-align: center; margin: 4px 0 0; }
+
 .pb-card {
   background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
   padding: 14px 16px; margin-bottom: 10px;
@@ -1188,6 +1258,7 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
   <div class="day-tabs" id="dayTabs">
     <button class="day-tab green-tab" onclick="showAllMap()" id="dtabAll">All Days Map</button>
     <button class="day-tab" onclick="showView('search')" id="dtabSearch" style="border-color:#1a73e8;color:#1a73e8;">+ Add / Search</button>
+    <button class="day-tab" onclick="showStoryTab()" id="dtabStory" style="border-color:#c05621;color:#c05621;">✍️ Story</button>
     <button class="day-tab" onclick="showView('settings')" id="dtabSettings" style="border-color:#666;color:#ccc;">⚙ Settings</button>
   </div>
 </div>
@@ -1444,6 +1515,11 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
   </div>
 
   <!-- PRE-BOOKING -->
+  <!-- ── STORY PANEL ─────────────────────────────────────────────── -->
+  <div class="panel" id="panel-story">
+    <div id="story-content" style="padding:16px 16px 80px;"></div>
+  </div>
+
   <div class="panel" id="panel-prebook">
     <div class="prebook-view">
       <h2>Pre-booking checklist</h2>
@@ -3456,10 +3532,10 @@ function showView(v) {
 }
 
 function updateTabHighlight() {
-  ['dtab0','dtab1','dtab2','dtab3','dtab4','dtab5','dtab6','dtabMap','dtabAll','dtabSearch','dtabSettings'].forEach(id => {
+  ['dtab0','dtab1','dtab2','dtab3','dtab4','dtab5','dtab6','dtabMap','dtabAll','dtabSearch','dtabSettings','dtabStory'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
-    if (['dtabMap','dtabAll','dtabSearch','dtabSettings'].includes(id)) return;
+    if (['dtabMap','dtabAll','dtabSearch','dtabSettings','dtabStory'].includes(id)) return;
     el.classList.remove('active');
   });
   if (currentView === 'list' || currentView === 'detail') {
@@ -8681,6 +8757,320 @@ function geocodeAddStopAddress() {
   geocodeAddress(addr, 'addLat', 'addLng', 'addGeocodeStatus');
 }
 
+
+
+
+// ══════════════════════════════════════════════════════════════════
+// ✍️  STORY / BLOG GENERATOR
+// ══════════════════════════════════════════════════════════════════
+
+const STORY_STYLES = [
+  { id:'humorous',   emoji:'😄', label:'Humorous & Fun',      desc:'Witty, playful, lots of laughs' },
+  { id:'warm',       emoji:'🌸', label:'Warm & Friendly',     desc:'Heartfelt, personal, cozy' },
+  { id:'adventure',  emoji:'🗺️', label:'Adventurous',         desc:'Epic, exploratory, inspiring' },
+  { id:'elegant',    emoji:'💎', label:'Elegant & Refined',   desc:'Sophisticated, evocative prose' },
+  { id:'casual',     emoji:'😎', label:'Casual & Real',       desc:'Like texting your best friend' },
+  { id:'foodie',     emoji:'🍽️', label:'Foodie-focused',      desc:'Flavours, aromas, restaurants' },
+];
+const STORY_TYPES = [
+  { id:'couple',  emoji:'💑', label:"Couple's Getaway" },
+  { id:'girls',   emoji:'👯', label:"Girls' Trip" },
+  { id:'family',  emoji:'👨‍👩‍👧', label:'Family Adventure' },
+  { id:'solo',    emoji:'🧳', label:'Solo Journey' },
+  { id:'friends', emoji:'🎉', label:'Friend Group' },
+  { id:'custom',  emoji:'✏️', label:'Other / Custom' },
+];
+
+let _storyStyle  = 'warm';
+let _storyType   = 'couple';
+let _storyState  = null;   // { title, blogHtml, fbPost, igCaption }
+let _storyParams = null;   // { names, tripType, style, notes }
+let _storyShowing = 'form'; // 'form' | 'output'
+
+function _loadStoryState() {
+  try {
+    const raw = localStorage.getItem('story_' + TRIP_ID);
+    if (raw) { const d = JSON.parse(raw); _storyState = d.state; _storyParams = d.params; }
+  } catch(e) {}
+}
+function _saveStoryState() {
+  try { localStorage.setItem('story_' + TRIP_ID, JSON.stringify({ state: _storyState, params: _storyParams })); } catch(e) {}
+}
+
+function showStoryTab() {
+  _loadStoryState();
+  showView('story');
+  _storyShowing = _storyState ? 'output' : 'form';
+  _renderStory();
+}
+
+function _renderStory() {
+  const el = document.getElementById('story-content');
+  if (!el) return;
+  if (_storyShowing === 'form') el.innerHTML = _buildStoryFormHtml();
+  else _renderStoryOutput(el);
+  // Re-select active style/type buttons
+  if (_storyShowing === 'form') {
+    (_storyParams ? _storyParams.style : _storyStyle) && _storySelectStyle(_storyParams ? _storyParams.style : _storyStyle);
+    (_storyParams ? _storyParams.tripType : _storyType) && _storySelectType(_storyParams ? _storyParams.tripType : _storyType);
+  }
+}
+
+function _buildStoryFormHtml() {
+  const styleGrid = STORY_STYLES.map(s =>
+    `<div class="story-style-btn${s.id===_storyStyle?' active':''}" onclick="_storySelectStyle('${s.id}')" id="ssbtn_${s.id}">
+      <div style="font-size:20px;margin-bottom:3px;">${s.emoji}</div>
+      <div style="font-size:11px;font-weight:800;">${s.label}</div>
+      <div style="font-size:10px;color:inherit;opacity:.7;margin-top:2px;">${s.desc}</div>
+    </div>`
+  ).join('');
+  const typePills = STORY_TYPES.map(t =>
+    `<div class="story-type-pill${t.id===_storyType?' active':''}" onclick="_storySelectType('${t.id}')" id="stpill_${t.id}">${t.emoji} ${t.label}</div>`
+  ).join('');
+  const savedNames = _storyParams ? _storyParams.names : '';
+  const savedNotes = _storyParams ? _storyParams.notes : '';
+  const savedCustomType = (_storyParams && _storyParams.tripType === 'custom') ? _storyParams.customType : '';
+  return `
+  <div style="padding-bottom:8px;">
+    <div style="font-size:22px;font-weight:900;margin-bottom:4px;">✍️ Trip Story</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:20px;">AI writes a beautiful blog, Facebook post &amp; Instagram caption from your schedule and photos.</div>
+  </div>
+
+  <div class="story-form-card">
+    <h3>👥 Who's on this trip?</h3>
+    <input class="form-input" id="storyNames" placeholder="e.g. Margarit &amp; Levon, or just your name" value="${savedNames}" style="margin:0;">
+    <div class="story-triptype-row" style="margin-top:10px;">${typePills}</div>
+    <div id="customTypeWrap" style="margin-top:8px;display:${_storyType==='custom'?'block':'none'};">
+      <input class="form-input" id="storyCustomType" placeholder="Describe the trip type (e.g. anniversary, honeymoon…)" value="${savedCustomType}" style="margin:0;font-size:13px;">
+    </div>
+  </div>
+
+  <div class="story-form-card">
+    <h3>🎭 Writing style</h3>
+    <div class="story-style-grid">${styleGrid}</div>
+  </div>
+
+  <div class="story-form-card">
+    <h3>📝 Anything extra to include?</h3>
+    <textarea class="form-input" id="storyNotes" placeholder="e.g. It rained on day 2 but we still loved it • We got engaged at Tower Bridge • The kids were obsessed with the guards" style="min-height:80px;margin:0;resize:vertical;">${savedNotes}</textarea>
+  </div>
+
+  <button class="story-gen-btn" onclick="generateStory()" id="storyGenBtn">✨ Generate my trip story</button>
+  ${_storyState ? `<button class="story-regen-btn" style="width:100%;margin-top:10px;" onclick="_storyShowing='output';_renderStory();">← Back to existing story</button>` : ''}
+  `;
+}
+
+function _storySelectStyle(id) {
+  _storyStyle = id;
+  document.querySelectorAll('.story-style-btn').forEach(b => b.classList.remove('active'));
+  const el = document.getElementById('ssbtn_' + id);
+  if (el) el.classList.add('active');
+}
+function _storySelectType(id) {
+  _storyType = id;
+  document.querySelectorAll('.story-type-pill').forEach(b => b.classList.remove('active'));
+  const el = document.getElementById('stpill_' + id);
+  if (el) el.classList.add('active');
+  const wrap = document.getElementById('customTypeWrap');
+  if (wrap) wrap.style.display = id === 'custom' ? 'block' : 'none';
+}
+
+function _renderStoryOutput(container) {
+  if (!_storyState) { _storyShowing = 'form'; _renderStory(); return; }
+  const { title, blogHtml, fbPost, igCaption } = _storyState;
+  const blogWithPhotos = _injectStoryPhotos(blogHtml);
+  container.innerHTML = `
+  <div class="story-regen-row">
+    <button class="story-regen-btn" onclick="_storyShowing='form';_renderStory();">🔄 Re-generate</button>
+    <button class="story-regen-btn" style="background:#fff8f5;border-color:#c05621;color:#c05621;" onclick="_copyAllStory()">📋 Copy all</button>
+  </div>
+
+  <input id="storyTitleEl" class="story-output-title" value="${_escHtml(title)}" onchange="_storyState.title=this.value;_saveStoryState();" placeholder="Story title…">
+
+  <div class="story-section-label">
+    📰 Blog Post
+    <button class="story-copy-btn" onclick="_copyEl('storyBlogEl')">Copy</button>
+  </div>
+  <div id="storyBlogEl" class="story-blog-body" contenteditable="true" oninput="_debounceSaveBlog()">${blogWithPhotos}</div>
+  <div class="story-edit-note">✏️ Click anywhere above to edit</div>
+
+  <div class="story-section-label">
+    <span style="color:#1877f2;">𝔽 Facebook Post</span>
+    <button class="story-copy-btn" onclick="_copyEl('storyFbEl')">Copy</button>
+  </div>
+  <div id="storyFbEl" class="story-social-box story-fb-box" contenteditable="true" oninput="_debounceSaveSocial()">${_escHtml(fbPost)}</div>
+
+  <div class="story-section-label">
+    <span style="background:linear-gradient(90deg,#c13584,#e1306c,#f77737);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">📸 Instagram Caption</span>
+    <button class="story-copy-btn" onclick="_copyEl('storyIgEl')">Copy</button>
+  </div>
+  <div id="storyIgEl" class="story-social-box story-ig-box" contenteditable="true" oninput="_debounceSaveSocial()">${_escHtml(igCaption)}</div>
+
+  <div style="height:24px;"></div>
+  `;
+}
+
+function _escHtml(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+let _storySaveTimer = null;
+function _debounceSaveBlog() {
+  clearTimeout(_storySaveTimer);
+  _storySaveTimer = setTimeout(() => {
+    const el = document.getElementById('storyBlogEl');
+    if (el && _storyState) { _storyState.blogHtml = el.innerHTML; _saveStoryState(); }
+  }, 1500);
+}
+function _debounceSaveSocial() {
+  clearTimeout(_storySaveTimer);
+  _storySaveTimer = setTimeout(() => {
+    const fb = document.getElementById('storyFbEl');
+    const ig = document.getElementById('storyIgEl');
+    if (_storyState) {
+      if (fb) _storyState.fbPost = fb.innerText;
+      if (ig) _storyState.igCaption = ig.innerText;
+      _saveStoryState();
+    }
+  }, 1500);
+}
+
+function _injectStoryPhotos(html) {
+  // Replace {{PHOTO:dayIdx:stopIdx}} with actual images
+  return html.replace(/\{\{PHOTO:(\d+):(\d+)\}\}/g, (match, di, si) => {
+    const day = days[parseInt(di)];
+    if (!day) return '';
+    const stop = day.stops[parseInt(si)];
+    if (!stop || !stop.userPhotos || !stop.userPhotos.length) return '';
+    const photos = stop.userPhotos;
+    if (photos.length === 1) {
+      return `<div class="story-photo-block"><img src="${photos[0]}" alt="${_escHtml(stop.name)}"><div class="story-photo-caption">${_escHtml(stop.name)}${stop.time ? ' · ' + stop.time : ''}</div></div>`;
+    }
+    const grid = photos.slice(0, 4).map(p => `<img src="${p}" alt="${_escHtml(stop.name)}">`).join('');
+    return `<div class="story-photo-grid">${grid}</div><div class="story-photo-caption" style="padding:0 2px 8px;">${_escHtml(stop.name)}${stop.time ? ' · ' + stop.time : ''}</div>`;
+  });
+}
+
+async function generateStory() {
+  const names = (document.getElementById('storyNames') || {}).value || '';
+  const notes = (document.getElementById('storyNotes') || {}).value || '';
+  const customType = (document.getElementById('storyCustomType') || {}).value || '';
+  const tripTypeObj = STORY_TYPES.find(t => t.id === _storyType) || STORY_TYPES[0];
+  const tripTypeLabel = _storyType === 'custom' ? (customType || 'Trip') : tripTypeObj.label;
+  const styleObj = STORY_STYLES.find(s => s.id === _storyStyle) || STORY_STYLES[0];
+
+  _storyParams = { names, tripType: _storyType, customType, style: _storyStyle, notes };
+
+  const btn = document.getElementById('storyGenBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '✨ Generating your story…'; }
+
+  // Build trip summary for AI
+  const tripName = document.getElementById('pageTitle') ? document.getElementById('pageTitle').textContent : TRIP_ID;
+  const cityName = getTripCity ? getTripCity() : TRIP_ID;
+  let daySummaries = '';
+  days.forEach((day, di) => {
+    if (!day || !day.stops || !day.stops.length) return;
+    daySummaries += `\n\nDay ${di+1}${day.title ? ' — ' + day.title : ''}:`;
+    if (day.note) daySummaries += `\n  (${day.note})`;
+    day.stops.forEach((stop, si) => {
+      if (!stop.name || stop.name === 'Hotel' || stop.name === 'Unknown stop') return;
+      const photoCount = stop.userPhotos && stop.userPhotos.length ? ` [${stop.userPhotos.length} photo${stop.userPhotos.length>1?'s':''}]` : '';
+      const noteStr = stop.note ? ` — "${stop.note}"` : '';
+      daySummaries += `\n  ${stop.time || ''} ${stop.name} (${stop.type || 'place'})${photoCount}${noteStr}`;
+    });
+  });
+
+  const prompt = `You are a skilled travel writer. Write a beautiful, personal trip story based on this itinerary.
+
+TRIP: ${tripName} / ${cityName}
+TRAVELERS: ${names || 'the travelers'}
+TRIP TYPE: ${tripTypeLabel}
+WRITING STYLE: ${styleObj.label} — ${styleObj.desc}
+EXTRA NOTES FROM TRAVELER: ${notes || 'none'}
+
+ITINERARY:${daySummaries}
+
+INSTRUCTIONS:
+1. Write a catchy, creative blog title (not just "X Trip" — make it evocative)
+2. Write a blog post (~600-900 words) that tells the story of this trip as a narrative. 
+   - Weave stops into a flowing story, don't just list them
+   - Use the writing style consistently throughout
+   - If travelers' names are provided, use them
+   - Where a stop has photos (marked [N photo(s)]), insert a photo placeholder like {{PHOTO:0:2}} immediately after mentioning that stop (use the correct day index starting at 0 and stop index starting at 0)
+   - Include sensory details, emotions, highlights
+   - End with a reflection or recommendation
+   - Use <h2> for sub-headings, <p> for paragraphs, <em> for emphasis, <strong> for key moments
+3. Write a Facebook post (150-250 words) — engaging, personal, shareable, with 2-3 emojis naturally placed
+4. Write an Instagram caption (60-90 words + 12-15 relevant hashtags on a new line)
+
+Return ONLY valid JSON (absolutely no markdown fences, no explanation outside the JSON):
+{
+  "title": "...",
+  "blogHtml": "...",
+  "fbPost": "...",
+  "igCaption": "..."
+}
+
+blogHtml must be valid HTML fragments (no <html>/<body> tags). Photo placeholders use {{PHOTO:dayIndex:stopIndex}} format where indices are 0-based integers.`;
+
+  try {
+    const key = getApiKey ? getApiKey() : '';
+    if (!key && !(APP_CONFIG.supabaseUrl && APP_CONFIG.supabaseKey)) {
+      showToast('⚠️ Set an Anthropic API key in Settings first');
+      if (btn) { btn.disabled = false; btn.textContent = '✨ Generate my trip story'; }
+      return;
+    }
+    const raw = await callAnthropic({ prompt, maxTokens: 4000, model: 'claude-sonnet-4-6' });
+    // Strip any accidental markdown fences
+    const clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/,'').trim();
+    const parsed = JSON.parse(clean);
+    _storyState = {
+      title: parsed.title || 'Our Trip Story',
+      blogHtml: parsed.blogHtml || '<p>Story generation failed. Please try again.</p>',
+      fbPost: parsed.fbPost || '',
+      igCaption: parsed.igCaption || '',
+    };
+    _saveStoryState();
+    _storyShowing = 'output';
+    _renderStory();
+    showToast('✍️ Story generated!');
+  } catch(e) {
+    console.error('Story generation error:', e);
+    showToast('❌ Story generation failed: ' + (e.message || 'unknown error'));
+    if (btn) { btn.disabled = false; btn.textContent = '✨ Generate my trip story'; }
+  }
+}
+
+function _copyEl(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const text = el.innerText || el.value || '';
+  navigator.clipboard.writeText(text).then(() => showToast('📋 Copied!')).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); document.body.removeChild(ta);
+    showToast('📋 Copied!');
+  });
+}
+function _copyAllStory() {
+  if (!_storyState) return;
+  const t = document.getElementById('storyTitleEl');
+  const blog = document.getElementById('storyBlogEl');
+  const fb = document.getElementById('storyFbEl');
+  const ig = document.getElementById('storyIgEl');
+  const all = [
+    '# ' + (t ? t.value : _storyState.title),
+    '',
+    (blog ? blog.innerText : ''),
+    '',
+    '─── FACEBOOK ───',
+    (fb ? fb.innerText : _storyState.fbPost),
+    '',
+    '─── INSTAGRAM ───',
+    (ig ? ig.innerText : _storyState.igCaption),
+  ].join('\n');
+  navigator.clipboard.writeText(all).then(() => showToast('📋 All copied!')).catch(() => showToast('❌ Copy failed'));
+}
 
 init();
 </script>
