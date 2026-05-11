@@ -4041,9 +4041,26 @@ function addStopPhotos(stopIdx, dayIdx) {
   setTimeout(function(){ input.click(); }, 30);
 }
 
+async function _deleteFromStorage(photoUrl) {
+  if (!photoUrl || !photoUrl.includes('supabase.co/storage')) return;
+  try {
+    const match = photoUrl.match(/\/trip-photos\/([^?#]+)/);
+    if (!match) return;
+    await supa.storage.from(PHOTO_BUCKET).remove([match[1]]);
+    console.log('Deleted from storage:', match[1]);
+  } catch(e) { console.warn('Storage delete failed:', e.message); }
+}
+
 function deleteStopPhoto(stopIdx, dayIdx, photoIdx) {
   const s = days[dayIdx].stops[stopIdx];
-  if (s.userPhotos) { s.userPhotos.splice(photoIdx, 1); saveToStorage(); renderStopList(); renderDetail(); }
+  if (!s.userPhotos) return;
+  const photo = s.userPhotos[photoIdx];
+  s.userPhotos.splice(photoIdx, 1);
+  saveToStorage();
+  schedulePush();
+  renderStopList();
+  renderDetail();
+  _deleteFromStorage(photo); // async, fire and forget
 }
 
 function openPhotoGallery(stopIdx, dayIdx, startIdx) {
@@ -4094,12 +4111,15 @@ function openPhotoGallery(stopIdx, dayIdx, startIdx) {
   window.deleteGalleryPhoto = (si, di, idx) => {
     const photos = days[di].stops[si].userPhotos;
     if (!photos) return;
+    const photo = photos[idx];
     photos.splice(idx, 1);
     cur = Math.max(0, idx - 1);
     saveToStorage();
+    schedulePush();
     renderStopList();
     renderDetail();
     render();
+    _deleteFromStorage(photo); // async, fire and forget
   };
 
   ov.onclick = (e) => { if (e.target === ov) ov.remove(); };
