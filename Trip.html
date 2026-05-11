@@ -3781,6 +3781,9 @@ async function init() {
       '</div>';
   }
 
+  // Clean any invalid photo entries (HTML strings from old broken onerror handlers)
+  _cleanInvalidPhotos();
+
   // Always render — never leave stuck on "Loading…"
   try { renderAll(); } catch(e) { console.warn('renderAll:', e); }
   switchDay(getTodayDayIndex());
@@ -4123,6 +4126,23 @@ function addStopPhotos(stopIdx, dayIdx) {
   setTimeout(function(){ input.click(); }, 30);
 }
 
+function _isValidPhoto(p) {
+  if (!p || typeof p !== 'string') return false;
+  return p.startsWith('data:image') || p.startsWith('https://') || p.startsWith('http://');
+}
+
+// Auto-clean invalid photo entries (HTML strings etc) from all stops
+function _cleanInvalidPhotos() {
+  let cleaned = 0;
+  days.forEach(day => (day.stops||[]).forEach(stop => {
+    if (!stop.userPhotos) return;
+    const before = stop.userPhotos.length;
+    stop.userPhotos = stop.userPhotos.filter(_isValidPhoto);
+    cleaned += before - stop.userPhotos.length;
+  }));
+  if (cleaned > 0) { saveToStorage(); console.log('Cleaned', cleaned, 'invalid photo entries'); }
+}
+
 function _onPhotoError(img) {
   // Photo URL is broken (e.g. Storage was cleared) — show a subtle broken indicator
   const div = img.parentNode;
@@ -4221,7 +4241,7 @@ function openPhotoGallery(stopIdx, dayIdx, startIdx) {
 
 function stopPhotosHtml(stopIdx, dayIdx) {
   const s = days[dayIdx].stops[stopIdx];
-  const photos = s.userPhotos || [];
+  const photos = (s.userPhotos || []).filter(_isValidPhoto);
   const thumbs = photos.map(function(p, pi) {
     return '<div style="position:relative;flex-shrink:0;">'
       + '<img src="'+p+'" onclick="event.stopPropagation();openPhotoGallery('+stopIdx+','+dayIdx+','+pi+')" '
@@ -4269,7 +4289,7 @@ function renderDetail() {
       </div>
       ${(s.userPhotos && s.userPhotos.length)
         ? '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">'
-          + s.userPhotos.map(function(p,pi){
+          + s.userPhotos.filter(_isValidPhoto).map(function(p,pi){
               const safe = (p||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
               return '<div style="position:relative;aspect-ratio:1;">'
                 + '<img src="'+safe+'" onclick="_openPhoto('+currentDay+','+currentStop+','+pi+')" onerror="_onPhotoError(this)" style="width:100%;height:100%;object-fit:cover;border-radius:8px;cursor:pointer;">'
