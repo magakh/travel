@@ -1248,7 +1248,7 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
     </div>
     <div style="display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;flex-shrink:1;align-self:flex-start;padding-top:2px;">
       <button class="prebook-pill" id="lockBtn" onclick="showLockDialog()" title="Edit access" style="border-color:#aaa;color:#555;">🔒 View</button>
-      <button class="prebook-pill" id="saveBtn" onclick="saveToStorage()" title="Save" style="border-color:#88d8a0;color:#88d8a0;">💾</button>
+      <button class="prebook-pill" id="saveBtn" onclick="doAutoPush()" title="Save to cloud" style="border-color:#88d8a0;color:#88d8a0;">💾</button>
       <button class="prebook-pill" id="walkGuideBtn" onclick="toggleWalkingGuide()" title="Live walking guide" style="border-color:#1a7a3a;color:#1a7a3a;font-size:16px;padding:4px 8px;">🚶</button>
       <button class="prebook-pill" onclick="checkInHere()" title="Check in at current location" style="border-color:#e67e22;color:#e67e22;font-size:16px;padding:4px 8px;">📍</button>
       <button class="prebook-pill" onclick="identifyLandmark()" title="Identify landmark from photo" style="border-color:#5c4db1;color:#5c4db1;font-size:16px;padding:4px 8px;">📷</button>
@@ -1257,6 +1257,12 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
       <a href="index.html" class="prebook-pill" style="border-color:#666;color:#ccc;text-decoration:none;white-space:nowrap;">← All Trips</a>
     </div>
   </div>
+  <!-- Sync status bar -->
+  <div id="syncBar" style="display:none;height:3px;background:#1a1a1a;position:relative;overflow:hidden;">
+    <div id="syncBarFill" style="height:100%;width:0%;transition:width 0.3s;"></div>
+  </div>
+  <div id="syncLabel" style="display:none;font-size:10px;font-weight:700;text-align:center;padding:3px 0;letter-spacing:.04em;"></div>
+
   <div class="day-tabs" id="dayTabs">
     <button class="day-tab green-tab" onclick="showAllMap()" id="dtabAll">All Days Map</button>
     <button class="day-tab" onclick="showView('search')" id="dtabSearch" style="border-color:#1a73e8;color:#1a73e8;">+ Add / Search</button>
@@ -1896,8 +1902,38 @@ async function cloudLoad() {
 }
 
 // Push current state to Supabase (upsert)
-let _syncFailCount = 0;
-let _syncBackoffTimer = null;
+function _syncBarShow(label, color, pct) {
+  const bar = document.getElementById('syncBar');
+  const fill = document.getElementById('syncBarFill');
+  const lbl = document.getElementById('syncLabel');
+  if (!bar) return;
+  bar.style.display = 'block';
+  fill.style.background = color;
+  fill.style.width = (pct || 0) + '%';
+  lbl.style.display = 'block';
+  lbl.style.color = color;
+  lbl.textContent = label;
+}
+function _syncBarHide() {
+  const bar = document.getElementById('syncBar');
+  const lbl = document.getElementById('syncLabel');
+  if (bar) bar.style.display = 'none';
+  if (lbl) lbl.style.display = 'none';
+}
+function _syncBarAnimate() {
+  // Indeterminate animation while saving
+  const fill = document.getElementById('syncBarFill');
+  if (!fill) return;
+  let p = 0;
+  const iv = setInterval(() => {
+    if (!_autoPushInFlight) { clearInterval(iv); return; }
+    p = (p + 3) % 110;
+    fill.style.width = Math.min(p, 95) + '%';
+  }, 100);
+  return iv;
+}
+
+let _syncAnimInterval = null;
 
 async function cloudSave(summary) {
   if (!supabaseReady() || !EDITOR_MODE) {
@@ -1906,6 +1942,13 @@ async function cloudSave(summary) {
   }
   try {
     const data = getSaveData();
+    const sizeMB = (JSON.stringify(data).length / 1024 / 1024).toFixed(1);
+
+    // Show progress bar
+    _syncBarShow('☁️ Saving ' + sizeMB + 'MB to Supabase…', '#1a73e8', 10);
+    clearInterval(_syncAnimInterval);
+    _syncAnimInterval = _syncBarAnimate();
+
     const payload = {
       id: TRIP_ID,
       title: APP_CONFIG.title,
@@ -1917,42 +1960,43 @@ async function cloudSave(summary) {
     _ourLastSavedAt = data.savedAt || '';
     _localChangeAt = 0;
 
-    const sizeMB = (JSON.stringify(payload).length / 1024 / 1024).toFixed(1);
-    console.log('cloudSave', sizeMB + 'MB', summary || '');
-
     let { error } = await supa.from('trips').upsert(payload, { onConflict: 'id' });
 
     if (error) {
-      // One retry after short pause
       console.warn('cloudSave attempt 1 failed:', error.message);
+      _syncBarShow('⏳ Retrying… (' + error.message.slice(0, 40) + ')', '#e07a3a', 50);
       await new Promise(r => setTimeout(r, 2000));
       const r2 = await supa.from('trips').upsert(payload, { onConflict: 'id' });
       error = r2.error;
     }
 
+    clearInterval(_syncAnimInterval);
+
     if (error) {
       _syncFailCount++;
       console.warn('cloudSave failed (' + _syncFailCount + '):', error.message);
-      if (_syncFailCount === 1) {
-        showToast('⚠️ Sync failed (' + sizeMB + 'MB) — retrying in background', true);
-      }
+      _syncBarShow('⚠️ Sync failed — ' + error.message.slice(0, 50), '#e74c3c', 100);
+      setTimeout(_syncBarHide, 6000);
+      if (_syncFailCount === 1) showToast('⚠️ Sync failed (' + sizeMB + 'MB) — retrying in background', true);
       const delays = [15000, 60000, 300000, 900000];
-      const delay = delays[Math.min(_syncFailCount - 1, delays.length - 1)];
       clearTimeout(_syncBackoffTimer);
-      _syncBackoffTimer = setTimeout(() => cloudSave('background-retry'), delay);
+      _syncBackoffTimer = setTimeout(() => cloudSave('background-retry'), delays[Math.min(_syncFailCount - 1, delays.length - 1)]);
       return false;
     }
 
-    if (_syncFailCount > 0) {
-      _syncFailCount = 0;
-      clearTimeout(_syncBackoffTimer);
-      showToast('✅ Synced (' + sizeMB + 'MB)');
-    }
+    _syncFailCount = 0;
+    clearTimeout(_syncBackoffTimer);
+    _syncBarShow('✅ Saved ' + sizeMB + 'MB to Supabase', '#1a7a3a', 100);
+    setTimeout(_syncBarHide, 3000);
     const btn = document.getElementById('saveBtn');
-    if (btn) { btn.textContent = '✓'; btn.style.color = '#1a7a3a'; setTimeout(() => { btn.textContent = '💾'; btn.style.color = '#88d8a0'; }, 1200); }
+    if (btn) { btn.textContent = '✓'; btn.style.color = '#1a7a3a'; setTimeout(() => { btn.textContent = '💾'; btn.style.color = '#88d8a0'; }, 2000); }
     return true;
   } catch(e) {
+    clearInterval(_syncAnimInterval);
     _syncFailCount++;
+    const msg = e.message || 'unknown error';
+    _syncBarShow('⚠️ Sync error — ' + msg.slice(0, 50), '#e74c3c', 100);
+    setTimeout(_syncBarHide, 6000);
     console.warn('cloudSave exception:', e);
     if (_syncFailCount === 1) showToast('⚠️ Sync failed — photos safe locally', true);
     const delay = Math.min(60000, 15000 * _syncFailCount);
