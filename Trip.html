@@ -1248,7 +1248,7 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
     </div>
     <div style="display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;flex-shrink:1;align-self:flex-start;padding-top:2px;">
       <button class="prebook-pill" id="lockBtn" onclick="showLockDialog()" title="Edit access" style="border-color:#aaa;color:#555;">🔒 View</button>
-      <button class="prebook-pill" id="saveBtn" onclick="doAutoPush()" title="Save to cloud" style="border-color:#88d8a0;color:#88d8a0;">💾</button>
+      <button class="prebook-pill" id="saveBtn" onclick="_autoPushInFlight=false;doAutoPush();" title="Save to cloud" style="border-color:#88d8a0;color:#88d8a0;">💾</button>
       <button class="prebook-pill" id="walkGuideBtn" onclick="toggleWalkingGuide()" title="Live walking guide" style="border-color:#1a7a3a;color:#1a7a3a;font-size:16px;padding:4px 8px;">🚶</button>
       <button class="prebook-pill" onclick="checkInHere()" title="Check in at current location" style="border-color:#e67e22;color:#e67e22;font-size:16px;padding:4px 8px;">📍</button>
       <button class="prebook-pill" onclick="identifyLandmark()" title="Identify landmark from photo" style="border-color:#5c4db1;color:#5c4db1;font-size:16px;padding:4px 8px;">📷</button>
@@ -2448,20 +2448,21 @@ function importFile(input) {
   reader.onload = (e) => {
     try {
       const data = JSON.parse(e.target.result);
-      if (!data || !data.days || data.days.length < 1) throw new Error('No days found');
+      if (!data || !data.days || !Array.isArray(data.days) || data.days.length < 1) throw new Error('No days found in file');
       data.days.forEach((d, i) => {
+        if (!d) return;
         if (!days[i]) days[i] = { title: '', note: '', stops: [] };
         if (d.title) days[i].title = d.title;
         if (d.note) days[i].note = d.note;
-        (d.stops || []).forEach((s, si) => {
+        const incoming = Array.isArray(d.stops) ? d.stops : [];
+        incoming.forEach((s, si) => {
+          if (!s) return;
           if (!days[i].stops[si]) { days[i].stops[si] = s; return; }
-          days[i].stops[si] = { ...s, userPhotos: _mergePhotos(days[i].stops[si].userPhotos, s.userPhotos) };
+          const existingPhotos = days[i].stops[si].userPhotos || [];
+          days[i].stops[si] = Object.assign({}, s, { userPhotos: _mergePhotos(existingPhotos, s.userPhotos || []) });
         });
-        // Append extra stops from import if it has more than current
-        if ((d.stops||[]).length > days[i].stops.length) {
-          for (let si = days[i].stops.length; si < d.stops.length; si++) {
-            days[i].stops[si] = d.stops[si];
-          }
+        for (let si = days[i].stops.length; si < incoming.length; si++) {
+          if (incoming[si]) days[i].stops[si] = incoming[si];
         }
       });
       if (Array.isArray(data.completed)) completed = data.completed;
@@ -2474,18 +2475,20 @@ function importFile(input) {
       }
       saveToStorage();
       switchDay(currentDay);
-      renderPrebook();
-      showToast('✅ Imported — pushing to Supabase…');
+      try { renderPrebook(); } catch(ex) {}
+      showToast('Imported successfully!');
       _syncFailCount = 0;
       clearTimeout(_syncBackoffTimer);
-      setTimeout(() => cloudSave('post-import'), 800);
+      _autoPushInFlight = false;
+      setTimeout(() => doAutoPush(), 800);
     } catch(err) {
-      console.error('Import error:', err);
-      showToast('❌ Import failed: ' + (err.message || 'check file format'), true);
+      console.error('importFile:', err);
+      showToast('Import failed: ' + (err.message || 'unknown error'), true);
     }
   };
   reader.readAsText(file);
 }
+
 
 function clearSaved() {
   showConfirm('Reset local copy? (Cloud copy untouched.)', () => {
