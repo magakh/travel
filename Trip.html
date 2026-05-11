@@ -1969,7 +1969,11 @@ async function _migratePhotosToStorage(daysData) {
   // Deep clone — NEVER modify the original days[] so base64 stays in memory/localStorage always
   const result = JSON.parse(JSON.stringify(daysData));
   await _ensurePhotoBucket();
-  let uploaded = 0;
+  let uploaded = 0, verified = 0, broken = 0;
+
+  // Count total photos for progress
+  const total = result.reduce((n, d) => n + (d.stops||[]).reduce((m, s) => m + (s.userPhotos||[]).length, 0), 0);
+
   for (let di = 0; di < result.length; di++) {
     const day = result[di];
     if (!day.stops) continue;
@@ -1980,17 +1984,44 @@ async function _migratePhotosToStorage(daysData) {
       for (let pi = 0; pi < stop.userPhotos.length; pi++) {
         const p = stop.userPhotos[pi];
         if (!p) continue;
-        if (!p.startsWith('data:')) { newPhotos.push(p); continue; }
-        try {
-          const url = await _uploadPhotoToStorage(p, 'd' + di + 's' + si + 'p' + pi);
-          newPhotos.push(url); uploaded++;
-          _syncBarShow('\u2601\ufe0f Photo ' + uploaded + ' uploaded to Storage', '#5c4db1', Math.min(85, 10 + uploaded * 2));
-        } catch(e) { console.warn('photo upload fail:', e.message); newPhotos.push(p); }
+
+        if (p.startsWith('data:')) {
+          // Base64 photo — upload to Storage
+          try {
+            const url = await _uploadPhotoToStorage(p, 'd' + di + 's' + si + 'p' + pi);
+            newPhotos.push(url); uploaded++;
+            _syncBarShow('☁️ Uploading photo ' + (uploaded+verified) + '/' + total, '#5c4db1', Math.min(85, 10 + ((uploaded+verified)/total)*75));
+          } catch(e) { console.warn('photo upload fail:', e.message); newPhotos.push(p); }
+
+        } else if (p.includes(APP_CONFIG.supabaseUrl + '/storage')) {
+          // Our own Storage URL — extract filename and get a fresh signed URL
+          // (handles case where old signed URL expired or bucket was cleared)
+          try {
+            const match = p.match(/\/trip-photos\/([^?#]+)/);
+            if (match) {
+              const filename = decodeURIComponent(match[1]);
+              const { data: signed, error: se } = await supa.storage.from(PHOTO_BUCKET).createSignedUrl(filename, 31536000);
+              if (se || !signed) {
+                // File is gone — mark as broken so user knows to re-add
+                broken++;
+                console.warn('Storage file gone:', filename);
+                // Keep the URL as-is — _onPhotoError will show "broken" UI
+                newPhotos.push(p);
+              } else {
+                newPhotos.push(signed.signedUrl); verified++;
+              }
+            } else { newPhotos.push(p); }
+          } catch(e) { newPhotos.push(p); }
+
+        } else {
+          newPhotos.push(p); // external URL — keep as-is
+        }
       }
       stop.userPhotos = newPhotos;
     }
   }
-  if (uploaded > 0) console.log('Uploaded', uploaded, 'photos to Storage (originals kept locally)');
+  console.log('Storage migration: uploaded=' + uploaded + ' verified=' + verified + ' broken=' + broken);
+  if (broken > 0) showToast('⚠️ ' + broken + ' photos are missing from Storage — use "Clear broken links" then re-add from phone');
   return result;
 }
 
