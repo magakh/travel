@@ -1248,7 +1248,7 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
     </div>
     <div style="display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;flex-shrink:1;align-self:flex-start;padding-top:2px;">
       <button class="prebook-pill" id="lockBtn" onclick="showLockDialog()" title="Edit access" style="border-color:#aaa;color:#555;">🔒 View</button>
-      <button class="prebook-pill" id="saveBtn" onclick="_autoPushInFlight=false;doAutoPush();" title="Save to cloud" style="border-color:#88d8a0;color:#88d8a0;">💾</button>
+      <button class="prebook-pill" id="saveBtn" onclick="_autoPushInFlight=false;_forceSave();" title="Save to cloud" style="border-color:#88d8a0;color:#88d8a0;pointer-events:auto !important;">💾</button>
       <button class="prebook-pill" id="walkGuideBtn" onclick="toggleWalkingGuide()" title="Live walking guide" style="border-color:#1a7a3a;color:#1a7a3a;font-size:16px;padding:4px 8px;">🚶</button>
       <button class="prebook-pill" onclick="checkInHere()" title="Check in at current location" style="border-color:#e67e22;color:#e67e22;font-size:16px;padding:4px 8px;">📍</button>
       <button class="prebook-pill" onclick="identifyLandmark()" title="Identify landmark from photo" style="border-color:#5c4db1;color:#5c4db1;font-size:16px;padding:4px 8px;">📷</button>
@@ -1979,6 +1979,38 @@ async function _migratePhotosToStorage(daysData) {
   return result;
 }
 
+
+// ── FORCE SAVE — called directly by the 💾 button ─────────────────
+async function _forceSave() {
+  const btn = document.getElementById('saveBtn');
+  if (btn) { btn.textContent = '⏳'; btn.style.color = '#e07a3a'; }
+
+  // 1. Always save to localStorage first (instant, offline-safe)
+  try {
+    saveToStorage();
+  } catch(e) { console.warn('localStorage save failed:', e); }
+
+  // 2. Check if we can reach Supabase
+  if (!supabaseReady()) {
+    showToast('⚠️ Supabase not ready — saved locally only', true);
+    if (btn) { btn.textContent = '💾'; btn.style.color = '#88d8a0'; }
+    return;
+  }
+  if (!EDITOR_MODE) {
+    showToast('🔒 Unlock editing first (tap the lock)', true);
+    if (btn) { btn.textContent = '💾'; btn.style.color = '#88d8a0'; }
+    return;
+  }
+
+  // 3. Push to Supabase
+  _autoPushInFlight = false;
+  const ok = await cloudSave('force');
+  if (btn) {
+    btn.textContent = ok ? '✓' : '⚠️';
+    btn.style.color = ok ? '#1a7a3a' : '#e74c3c';
+    setTimeout(() => { btn.textContent = '💾'; btn.style.color = '#88d8a0'; }, 2000);
+  }
+}
 
 // ── SYNC STATE ───────────────────────────────────────────────────
 let _syncFailCount = 0;
