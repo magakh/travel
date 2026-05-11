@@ -4251,6 +4251,14 @@ function addStopPhotos(stopIdx, dayIdx) {
     for (const file of files) {
       try {
         const b64 = await resizeStopPhoto(file, 250);
+        const fp = _photoFingerprint(b64);
+        // Check if this photo already exists (same fingerprint as base64 or Storage URL filename)
+        const alreadyExists = s.userPhotos.some(p => {
+          if (p && p.startsWith('data:')) return _photoFingerprint(p) === fp;
+          if (p && p.startsWith('http')) return _fingerprintFromUrl(p) === fp;
+          return false;
+        });
+        if (alreadyExists) { showToast('⚠️ Photo already added to this stop — skipped'); continue; }
         s.userPhotos.push(b64);
         added++;
       } catch(e) {
