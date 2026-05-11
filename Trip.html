@@ -1795,6 +1795,23 @@ function _fingerprintFromUrl(url) {
 // - Add remote URLs that are NEW photos from other devices
 // - Skip remote URLs that match an existing local base64 (same photo, already have it)
 // - Deduplicate base64 by content fingerprint
+function _dedupePhotos(photos) {
+  if (!photos || !photos.length) return photos || [];
+  const urlFingerprints = new Set();
+  photos.forEach(p => {
+    if (p && p.includes('/' + PHOTO_BUCKET + '/')) {
+      const m = p.match(/\/([a-z0-9]+)\.jpg/i);
+      if (m) urlFingerprints.add(m[1]);
+    }
+  });
+  return photos.filter(p => {
+    if (!p) return false;
+    if (!p.startsWith('data:')) return true;
+    if (!urlFingerprints.size) return true;
+    return !urlFingerprints.has(_photoFingerprint(p));
+  });
+}
+
 function _mergePhotos(a, b) {
   const arr1 = Array.isArray(a) ? a : [];
   const arr2 = Array.isArray(b) ? b : [];
@@ -1847,7 +1864,7 @@ function applyRemoteData(row) {
         const cur = days[i].stops && days[i].stops[si];
         const localPhotos = (cur && cur.userPhotos) || [];
         const remotePhotos = s.userPhotos || [];
-        s.userPhotos = _mergePhotos(localPhotos, remotePhotos);
+        s.userPhotos = _dedupePhotos(_mergePhotos(localPhotos, remotePhotos));
       });
       days[i].stops = incoming;
       if (dd.title) days[i].title = dd.title;
@@ -3866,9 +3883,9 @@ async function init() {
   setTimeout(scheduleBookingReminders, 3000);
   startRealtime();
 
-  // Silent background refresh — picks up photos from other devices even if realtime missed
+  // Background photo sync — only when screen is active, every 2 minutes (no battery impact)
   setInterval(async () => {
-    if (!supabaseReady() || _autoPushInFlight) return;
+    if (document.hidden || !supabaseReady() || _autoPushInFlight) return;
     try {
       const { data } = await supa.from('trips').select('data').eq('id', TRIP_ID).single();
       if (!data || !data.data) return;
@@ -3882,17 +3899,16 @@ async function init() {
           const cur = days[i].stops && days[i].stops[si];
           if (!cur) return;
           const before = (cur.userPhotos || []).length;
-          cur.userPhotos = _mergePhotos(cur.userPhotos, remotePhotos);
-          added += cur.userPhotos.length - before;
+          cur.userPhotos = _dedupePhotos(_mergePhotos(cur.userPhotos, remotePhotos));
+          added += Math.max(0, cur.userPhotos.length - before);
         });
       });
       if (added > 0) {
-        saveToStorage();
-        renderStopList(); renderDetail();
-        showToast('📷 ' + added + ' new photo' + (added > 1 ? 's' : '') + ' synced from cloud!');
+        saveToStorage(); renderStopList(); renderDetail();
+        showToast('📷 ' + added + ' new photo' + (added > 1 ? 's' : '') + ' synced!');
       }
     } catch(e) {}
-  }, 30000);
+  }, 120000); // 2 minutes
 }
 
 function getTodayDayIndex() {
