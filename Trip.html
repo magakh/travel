@@ -2448,30 +2448,41 @@ function importFile(input) {
   reader.onload = (e) => {
     try {
       const data = JSON.parse(e.target.result);
-      if (!data.days || data.days.length < 1) throw new Error('Invalid format');
+      if (!data || !data.days || data.days.length < 1) throw new Error('No days found');
       data.days.forEach((d, i) => {
         if (!days[i]) days[i] = { title: '', note: '', stops: [] };
-        // Merge photos rather than replace
-        d.stops.forEach((s, si) => {
+        if (d.title) days[i].title = d.title;
+        if (d.note) days[i].note = d.note;
+        (d.stops || []).forEach((s, si) => {
           if (!days[i].stops[si]) { days[i].stops[si] = s; return; }
           days[i].stops[si] = { ...s, userPhotos: _mergePhotos(days[i].stops[si].userPhotos, s.userPhotos) };
         });
-        // If imported has more stops than current, append them
-        if (d.stops.length > days[i].stops.length) {
-          days[i].stops = d.stops.map((s, si) => days[i].stops[si] || s);
+        // Append extra stops from import if it has more than current
+        if ((d.stops||[]).length > days[i].stops.length) {
+          for (let si = days[i].stops.length; si < d.stops.length; si++) {
+            days[i].stops[si] = d.stops[si];
+          }
         }
       });
-      completed = data.completed || [];
-      if (data.hotel) { window.HOTEL_DATA = data.hotel; HOTEL.name = data.hotel.name; HOTEL.address = data.hotel.address; HOTEL.lat = data.hotel.lat; HOTEL.lng = data.hotel.lng; }
+      if (Array.isArray(data.completed)) completed = data.completed;
+      if (data.hotel) {
+        window.HOTEL_DATA = data.hotel;
+        HOTEL.name = data.hotel.name || HOTEL.name;
+        HOTEL.address = data.hotel.address || '';
+        HOTEL.lat = data.hotel.lat || 0;
+        HOTEL.lng = data.hotel.lng || 0;
+      }
       saveToStorage();
       switchDay(currentDay);
       renderPrebook();
-      showToast('Imported ✓ — pushing to Supabase…');
-      // Force push to Supabase immediately after import
+      showToast('✅ Imported — pushing to Supabase…');
       _syncFailCount = 0;
       clearTimeout(_syncBackoffTimer);
-      setTimeout(() => cloudSave('post-import'), 500);
-    } catch(err) { showToast('Could not read file — check format', true); }
+      setTimeout(() => cloudSave('post-import'), 800);
+    } catch(err) {
+      console.error('Import error:', err);
+      showToast('❌ Import failed: ' + (err.message || 'check file format'), true);
+    }
   };
   reader.readAsText(file);
 }
