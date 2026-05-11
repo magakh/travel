@@ -2463,18 +2463,20 @@ function clearBrokenPhotoUrls() {
 }
 
 async function forcePushToSupabase() {
-  if (!EDITOR_MODE) { showToast('🔒 Unlock editing first', true); return; }
-  const stopCount = days.reduce((n, d) => n + (d.stops||[]).length, 0);
-  if (stopCount === 0) {
-    showToast('⚠️ No data loaded yet — wait for the app to finish loading first', true);
-    return;
-  }
-  _syncFailCount = 0;
-  clearTimeout(_syncBackoffTimer);
-  saveToStorage();
-  showToast('☁️ Pushing ' + stopCount + ' stops to Supabase…');
+  if (!EDITOR_MODE) { showToast('\u{1F512} Unlock editing first', true); return; }
+  let b64=0, urls=0, broken=0;
+  days.forEach(d=>(d.stops||[]).forEach(s=>(s.userPhotos||[]).forEach(p=>{
+    if(!p) return;
+    if(p.startsWith('data:')) b64++;
+    else if(p.includes('supabase.co/storage')) urls++;
+    else broken++;
+  })));
+  const stopCount = days.reduce((n,d)=>n+(d.stops||[]).length,0);
+  showToast('\u{1F4F7} ' + b64 + ' to upload, ' + urls + ' in Storage, ' + broken + ' broken | ' + stopCount + ' stops');
+  _syncFailCount=0; clearTimeout(_syncBackoffTimer); saveToStorage();
+  await new Promise(r=>setTimeout(r,1800));
   const ok = await cloudSave('force-push');
-  if (ok) showToast('✅ ' + stopCount + ' stops pushed to Supabase!');
+  if(ok) showToast('\u2705 Push done! ' + b64 + ' photos uploading to Storage…');
 }
 
 async function forceLoadFromSupabase() {
