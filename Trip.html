@@ -1946,13 +1946,19 @@ function _photoFingerprint(dataUrl) {
 async function _uploadPhotoToStorage(base64DataUrl, stopKey) {
   const res = await fetch(base64DataUrl);
   const blob = await res.blob();
-  // Use fingerprint-only filename — same photo always = same file, position-independent
-  // This means moving a photo between stops never creates a duplicate or orphan
   const filename = TRIP_ID + '/' + _photoFingerprint(base64DataUrl) + '.jpg';
+
+  // Try to insert (upsert:false) — no UPDATE permission needed
   const { error } = await supa.storage.from(PHOTO_BUCKET).upload(filename, blob, {
-    contentType: 'image/jpeg', upsert: true // no-op if already exists
+    contentType: 'image/jpeg', upsert: false
   });
-  if (error && !error.message.includes('already exists')) throw error;
+
+  // If file already exists, that's fine — just get the signed URL for it
+  if (error && !error.message.includes('already exists') && error.statusCode !== '409' && error.statusCode !== 409) {
+    throw error;
+  }
+
+  // Get signed URL (1 year) — works whether we just uploaded or file already existed
   const { data: signed, error: signErr } = await supa.storage
     .from(PHOTO_BUCKET).createSignedUrl(filename, 31536000);
   if (signErr) throw signErr;
@@ -1978,7 +1984,7 @@ async function _migratePhotosToStorage(daysData) {
         try {
           const url = await _uploadPhotoToStorage(p, 'd' + di + 's' + si + 'p' + pi);
           newPhotos.push(url); uploaded++;
-          _syncBarShow('\u2601\ufe0f Uploading photo ' + uploaded + '\u2026', '#1a73e8', Math.min(85, 10 + uploaded * 2));
+          _syncBarShow('\u2601\ufe0f Photo ' + uploaded + ' uploaded to Storage', '#5c4db1', Math.min(85, 10 + uploaded * 2));
         } catch(e) { console.warn('photo upload fail:', e.message); newPhotos.push(p); }
       }
       stop.userPhotos = newPhotos;
