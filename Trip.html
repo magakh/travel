@@ -3865,6 +3865,34 @@ async function init() {
   // Schedule in-app notifications for booked stops on all devices
   setTimeout(scheduleBookingReminders, 3000);
   startRealtime();
+
+  // Silent background refresh — picks up photos from other devices even if realtime missed
+  setInterval(async () => {
+    if (!supabaseReady() || _autoPushInFlight) return;
+    try {
+      const { data } = await supa.from('trips').select('data').eq('id', TRIP_ID).single();
+      if (!data || !data.data) return;
+      const remoteDays = data.data.days || [];
+      let added = 0;
+      remoteDays.forEach((dd, i) => {
+        if (!dd || !dd.stops || !days[i]) return;
+        dd.stops.forEach((rs, si) => {
+          const remotePhotos = (rs.userPhotos || []).filter(_isValidPhoto);
+          if (!remotePhotos.length) return;
+          const cur = days[i].stops && days[i].stops[si];
+          if (!cur) return;
+          const before = (cur.userPhotos || []).length;
+          cur.userPhotos = _mergePhotos(cur.userPhotos, remotePhotos);
+          added += cur.userPhotos.length - before;
+        });
+      });
+      if (added > 0) {
+        saveToStorage();
+        renderStopList(); renderDetail();
+        showToast('📷 ' + added + ' new photo' + (added > 1 ? 's' : '') + ' synced from cloud!');
+      }
+    } catch(e) {}
+  }, 30000);
 }
 
 function getTodayDayIndex() {
