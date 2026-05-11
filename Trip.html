@@ -1786,7 +1786,8 @@ function getTripCenter() {
 
 // Extract fingerprint from Storage URL filename (e.g. .../5hs66w.jpg?token=... → "5hs66w")
 function _fingerprintFromUrl(url) {
-  const m = url && url.match(/\/([a-z0-9]+)\.jpg(\?|$)/i);
+  // Extract stable filename (fingerprint) from Storage URL — ignores ?token= part
+  const m = url && url.match(/\/([a-z0-9]+)\.jpg(?:\?|$)/i);
   return m ? m[1] : null;
 }
 
@@ -1820,27 +1821,30 @@ function _mergePhotos(a, b) {
   if (!arr1.length) return arr2;
 
   const result = [...arr1];
-  // Build fingerprint sets from local photos
-  const localFps = new Set(
+  // Fingerprints from local base64 photos
+  const localB64Fps = new Set(
     arr1.filter(p => p && p.startsWith('data:')).map(_photoFingerprint)
   );
-  const localUrls = new Set(arr1.filter(p => p && p.startsWith('http')));
+  // Filenames from local Storage URLs (stable — ignore changing ?token)
+  const localUrlFilenames = new Set(
+    arr1.filter(p => p && p.startsWith('http')).map(_fingerprintFromUrl).filter(Boolean)
+  );
 
   for (const p of arr2) {
     if (!p) continue;
     if (p.startsWith('data:')) {
-      // Remote base64 — add only if not already local
       const fp = _photoFingerprint(p);
-      if (!localFps.has(fp)) { result.push(p); localFps.add(fp); }
+      // Skip if already have base64 or Storage URL for this photo
+      if (localB64Fps.has(fp) || localUrlFilenames.has(fp)) continue;
+      result.push(p); localB64Fps.add(fp);
     } else if (p.startsWith('http')) {
-      // Remote URL — add only if:
-      // 1. Not already in local URLs, AND
-      // 2. Not already represented as a local base64 with same fingerprint
-      if (localUrls.has(p)) continue;
-      const fp = _fingerprintFromUrl(p);
-      if (fp && localFps.has(fp)) continue; // Already have base64 of this photo
+      const fn = _fingerprintFromUrl(p);
+      // Skip if already have a URL with same filename (even different token)
+      if (fn && localUrlFilenames.has(fn)) continue;
+      // Skip if already have base64 of this photo
+      if (fn && localB64Fps.has(fn)) continue;
       result.push(p);
-      localUrls.add(p);
+      if (fn) localUrlFilenames.add(fn);
     }
   }
   return result;
