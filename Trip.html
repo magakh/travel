@@ -9787,15 +9787,22 @@ function showMovePhotoSheet(fromStop, fromDay, photoIdx) {
 
   const doMove = (toDay, toStop) => {
     if (toDay === fromDay && toStop === fromStop) { document.getElementById('movePhotoSheet').remove(); return; }
-    // Move photo
     const src = days[fromDay].stops[fromStop].userPhotos;
     const [moved] = src.splice(photoIdx, 1);
     if (!days[toDay].stops[toStop].userPhotos) days[toDay].stops[toStop].userPhotos = [];
     days[toDay].stops[toStop].userPhotos.push(moved);
-    saveToStorage(); schedulePush();
+    // Delete old Storage file
+    if (moved && moved.startsWith('http')) {
+      _deleteFromStorage(moved); // URL moved — delete old file, will re-upload with new key
+    } else if (moved && moved.startsWith('data:')) {
+      const oldKey = TRIP_ID + '/d' + fromDay + 's' + fromStop + 'p' + photoIdx + '_' + _photoFingerprint(moved) + '.jpg';
+      try { supa.storage.from(PHOTO_BUCKET).remove([oldKey]); } catch(e) {}
+    }
+    saveToStorage();
+    schedulePush();
+    renderStopList();  // Immediate UI update
     renderDetail();
     document.getElementById('movePhotoSheet').remove();
-    // Close gallery if open
     const g = document.getElementById('photoGalleryOv');
     if (g) g.remove();
     showToast('📷 Moved to ' + days[toDay].stops[toStop].name);
