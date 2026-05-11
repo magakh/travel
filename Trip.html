@@ -3863,8 +3863,9 @@ async function init() {
       '</div>';
   }
 
-  // Clean any invalid photo entries (HTML strings from old broken onerror handlers)
+  // Clean invalid AND duplicate photos on every load
   _cleanInvalidPhotos();
+  _cleanDuplicatePhotos();
 
   // Always render — never leave stuck on "Loading…"
   try { renderAll(); } catch(e) { console.warn('renderAll:', e); }
@@ -4241,6 +4242,35 @@ function _isValidPhoto(p) {
 }
 
 // Auto-clean invalid photo entries (HTML strings etc) from all stops
+function _cleanDuplicatePhotos() {
+  let cleaned = 0;
+  days.forEach(day => (day.stops || []).forEach(stop => {
+    if (!stop.userPhotos || stop.userPhotos.length < 2) return;
+    const seenFilenames = new Set();
+    const seenB64Fps = new Set();
+    stop.userPhotos = stop.userPhotos.filter(p => {
+      if (!p) return false;
+      if (p.startsWith('data:')) {
+        const fp = _photoFingerprint(p);
+        if (seenB64Fps.has(fp) || seenFilenames.has(fp)) { cleaned++; return false; }
+        seenB64Fps.add(fp); return true;
+      } else if (p.startsWith('http')) {
+        const fn = _fingerprintFromUrl(p);
+        const key = fn || p.slice(0, 80);
+        if (seenFilenames.has(key)) { cleaned++; return false; }
+        seenFilenames.add(key);
+        if (fn) seenB64Fps.add(fn); // prevent matching base64 too
+        return true;
+      }
+      return false;
+    });
+  }));
+  if (cleaned > 0) {
+    saveToStorage();
+    console.log('Cleaned', cleaned, 'duplicate photos');
+  }
+}
+
 function _cleanInvalidPhotos() {
   let cleaned = 0;
   days.forEach(day => (day.stops||[]).forEach(stop => {
