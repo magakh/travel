@@ -1987,30 +1987,16 @@ async function cloudSave(summary) {
   }
   try {
     const data = getSaveData();
+    const sizeMB = (JSON.stringify(data).length / 1024 / 1024).toFixed(1);
 
-    // Upload base64 photos to Supabase Storage first — shrinks payload from MBs to KBs
-    _syncBarShow('☁️ Preparing photos…', '#1a73e8', 5);
-    const hasBase64 = data.days.some(d => (d.stops||[]).some(s => (s.userPhotos||[]).some(p => p && p.startsWith('data:'))));
-    let saveData = data;
-    if (hasBase64) {
-      try {
-        saveData = { ...data, days: await _migratePhotosToStorage(data.days) };
-      } catch(e) {
-        console.warn('Storage migration failed, saving with base64:', e.message);
-        saveData = data; // fall back to base64
-      }
-    }
-
-    const sizeMB = (JSON.stringify(saveData).length / 1024 / 1024).toFixed(1);
-    _syncBarShow('☁️ Saving ' + sizeMB + 'MB to Supabase…', '#1a73e8', 90);
-    clearInterval(_syncAnimInterval);
+    _syncBarShow('☁️ Saving ' + sizeMB + 'MB…', '#1a73e8', 30);
 
     const payload = {
       id: TRIP_ID,
       title: APP_CONFIG.title,
       subtitle: APP_CONFIG.subtitle,
       config: getTripConfig(),
-      data: saveData
+      data
     };
     _lastKnownSignature = stateSignature({ config: payload.config, data: payload.data });
     _ourLastSavedAt = data.savedAt || '';
@@ -2019,47 +2005,71 @@ async function cloudSave(summary) {
     let { error } = await supa.from('trips').upsert(payload, { onConflict: 'id' });
 
     if (error) {
-      console.warn('cloudSave attempt 1 failed:', error.message);
-      _syncBarShow('⏳ Retrying… (' + error.message.slice(0, 40) + ')', '#e07a3a', 50);
+      _syncBarShow('⏳ Retrying…', '#e07a3a', 50);
       await new Promise(r => setTimeout(r, 2000));
       const r2 = await supa.from('trips').upsert(payload, { onConflict: 'id' });
       error = r2.error;
     }
 
-    clearInterval(_syncAnimInterval);
-
     if (error) {
       _syncFailCount++;
-      console.warn('cloudSave failed (' + _syncFailCount + '):', error.message);
-      _syncBarShow('⚠️ Sync failed — ' + error.message.slice(0, 50), '#e74c3c', 100);
-      setTimeout(_syncBarHide, 6000);
-      if (_syncFailCount === 1) showToast('⚠️ Sync failed (' + sizeMB + 'MB) — retrying in background', true);
+      _syncBarShow('⚠️ ' + error.message.slice(0, 60), '#e74c3c', 100);
+      setTimeout(_syncBarHide, 8000);
+      if (_syncFailCount === 1) showToast('⚠️ Sync failed (' + sizeMB + 'MB): ' + error.message.slice(0, 60), true);
       const delays = [15000, 60000, 300000, 900000];
       clearTimeout(_syncBackoffTimer);
-      _syncBackoffTimer = setTimeout(() => cloudSave('background-retry'), delays[Math.min(_syncFailCount - 1, delays.length - 1)]);
+      _syncBackoffTimer = setTimeout(() => cloudSave('retry'), delays[Math.min(_syncFailCount-1, delays.length-1)]);
       return false;
     }
 
     _syncFailCount = 0;
     clearTimeout(_syncBackoffTimer);
-    _syncBarShow('✅ Saved ' + sizeMB + 'MB to Supabase', '#1a7a3a', 100);
+    _syncBarShow('✅ Saved ' + sizeMB + 'MB', '#1a7a3a', 100);
     setTimeout(_syncBarHide, 3000);
     const btn = document.getElementById('saveBtn');
     if (btn) { btn.textContent = '✓'; btn.style.color = '#1a7a3a'; setTimeout(() => { btn.textContent = '💾'; btn.style.color = '#88d8a0'; }, 2000); }
+
+    // After successful save, migrate photos to Storage in background (non-blocking)
+    const hasBase64 = data.days.some(d => (d.stops||[]).some(s => (s.userPhotos||[]).some(p => p && p.startsWith('data:'))));
+    if (hasBase64 && summary !== 'photo-migrate') {
+      setTimeout(() => _migrateAndResave(), 2000);
+    }
     return true;
   } catch(e) {
-    clearInterval(_syncAnimInterval);
     _syncFailCount++;
-    const msg = e.message || 'unknown error';
-    _syncBarShow('⚠️ Sync error — ' + msg.slice(0, 50), '#e74c3c', 100);
-    setTimeout(_syncBarHide, 6000);
-    console.warn('cloudSave exception:', e);
-    if (_syncFailCount === 1) showToast('⚠️ Sync failed — photos safe locally', true);
+    const msg = e.message || String(e);
+    _syncBarShow('⚠️ Error: ' + msg.slice(0, 60), '#e74c3c', 100);
+    setTimeout(_syncBarHide, 8000);
+    console.error('cloudSave exception:', e);
+    if (_syncFailCount === 1) showToast('⚠️ Sync error: ' + msg.slice(0, 80), true);
     const delay = Math.min(60000, 15000 * _syncFailCount);
     clearTimeout(_syncBackoffTimer);
-    _syncBackoffTimer = setTimeout(() => cloudSave('background-retry'), delay);
+    _syncBackoffTimer = setTimeout(() => cloudSave('retry'), delay);
     return false;
   }
+}
+
+// Migrate base64 photos to Storage then re-save with tiny URLs — runs after successful save
+async function _migrateAndResave() {
+  try {
+    const data = getSaveData();
+    const hasBase64 = data.days.some(d => (d.stops||[]).some(s => (s.userPhotos||[]).some(p => p && p.startsWith('data:'))));
+    if (!hasBase64) return;
+    _syncBarShow('☁️ Uploading photos to Storage…', '#5c4db1', 10);
+    const migratedDays = await _migratePhotosToStorage(data.days);
+    const migratedPayload = {
+      id: TRIP_ID,
+      title: APP_CONFIG.title,
+      subtitle: APP_CONFIG.subtitle,
+      config: getTripConfig(),
+      data: { ...data, days: migratedDays }
+    };
+    const sizeMB = (JSON.stringify(migratedPayload).length / 1024 / 1024).toFixed(1);
+    _syncBarShow('☁️ Saving ' + sizeMB + 'MB with photo URLs…', '#5c4db1', 90);
+    const { error } = await supa.from('trips').upsert(migratedPayload, { onConflict: 'id' });
+    if (error) { _syncBarShow('⚠️ Photo upload failed: ' + error.message.slice(0,50), '#e74c3c', 100); setTimeout(_syncBarHide, 5000); }
+    else { _syncBarShow('✅ Photos in Storage (' + sizeMB + 'MB saved)', '#1a7a3a', 100); setTimeout(_syncBarHide, 3000); }
+  } catch(e) { console.warn('_migrateAndResave failed:', e.message); _syncBarHide(); }
 }
 
 // Build a stable JSON signature of the "meaningful" trip state. Used to
