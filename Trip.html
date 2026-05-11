@@ -1938,10 +1938,11 @@ function _photoFingerprint(dataUrl) {
 async function _uploadPhotoToStorage(base64DataUrl, stopKey) {
   const res = await fetch(base64DataUrl);
   const blob = await res.blob();
-  // Stable filename — same photo content always maps to same file, no duplicates
-  const filename = TRIP_ID + '/' + stopKey + '_' + _photoFingerprint(base64DataUrl) + '.jpg';
+  // Use fingerprint-only filename — same photo always = same file, position-independent
+  // This means moving a photo between stops never creates a duplicate or orphan
+  const filename = TRIP_ID + '/' + _photoFingerprint(base64DataUrl) + '.jpg';
   const { error } = await supa.storage.from(PHOTO_BUCKET).upload(filename, blob, {
-    contentType: 'image/jpeg', upsert: true // overwrite if exists, never duplicate
+    contentType: 'image/jpeg', upsert: true // no-op if already exists
   });
   if (error && !error.message.includes('already exists')) throw error;
   const { data: signed, error: signErr } = await supa.storage
@@ -9791,13 +9792,7 @@ function showMovePhotoSheet(fromStop, fromDay, photoIdx) {
     const [moved] = src.splice(photoIdx, 1);
     if (!days[toDay].stops[toStop].userPhotos) days[toDay].stops[toStop].userPhotos = [];
     days[toDay].stops[toStop].userPhotos.push(moved);
-    // Delete old Storage file
-    if (moved && moved.startsWith('http')) {
-      _deleteFromStorage(moved); // URL moved — delete old file, will re-upload with new key
-    } else if (moved && moved.startsWith('data:')) {
-      const oldKey = TRIP_ID + '/d' + fromDay + 's' + fromStop + 'p' + photoIdx + '_' + _photoFingerprint(moved) + '.jpg';
-      try { supa.storage.from(PHOTO_BUCKET).remove([oldKey]); } catch(e) {}
-    }
+    // No Storage changes needed — filename is fingerprint-based, same file regardless of position
     saveToStorage();
     schedulePush();
     renderStopList();  // Immediate UI update
