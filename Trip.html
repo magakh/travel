@@ -1841,7 +1841,7 @@ function _dedupeAllPhotos() {
   }));
   if (cleaned > 0) {
     console.log('Deduped', cleaned, 'photos');
-    saveToStorage(); schedulePush();
+    saveToStorage();
     renderStopList(); renderDetail();
     showToast('Removed ' + cleaned + ' duplicate photo' + (cleaned>1?'s':''));
   }
@@ -3901,7 +3901,6 @@ async function init() {
 
   // Clean invalid AND duplicate photos on every load
   _cleanInvalidPhotos();
-  _dedupeAllPhotos();
 
   // Always render — never leave stuck on "Loading…"
   try { renderAll(); } catch(e) { console.warn('renderAll:', e); }
