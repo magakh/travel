@@ -1928,10 +1928,18 @@ async function _ensurePhotoBucket() {
 }
 
 function _photoFingerprint(dataUrl) {
-  // Create a stable ID from the photo content — same photo = same filename
-  const sample = dataUrl.slice(22, 150); // skip data:image/jpeg;base64,
+  // Sample from multiple positions — JPEG headers are identical across photos
+  // so sampling only the start gives the same hash for all photos from same camera
+  const b64 = dataUrl.startsWith('data:') ? dataUrl.slice(dataUrl.indexOf(',') + 1) : dataUrl;
+  const len = b64.length;
+  const samples = [
+    b64.slice(Math.floor(len * 0.10), Math.floor(len * 0.10) + 50),
+    b64.slice(Math.floor(len * 0.35), Math.floor(len * 0.35) + 50),
+    b64.slice(Math.floor(len * 0.65), Math.floor(len * 0.65) + 50),
+    b64.slice(Math.max(0, len - 50))
+  ].join('') + len; // include length so different-sized photos never collide
   let h = 0;
-  for (let i = 0; i < sample.length; i++) { h = Math.imul(31, h) + sample.charCodeAt(i) | 0; }
+  for (let i = 0; i < samples.length; i++) { h = Math.imul(31, h) + samples.charCodeAt(i) | 0; }
   return Math.abs(h).toString(36);
 }
 
