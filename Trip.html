@@ -4123,6 +4123,13 @@ function addStopPhotos(stopIdx, dayIdx) {
   setTimeout(function(){ input.click(); }, 30);
 }
 
+function _onPhotoError(img) {
+  // Photo URL is broken (e.g. Storage was cleared) — show a subtle broken indicator
+  const div = img.parentNode;
+  if (!div) return;
+  div.innerHTML = '<div style="width:100%;height:100%;background:#f8f0f0;border:1.5px dashed #e74c3c;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#e74c3c;font-size:10px;gap:2px;"><span style="font-size:16px;">📷</span><span>Broken</span></div>';
+}
+
 async function _deleteFromStorage(photoUrl) {
   if (!photoUrl || !photoUrl.includes('supabase.co/storage')) return;
   try {
@@ -4263,7 +4270,7 @@ function renderDetail() {
       ${(s.userPhotos && s.userPhotos.length)
         ? '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">'
           + s.userPhotos.map(function(p,pi){ return '<div style="position:relative;aspect-ratio:1;">'
-            + '<img src="'+p+'" onclick="viewStopPhoto(\''+p.replace(/'/g,"\\'")+'\'+\'\')" onerror="this.parentNode.innerHTML=\'<div onclick=\\\"document.getElementById(\\\\\"photo-input-\'+currentDay+\'-\'+currentStop+\'\\\\\").click()\\\" style=\\\"width:100%;height:100%;background:#fff0f0;border:2px dashed #e74c3c;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;font-size:11px;color:#e74c3c;text-align:center;gap:2px;\\\"><span style=\\\"font-size:18px;\\\">📷</span><span>Re-add</span></div>\';" style="width:100%;height:100%;object-fit:cover;border-radius:8px;cursor:pointer;">'
+            + '<img src="'+p+'" onclick="viewStopPhoto(\''+p.replace(/'/g,"\\'")+'\'+\'\')" onerror="_onPhotoError(this)" style="width:100%;height:100%;object-fit:cover;border-radius:8px;cursor:pointer;">'
             + '<button onclick="event.stopPropagation();deleteStopPhoto('+currentStop+','+currentDay+','+pi+')" style="position:absolute;top:3px;right:3px;background:rgba(0,0,0,0.6);border:none;color:#fff;border-radius:50%;width:22px;height:22px;font-size:11px;cursor:pointer;line-height:1;">✕</button>'
             + (EDITOR_MODE ? '<button onclick="event.stopPropagation();showMovePhotoSheet('+currentStop+','+currentDay+','+pi+')" style="position:absolute;bottom:3px;right:3px;background:rgba(26,115,232,0.85);border:none;color:#fff;border-radius:50%;width:22px;height:22px;font-size:13px;cursor:pointer;line-height:22px;text-align:center;" title="Move to another event">⇄</button>' : '')
             + '</div>'; }).join('')
