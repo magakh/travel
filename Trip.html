@@ -1951,13 +1951,12 @@ async function _uploadPhotoToStorage(base64DataUrl, stopKey) {
 }
 
 async function _migratePhotosToStorage(daysData) {
-  // daysData is already a deep clone — convert base64 → Storage URLs for Supabase payload ONLY
-  // We deliberately do NOT update local days[] with URLs so localStorage keeps original base64
-  // This means: if Storage is cleared, next save re-uploads automatically from local base64
+  // Deep clone — NEVER modify the original days[] so base64 stays in memory/localStorage always
+  const result = JSON.parse(JSON.stringify(daysData));
   await _ensurePhotoBucket();
   let uploaded = 0;
-  for (let di = 0; di < daysData.length; di++) {
-    const day = daysData[di];
+  for (let di = 0; di < result.length; di++) {
+    const day = result[di];
     if (!day.stops) continue;
     for (let si = 0; si < day.stops.length; si++) {
       const stop = day.stops[si];
@@ -1966,54 +1965,20 @@ async function _migratePhotosToStorage(daysData) {
       for (let pi = 0; pi < stop.userPhotos.length; pi++) {
         const p = stop.userPhotos[pi];
         if (!p) continue;
-        if (!p.startsWith('data:')) { newPhotos.push(p); continue; } // already URL or invalid
+        if (!p.startsWith('data:')) { newPhotos.push(p); continue; }
         try {
           const url = await _uploadPhotoToStorage(p, 'd' + di + 's' + si + 'p' + pi);
           newPhotos.push(url); uploaded++;
-          _syncBarShow('☁️ Uploading photo ' + uploaded + '…', '#1a73e8', Math.min(85, 10 + uploaded * 2));
-        } catch(e) { console.warn('photo upload fail:', e.message); newPhotos.push(p); } // keep base64 on fail
+          _syncBarShow('\u2601\ufe0f Uploading photo ' + uploaded + '\u2026', '#1a73e8', Math.min(85, 10 + uploaded * 2));
+        } catch(e) { console.warn('photo upload fail:', e.message); newPhotos.push(p); }
       }
-      stop.userPhotos = newPhotos; // only in the clone, not in local days[]
+      stop.userPhotos = newPhotos;
     }
   }
-  if (uploaded > 0) console.log('Uploaded', uploaded, 'photos to Supabase Storage');
-  return daysData;
+  if (uploaded > 0) console.log('Uploaded', uploaded, 'photos to Storage (originals kept locally)');
+  return result;
 }
 
-function _syncBarShow(label, color, pct) {
-  const bar = document.getElementById('syncBar');
-  const fill = document.getElementById('syncBarFill');
-  const lbl = document.getElementById('syncLabel');
-  if (!bar) return;
-  bar.style.display = 'block';
-  fill.style.background = color;
-  fill.style.width = (pct || 0) + '%';
-  lbl.style.display = 'block';
-  lbl.style.color = color;
-  lbl.textContent = label;
-}
-function _syncBarHide() {
-  const bar = document.getElementById('syncBar');
-  const lbl = document.getElementById('syncLabel');
-  if (bar) bar.style.display = 'none';
-  if (lbl) lbl.style.display = 'none';
-}
-function _syncBarAnimate() {
-  // Indeterminate animation while saving
-  const fill = document.getElementById('syncBarFill');
-  if (!fill) return;
-  let p = 0;
-  const iv = setInterval(() => {
-    if (!_autoPushInFlight) { clearInterval(iv); return; }
-    p = (p + 3) % 110;
-    fill.style.width = Math.min(p, 95) + '%';
-  }, 100);
-  return iv;
-}
-
-let _syncAnimInterval = null;
-let _syncFailCount = 0;
-let _syncBackoffTimer = null;
 
 async function cloudSave(summary) {
   if (!supabaseReady() || !EDITOR_MODE) {
