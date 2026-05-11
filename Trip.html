@@ -1985,6 +1985,30 @@ let _syncFailCount = 0;
 let _syncBackoffTimer = null;
 let _syncAnimInterval = null;
 
+function _syncBarShow(label, color, pct) {
+  try {
+    const bar = document.getElementById('syncBar');
+    const fill = document.getElementById('syncBarFill');
+    const lbl = document.getElementById('syncLabel');
+    if (!bar || !fill || !lbl) return;
+    bar.style.display = 'block';
+    fill.style.background = color || '#1a73e8';
+    fill.style.width = (pct || 0) + '%';
+    lbl.style.display = 'block';
+    lbl.style.color = color || '#1a73e8';
+    lbl.textContent = label || '';
+  } catch(e) {}
+}
+
+function _syncBarHide() {
+  try {
+    const bar = document.getElementById('syncBar');
+    const lbl = document.getElementById('syncLabel');
+    if (bar) bar.style.display = 'none';
+    if (lbl) lbl.style.display = 'none';
+  } catch(e) {}
+}
+
 async function cloudSave(summary) {
   if (!supabaseReady() || !EDITOR_MODE) {
     if (!EDITOR_MODE) showToast('Not in edit mode — unlock first', true);
