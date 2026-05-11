@@ -2236,20 +2236,20 @@ function startRealtime() {
         const row = payload.new;
         if (!row) return;
         const incomingSig = stateSignature(row);
-        if (incomingSig === _lastKnownSignature) return;
-        const incomingSavedAt = row.data && row.data.savedAt;
-        if (_ourLastSavedAt && incomingSavedAt && incomingSavedAt < _ourLastSavedAt) return;
-        if (_autoPushInFlight || _autoPushTimer) return;
-        // Block realtime for 10s after any local edit to protect unsaved changes
-        if (Date.now() - _localChangeAt < 10000) return;
-        // Foreign change — apply and re-render to show new photos from other device
+        if (incomingSig === _lastKnownSignature) return; // our own save echoed back
+        if (_autoPushInFlight) return; // mid-save, skip
+        if (Date.now() - _localChangeAt < 5000) return; // very recent local edit, skip
+        // Another device saved — apply and re-render
+        const prevPhotoCount = days.reduce((n, d) => n + (d.stops||[]).reduce((m, s) => m + (s.userPhotos||[]).length, 0), 0);
         applyRemoteData(row);
         _lastKnownSignature = incomingSig;
         _walkLoadedDays.clear();
-        saveToStorage(); // keep localStorage in sync with merged data
+        saveToStorage();
+        const newPhotoCount = days.reduce((n, d) => n + (d.stops||[]).reduce((m, s) => m + (s.userPhotos||[]).length, 0), 0);
         try { renderAll(); } catch(e) {}
         try { renderDetail(); } catch(e) {}
-        
+        const added = newPhotoCount - prevPhotoCount;
+        if (added > 0) showToast('📷 ' + added + ' new photo' + (added > 1 ? 's' : '') + ' from another device!');
       })
     .subscribe((status) => {
       if (status === 'SUBSCRIBED') 
