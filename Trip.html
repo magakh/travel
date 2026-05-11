@@ -1813,10 +1813,22 @@ function applyRemoteData(row) {
     d.days.forEach((dd, i) => {
       if (!days[i]) days[i] = { title: '', note: '', stops: [] };
       const incoming = (dd.stops || []).map(sanitizeStop);
-      // MERGE photos: combine Supabase photos with in-memory photos (both directions)
+      // MERGE photos: prefer local base64 over Supabase Storage URLs
+      // (base64 in localStorage is the source of truth — Storage is just a delivery mechanism)
       incoming.forEach((s, si) => {
         const cur = days[i].stops && days[i].stops[si];
-        s.userPhotos = _mergePhotos(cur ? cur.userPhotos : [], s.userPhotos);
+        if (!cur) return;
+        // Keep local base64 photos; merge in any remote photos not already local
+        const localPhotos = (cur.userPhotos || []).filter(p => p && p.startsWith('data:'));
+        const remoteBase64 = (s.userPhotos || []).filter(p => p && p.startsWith('data:'));
+        const remoteUrls = (s.userPhotos || []).filter(p => p && p.startsWith('http'));
+        if (localPhotos.length > 0) {
+          // We have local base64 — use those, ignore remote URLs (they might be stale/deleted)
+          s.userPhotos = _mergePhotos(localPhotos, remoteBase64);
+        } else {
+          // No local base64 — use whatever remote has (URLs or base64)
+          s.userPhotos = _mergePhotos(cur.userPhotos, s.userPhotos);
+        }
       });
       days[i].stops = incoming;
       if (dd.title) days[i].title = dd.title;
@@ -1938,11 +1950,13 @@ async function _uploadPhotoToStorage(base64DataUrl, stopKey) {
 }
 
 async function _migratePhotosToStorage(daysData) {
+  // daysData is already a deep clone — convert base64 → Storage URLs for Supabase payload ONLY
+  // We deliberately do NOT update local days[] with URLs so localStorage keeps original base64
+  // This means: if Storage is cleared, next save re-uploads automatically from local base64
   await _ensurePhotoBucket();
-  const result = JSON.parse(JSON.stringify(daysData));
   let uploaded = 0;
-  for (let di = 0; di < result.length; di++) {
-    const day = result[di];
+  for (let di = 0; di < daysData.length; di++) {
+    const day = daysData[di];
     if (!day.stops) continue;
     for (let si = 0; si < day.stops.length; si++) {
       const stop = day.stops[si];
@@ -1951,29 +1965,18 @@ async function _migratePhotosToStorage(daysData) {
       for (let pi = 0; pi < stop.userPhotos.length; pi++) {
         const p = stop.userPhotos[pi];
         if (!p) continue;
-        if (p.startsWith('http')) { newPhotos.push(p); continue; } // already a URL
-        if (!p.startsWith('data:')) { continue; }
+        if (!p.startsWith('data:')) { newPhotos.push(p); continue; } // already URL or invalid
         try {
           const url = await _uploadPhotoToStorage(p, 'd' + di + 's' + si + 'p' + pi);
           newPhotos.push(url); uploaded++;
           _syncBarShow('☁️ Uploading photo ' + uploaded + '…', '#1a73e8', Math.min(85, 10 + uploaded * 2));
-        } catch(e) { console.warn('photo upload fail:', e.message); newPhotos.push(p); }
+        } catch(e) { console.warn('photo upload fail:', e.message); newPhotos.push(p); } // keep base64 on fail
       }
-      stop.userPhotos = newPhotos;
+      stop.userPhotos = newPhotos; // only in the clone, not in local days[]
     }
   }
-  if (uploaded > 0) {
-    // Update local days with URLs so we don't re-upload
-    for (let di = 0; di < days.length; di++) {
-      if (!days[di] || !result[di]) continue;
-      days[di].stops.forEach((s, si) => {
-        if (result[di].stops[si]) s.userPhotos = result[di].stops[si].userPhotos;
-      });
-    }
-    saveToStorage();
-    console.log('Migrated', uploaded, 'photos to Supabase Storage');
-  }
-  return result;
+  if (uploaded > 0) console.log('Uploaded', uploaded, 'photos to Supabase Storage');
+  return daysData;
 }
 
 function _syncBarShow(label, color, pct) {
