@@ -1914,17 +1914,25 @@ async function _ensurePhotoBucket() {
   } catch(e) { console.log('bucket check:', e.message); }
 }
 
+function _photoFingerprint(dataUrl) {
+  // Create a stable ID from the photo content — same photo = same filename
+  const sample = dataUrl.slice(22, 150); // skip data:image/jpeg;base64,
+  let h = 0;
+  for (let i = 0; i < sample.length; i++) { h = Math.imul(31, h) + sample.charCodeAt(i) | 0; }
+  return Math.abs(h).toString(36);
+}
+
 async function _uploadPhotoToStorage(base64DataUrl, stopKey) {
   const res = await fetch(base64DataUrl);
   const blob = await res.blob();
-  const filename = TRIP_ID + '/' + stopKey + '_' + Date.now() + '.jpg';
+  // Stable filename — same photo content always maps to same file, no duplicates
+  const filename = TRIP_ID + '/' + stopKey + '_' + _photoFingerprint(base64DataUrl) + '.jpg';
   const { error } = await supa.storage.from(PHOTO_BUCKET).upload(filename, blob, {
-    contentType: 'image/jpeg', upsert: false
+    contentType: 'image/jpeg', upsert: true // overwrite if exists, never duplicate
   });
-  if (error) throw error;
-  // Use signed URL (1 year expiry) for private bucket
+  if (error && !error.message.includes('already exists')) throw error;
   const { data: signed, error: signErr } = await supa.storage
-    .from(PHOTO_BUCKET).createSignedUrl(filename, 31536000); // 1 year
+    .from(PHOTO_BUCKET).createSignedUrl(filename, 31536000);
   if (signErr) throw signErr;
   return signed.signedUrl;
 }
@@ -4044,10 +4052,13 @@ function addStopPhotos(stopIdx, dayIdx) {
 async function _deleteFromStorage(photoUrl) {
   if (!photoUrl || !photoUrl.includes('supabase.co/storage')) return;
   try {
+    // Signed URLs: /storage/v1/sign/trip-photos/PATH?token=...
+    // Public URLs: /storage/v1/object/public/trip-photos/PATH
     const match = photoUrl.match(/\/trip-photos\/([^?#]+)/);
     if (!match) return;
-    await supa.storage.from(PHOTO_BUCKET).remove([match[1]]);
-    console.log('Deleted from storage:', match[1]);
+    const path = decodeURIComponent(match[1]);
+    await supa.storage.from(PHOTO_BUCKET).remove([path]);
+    console.log('Deleted from storage:', path);
   } catch(e) { console.warn('Storage delete failed:', e.message); }
 }
 
