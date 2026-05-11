@@ -4250,7 +4250,7 @@ function addStopPhotos(stopIdx, dayIdx) {
     let added = 0;
     for (const file of files) {
       try {
-        const b64 = await resizeStopPhoto(file, 250);
+        const b64 = await resizeStopPhoto(file, 1200);
         const fp = _photoFingerprint(b64);
         // Check if this photo already exists (same fingerprint as base64 or Storage URL filename)
         const alreadyExists = s.userPhotos.some(p => {
@@ -4910,7 +4910,7 @@ async function _processLandmarkPhoto(file) {
   try {
     const base64 = await _resizeToBase64(file, 1024);
     // Store a properly-sized data URL for attaching to stop photos
-    const photoDataUrl = await resizeStopPhoto(file, 400);
+    const photoDataUrl = await resizeStopPhoto(file, 1200);
     window._identifyBase64 = photoDataUrl; // data URL, displayable
     window._identifyBase64Raw = base64; // raw base64 for vision API
 
