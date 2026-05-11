@@ -1922,8 +1922,11 @@ async function _uploadPhotoToStorage(base64DataUrl, stopKey) {
     contentType: 'image/jpeg', upsert: false
   });
   if (error) throw error;
-  const { data: urlData } = supa.storage.from(PHOTO_BUCKET).getPublicUrl(filename);
-  return urlData.publicUrl;
+  // Use signed URL (1 year expiry) for private bucket
+  const { data: signed, error: signErr } = await supa.storage
+    .from(PHOTO_BUCKET).createSignedUrl(filename, 31536000); // 1 year
+  if (signErr) throw signErr;
+  return signed.signedUrl;
 }
 
 async function _migratePhotosToStorage(daysData) {
