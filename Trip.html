@@ -1980,6 +1980,11 @@ async function _migratePhotosToStorage(daysData) {
 }
 
 
+// ── SYNC STATE ───────────────────────────────────────────────────
+let _syncFailCount = 0;
+let _syncBackoffTimer = null;
+let _syncAnimInterval = null;
+
 async function cloudSave(summary) {
   if (!supabaseReady() || !EDITOR_MODE) {
     if (!EDITOR_MODE) showToast('Not in edit mode — unlock first', true);
