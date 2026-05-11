@@ -3961,7 +3961,7 @@ function getTodayDayIndex() {
       const diff = Math.round((today - start) / 86400000);
       if (days && diff >= 0 && diff < days.length) return diff;
       if (diff < 0) return 0;
-      if (days && diff >= days.length) return days.length - 1;
+      if (days && diff >= days.length) return 0; // trip over — show first day
     }
     const months = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
     if (days && days.length) {
