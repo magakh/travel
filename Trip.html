@@ -1511,6 +1511,7 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
           <button onclick="exportFile()" style="flex:1;padding:11px;border-radius:10px;border:1px solid #444;background:#1e1e1e;color:#ccc;font-size:13px;font-weight:700;cursor:pointer;">📤 Export JSON</button>
           <button onclick="document.getElementById('import-input').click()" style="flex:1;padding:11px;border-radius:10px;border:1px solid #444;background:#1e1e1e;color:#ccc;font-size:13px;font-weight:700;cursor:pointer;">📥 Import JSON</button>
         </div>
+        <button onclick="clearBrokenPhotoUrls()" style="width:100%;padding:11px;border-radius:10px;border:1px solid #c0392b;background:#1a0a0a;color:#e74c3c;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:6px;">🗑 Clear broken photo links (re-add from phone)</button>
         <button onclick="forcePushToSupabase()" style="width:100%;padding:12px;border-radius:10px;border:2px solid #1a7a3a;background:#0d2e18;color:#4caf50;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:6px;">☁️ Force push everything to Supabase</button>
         <button onclick="forceLoadFromSupabase()" style="width:100%;padding:12px;border-radius:10px;border:2px solid #1a73e8;background:#0d1e3a;color:#64b5f6;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:8px;">🔄 Force load fresh from Supabase</button>
       </div>
@@ -2360,6 +2361,25 @@ function saveToStorage() {
   doAutoPush();
   showToast('Saved ✓');
 }
+function clearBrokenPhotoUrls() {
+  if (!confirm('This will remove broken photo links from all stops. You\'ll need to re-add photos from your phone. Continue?')) return;
+  let cleared = 0;
+  days.forEach(day => {
+    (day.stops || []).forEach(stop => {
+      if (!stop.userPhotos) return;
+      const before = stop.userPhotos.length;
+      // Remove Storage URLs (they point to deleted files) — keep any remaining base64
+      stop.userPhotos = stop.userPhotos.filter(p => p && p.startsWith('data:'));
+      cleared += before - stop.userPhotos.length;
+    });
+  });
+  saveToStorage();
+  schedulePush();
+  renderStopList();
+  renderDetail();
+  showToast('🗑 Cleared ' + cleared + ' broken links — re-add photos from your phone');
+}
+
 async function forcePushToSupabase() {
   if (!EDITOR_MODE) { showToast('🔒 Unlock editing first', true); return; }
   const stopCount = days.reduce((n, d) => n + (d.stops||[]).length, 0);
@@ -4192,7 +4212,7 @@ function renderDetail() {
       ${(s.userPhotos && s.userPhotos.length)
         ? '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">'
           + s.userPhotos.map(function(p,pi){ return '<div style="position:relative;aspect-ratio:1;">'
-            + '<img src="'+p+'" onclick="viewStopPhoto(\''+p.replace(/'/g,"\\'")+'\'+\'\')" style="width:100%;height:100%;object-fit:cover;border-radius:8px;cursor:pointer;">'
+            + '<img src="'+p+'" onclick="viewStopPhoto(\''+p.replace(/'/g,"\\'")+'\'+\'\')" onerror="this.parentNode.innerHTML=\'<div onclick=\\\"document.getElementById(\\\\\"photo-input-\'+currentDay+\'-\'+currentStop+\'\\\\\").click()\\\" style=\\\"width:100%;height:100%;background:#fff0f0;border:2px dashed #e74c3c;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;font-size:11px;color:#e74c3c;text-align:center;gap:2px;\\\"><span style=\\\"font-size:18px;\\\">📷</span><span>Re-add</span></div>\';" style="width:100%;height:100%;object-fit:cover;border-radius:8px;cursor:pointer;">'
             + '<button onclick="event.stopPropagation();deleteStopPhoto('+currentStop+','+currentDay+','+pi+')" style="position:absolute;top:3px;right:3px;background:rgba(0,0,0,0.6);border:none;color:#fff;border-radius:50%;width:22px;height:22px;font-size:11px;cursor:pointer;line-height:1;">✕</button>'
             + (EDITOR_MODE ? '<button onclick="event.stopPropagation();showMovePhotoSheet('+currentStop+','+currentDay+','+pi+')" style="position:absolute;bottom:3px;right:3px;background:rgba(26,115,232,0.85);border:none;color:#fff;border-radius:50%;width:22px;height:22px;font-size:13px;cursor:pointer;line-height:22px;text-align:center;" title="Move to another event">⇄</button>' : '')
             + '</div>'; }).join('')
