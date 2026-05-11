@@ -1813,6 +1813,42 @@ function _dedupePhotos(photos) {
   });
 }
 
+function _dedupeAllPhotos() {
+  let cleaned = 0;
+  days.forEach(day => (day.stops||[]).forEach(stop => {
+    if (!stop.userPhotos || stop.userPhotos.length < 2) return;
+    const before = stop.userPhotos.length;
+    const seenFilenames = new Set();
+    stop.userPhotos.forEach(p => {
+      if (p && p.startsWith('http')) { const fn = _fingerprintFromUrl(p); if (fn) seenFilenames.add(fn); }
+    });
+    const seen = new Set();
+    stop.userPhotos = stop.userPhotos.filter(p => {
+      if (!p) return false;
+      if (p.startsWith('data:')) {
+        const fp = _photoFingerprint(p);
+        if (seenFilenames.has(fp) || seen.has('b64:'+fp)) return false;
+        seen.add('b64:'+fp); return true;
+      }
+      if (p.startsWith('http')) {
+        const fn = _fingerprintFromUrl(p) || p.slice(0,80);
+        if (seen.has(fn)) return false;
+        seen.add(fn); return true;
+      }
+      return false;
+    });
+    cleaned += before - stop.userPhotos.length;
+  }));
+  if (cleaned > 0) {
+    console.log('Deduped', cleaned, 'photos');
+    saveToStorage(); schedulePush();
+    renderStopList(); renderDetail();
+    showToast('Removed ' + cleaned + ' duplicate photo' + (cleaned>1?'s':''));
+  }
+  return cleaned;
+}
+
+
 function _mergePhotos(a, b) {
   const arr1 = Array.isArray(a) ? a : [];
   const arr2 = Array.isArray(b) ? b : [];
@@ -3865,7 +3901,7 @@ async function init() {
 
   // Clean invalid AND duplicate photos on every load
   _cleanInvalidPhotos();
-  _cleanDuplicatePhotos();
+  _dedupeAllPhotos();
 
   // Always render — never leave stuck on "Loading…"
   try { renderAll(); } catch(e) { console.warn('renderAll:', e); }
