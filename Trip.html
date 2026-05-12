@@ -2679,9 +2679,6 @@ async function verifyPhotosAgainstStorage() {
     } else {
       showToast('✅ All ' + kept + ' photos verified against ' + existingFiles.size + ' Storage files');
     }
-    } else {
-      showToast('✅ All ' + existingFiles.size + ' Storage files verified — no dead links');
-    }
   } catch(e) { showToast('⚠️ Verify failed: ' + e.message, true); }
 }
 
