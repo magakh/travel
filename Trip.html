@@ -2065,6 +2065,7 @@ async function _migratePhotosToStorage(daysData) {
           try {
             const url = await _uploadPhotoToStorage(p, 'd' + di + 's' + si + 'p' + pi);
             newPhotos.push(url); uploaded++;
+            _migratedFps.add(_photoFingerprint(p));
             _syncBarShow('☁️ Uploading photo ' + (uploaded+verified) + '/' + total, '#5c4db1', Math.min(85, 10 + ((uploaded+verified)/total)*75));
           } catch(e) { console.warn('photo upload fail:', e.message); newPhotos.push(p); }
 
@@ -2242,6 +2243,8 @@ function _syncBarHide() {
   } catch(e) {}
 }
 
+const _migratedFps = new Set(); // fingerprints already uploaded this session
+
 async function cloudSave(summary) {
   if (!supabaseReady() || !EDITOR_MODE) {
     if (!EDITOR_MODE) showToast('Not in edit mode — unlock first', true);
@@ -2291,9 +2294,11 @@ async function cloudSave(summary) {
     const btn = document.getElementById('saveBtn');
     if (btn) { btn.textContent = '✓'; btn.style.color = '#1a7a3a'; setTimeout(() => { btn.textContent = '💾'; btn.style.color = '#88d8a0'; }, 2000); }
 
-    // After successful save, migrate photos to Storage in background (non-blocking)
-    const hasBase64 = data.days.some(d => (d.stops||[]).some(s => (s.userPhotos||[]).some(p => p && p.startsWith('data:'))));
-    if (hasBase64 && summary !== 'photo-migrate') {
+    // Migrate new base64 photos to Storage — only if there are un-migrated ones
+    const hasNewBase64 = data.days.some(d => (d.stops||[]).some(s =>
+      (s.userPhotos||[]).some(p => p && p.startsWith('data:') && !_migratedFps.has(_photoFingerprint(p)))
+    ));
+    if (hasNewBase64 && summary !== 'photo-migrate') {
       setTimeout(() => _migrateAndResave(), 2000);
     }
     return true;
@@ -2329,8 +2334,13 @@ async function _migrateAndResave() {
     const sizeMB = (JSON.stringify(migratedPayload).length / 1024 / 1024).toFixed(1);
     _syncBarShow('☁️ Saving ' + sizeMB + 'MB with photo URLs…', '#5c4db1', 90);
     const { error } = await supa.from('trips').upsert(migratedPayload, { onConflict: 'id' });
-    if (error) { _syncBarShow('⚠️ Photo upload failed: ' + error.message.slice(0,50), '#e74c3c', 100); setTimeout(_syncBarHide, 5000); }
-    else { _syncBarShow('✅ Photos in Storage (' + sizeMB + 'MB saved)', '#1a7a3a', 100); setTimeout(_syncBarHide, 3000); }
+    if (error) {
+      _syncBarShow('⚠️ Photo save failed: ' + error.message.slice(0,50), '#e74c3c', 100);
+      setTimeout(_syncBarHide, 5000);
+    } else {
+      _syncBarShow('✅ All ' + uploaded + ' photos in Storage — ' + sizeMB + 'MB saved', '#1a7a3a', 100);
+      setTimeout(_syncBarHide, 4000);
+    }
   } catch(e) { console.warn('_migrateAndResave failed:', e.message); _syncBarHide(); }
 }
 
