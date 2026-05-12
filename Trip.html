@@ -2141,53 +2141,77 @@ let _syncAnimInterval = null;
 // ── PHOTO DRAG-REORDER ─────────────────────────────────────────────
 function _initPhotoDrag() {
   if (!EDITOR_MODE) return;
-  let ghost = null, dragSrc = null, srcDay, srcStop, srcIdx, startX, startY;
+  let ghost = null, dragSrc = null, srcDay, srcStop, srcIdx;
+  let longPressTimer = null, isDragging = false;
+
+  function _cleanGhost() {
+    if (ghost) { ghost.remove(); ghost = null; }
+    if (dragSrc) { dragSrc.style.opacity = ''; dragSrc = null; }
+    document.querySelectorAll('.photo-drag-item').forEach(x => x.style.outline = '');
+    isDragging = false;
+    if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+  }
 
   document.querySelectorAll('.photo-drag-item').forEach(el => {
     el.addEventListener('touchstart', e => {
       const t = e.touches[0];
-      startX = t.clientX; startY = t.clientY;
       srcDay = +el.dataset.day; srcStop = +el.dataset.stop; srcIdx = +el.dataset.idx;
-      dragSrc = el;
-      const r = el.getBoundingClientRect();
-      ghost = el.cloneNode(true);
-      ghost.style.cssText = 'position:fixed;z-index:9999;width:'+r.width+'px;height:'+r.height+'px;left:'+r.left+'px;top:'+r.top+'px;opacity:0.8;pointer-events:none;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.4);';
-      document.body.appendChild(ghost);
-      el.style.opacity = '0.3';
+
+      // Long press (400ms) activates drag — short taps open photo normally
+      longPressTimer = setTimeout(() => {
+        isDragging = true;
+        dragSrc = el;
+        const r = el.getBoundingClientRect();
+        ghost = el.cloneNode(true);
+        ghost.style.cssText = 'position:fixed;z-index:9999;width:'+r.width+'px;height:'+r.height+'px;'
+          + 'left:'+r.left+'px;top:'+r.top+'px;opacity:0.85;pointer-events:none;border-radius:10px;'
+          + 'box-shadow:0 10px 30px rgba(0,0,0,0.5);transform:scale(1.05);transition:none;';
+        document.body.appendChild(ghost);
+        el.style.opacity = '0.3';
+        // Haptic feedback if supported
+        if (navigator.vibrate) navigator.vibrate(30);
+      }, 400);
     }, {passive: true});
 
     el.addEventListener('touchmove', e => {
-      if (!ghost) return;
-      e.preventDefault();
+      if (!isDragging) {
+        // Not yet dragging — cancel long press if moved
+        clearTimeout(longPressTimer); longPressTimer = null;
+        return; // let scroll happen normally
+      }
+      e.preventDefault(); // Only block scroll when actually dragging
       const t = e.touches[0];
       const r = dragSrc.getBoundingClientRect();
-      ghost.style.left = (r.left + t.clientX - startX) + 'px';
-      ghost.style.top = (r.top + t.clientY - startY) + 'px';
+      const dx = t.clientX - (r.left + r.width/2);
+      const dy = t.clientY - (r.top + r.height/2);
+      ghost.style.left = (r.left + dx + r.width/2 - parseFloat(ghost.style.width)/2) + 'px';
+      ghost.style.top  = (r.top  + dy + r.height/2 - parseFloat(ghost.style.height)/2) + 'px';
+
       document.querySelectorAll('.photo-drag-item').forEach(x => x.style.outline = '');
       const over = document.elementFromPoint(t.clientX, t.clientY);
       const item = over && over.closest('.photo-drag-item');
-      if (item && item !== dragSrc) item.style.outline = '2px solid #1a73e8';
+      if (item && item !== dragSrc) item.style.outline = '3px solid #1a73e8';
     }, {passive: false});
 
-    el.addEventListener('touchend', e => {
-      if (!ghost) return;
-      ghost.remove(); ghost = null;
-      dragSrc.style.opacity = '';
-      document.querySelectorAll('.photo-drag-item').forEach(x => x.style.outline = '');
-      const t = e.changedTouches[0];
-      const over = document.elementFromPoint(t.clientX, t.clientY);
+    const onEnd = e => {
+      clearTimeout(longPressTimer); longPressTimer = null;
+      if (!isDragging) { _cleanGhost(); return; }
+      const t = (e.changedTouches || e.touches)[0];
+      const over = t ? document.elementFromPoint(t.clientX, t.clientY) : null;
       const item = over && over.closest('.photo-drag-item');
-      if (!item || item === dragSrc) return;
+      _cleanGhost();
+      if (!item || +item.dataset.idx === srcIdx) return;
       const toIdx = +item.dataset.idx;
-      if (toIdx === srcIdx) return;
       const stop = days[srcDay].stops[srcStop];
       const [p] = stop.userPhotos.splice(srcIdx, 1);
       stop.userPhotos.splice(toIdx, 0, p);
       const meta = stop.userPhotosMeta || [];
-      if (meta.length > srcIdx) { const [m] = meta.splice(srcIdx, 1); meta.splice(toIdx, 0, m); stop.userPhotosMeta = meta; }
+      if (meta.length > srcIdx) { const [m] = meta.splice(srcIdx,1); meta.splice(toIdx,0,m); }
       saveToStorage(); schedulePush();
       renderDetail(); renderStopList();
-    }, {passive: true});
+    };
+    el.addEventListener('touchend', onEnd, {passive: true});
+    el.addEventListener('touchcancel', () => { clearTimeout(longPressTimer); longPressTimer=null; _cleanGhost(); }, {passive: true});
   });
 }
 
