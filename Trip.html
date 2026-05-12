@@ -2138,6 +2138,59 @@ let _syncFailCount = 0;
 let _syncBackoffTimer = null;
 let _syncAnimInterval = null;
 
+// ── PHOTO DRAG-REORDER ─────────────────────────────────────────────
+function _initPhotoDrag() {
+  if (!EDITOR_MODE) return;
+  let ghost = null, dragSrc = null, srcDay, srcStop, srcIdx, startX, startY;
+
+  document.querySelectorAll('.photo-drag-item').forEach(el => {
+    el.addEventListener('touchstart', e => {
+      const t = e.touches[0];
+      startX = t.clientX; startY = t.clientY;
+      srcDay = +el.dataset.day; srcStop = +el.dataset.stop; srcIdx = +el.dataset.idx;
+      dragSrc = el;
+      const r = el.getBoundingClientRect();
+      ghost = el.cloneNode(true);
+      ghost.style.cssText = 'position:fixed;z-index:9999;width:'+r.width+'px;height:'+r.height+'px;left:'+r.left+'px;top:'+r.top+'px;opacity:0.8;pointer-events:none;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.4);';
+      document.body.appendChild(ghost);
+      el.style.opacity = '0.3';
+    }, {passive: true});
+
+    el.addEventListener('touchmove', e => {
+      if (!ghost) return;
+      e.preventDefault();
+      const t = e.touches[0];
+      const r = dragSrc.getBoundingClientRect();
+      ghost.style.left = (r.left + t.clientX - startX) + 'px';
+      ghost.style.top = (r.top + t.clientY - startY) + 'px';
+      document.querySelectorAll('.photo-drag-item').forEach(x => x.style.outline = '');
+      const over = document.elementFromPoint(t.clientX, t.clientY);
+      const item = over && over.closest('.photo-drag-item');
+      if (item && item !== dragSrc) item.style.outline = '2px solid #1a73e8';
+    }, {passive: false});
+
+    el.addEventListener('touchend', e => {
+      if (!ghost) return;
+      ghost.remove(); ghost = null;
+      dragSrc.style.opacity = '';
+      document.querySelectorAll('.photo-drag-item').forEach(x => x.style.outline = '');
+      const t = e.changedTouches[0];
+      const over = document.elementFromPoint(t.clientX, t.clientY);
+      const item = over && over.closest('.photo-drag-item');
+      if (!item || item === dragSrc) return;
+      const toIdx = +item.dataset.idx;
+      if (toIdx === srcIdx) return;
+      const stop = days[srcDay].stops[srcStop];
+      const [p] = stop.userPhotos.splice(srcIdx, 1);
+      stop.userPhotos.splice(toIdx, 0, p);
+      const meta = stop.userPhotosMeta || [];
+      if (meta.length > srcIdx) { const [m] = meta.splice(srcIdx, 1); meta.splice(toIdx, 0, m); stop.userPhotosMeta = meta; }
+      saveToStorage(); schedulePush();
+      renderDetail(); renderStopList();
+    }, {passive: true});
+  });
+}
+
 function _syncBarShow(label, color, pct) {
   try {
     const bar = document.getElementById('syncBar');
@@ -4483,13 +4536,14 @@ function renderDetail() {
         <button onclick="addStopPhotos(${currentStop},${currentDay})" style="background:#1a1a1a;color:#fff;border:none;border-radius:20px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;">+ Add</button>
       </div>
       ${(s.userPhotos && s.userPhotos.length)
-        ? '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">'
+        ? '<div id="photoGrid-'+currentDay+'-'+currentStop+'" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">'
           + s.userPhotos.filter(_isValidPhoto).map(function(p,pi){
               const safe = (p||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
-              return '<div style="position:relative;aspect-ratio:1;">'
-                + '<img src="'+safe+'" onclick="_openPhoto('+currentDay+','+currentStop+','+pi+')" onerror="_onPhotoError(this)" style="width:100%;height:100%;object-fit:cover;border-radius:8px;cursor:pointer;">'
-                + '<button onclick="event.stopPropagation();deleteStopPhoto('+currentStop+','+currentDay+','+pi+')" style="position:absolute;top:3px;right:3px;background:rgba(0,0,0,0.6);border:none;color:#fff;border-radius:50%;width:22px;height:22px;font-size:11px;cursor:pointer;line-height:1;">✕</button>'
+              return '<div class="photo-drag-item" data-day="'+currentDay+'" data-stop="'+currentStop+'" data-idx="'+pi+'" style="position:relative;aspect-ratio:1;touch-action:none;cursor:grab;">'
+                + '<img src="'+safe+'" onclick="_openPhoto('+currentDay+','+currentStop+','+pi+')" onerror="_onPhotoError(this)" style="width:100%;height:100%;object-fit:cover;border-radius:8px;pointer-events:none;user-select:none;">'
+                + (EDITOR_MODE ? '<button onclick="event.stopPropagation();deleteStopPhoto('+currentStop+','+currentDay+','+pi+')" style="position:absolute;top:3px;right:3px;background:rgba(0,0,0,0.6);border:none;color:#fff;border-radius:50%;width:22px;height:22px;font-size:11px;cursor:pointer;line-height:1;">✕</button>' : '')
                 + (EDITOR_MODE ? '<button onclick="event.stopPropagation();showMovePhotoSheet('+currentStop+','+currentDay+','+pi+')" style="position:absolute;bottom:3px;right:3px;background:rgba(26,115,232,0.85);border:none;color:#fff;border-radius:50%;width:22px;height:22px;font-size:13px;cursor:pointer;line-height:22px;text-align:center;">⇄</button>' : '')
+                + '<div style="position:absolute;top:3px;left:3px;background:rgba(0,0,0,0.4);border-radius:3px;padding:1px 3px;font-size:10px;color:rgba(255,255,255,0.8);pointer-events:none;">⠿</div>'
                 + '</div>';
             }).join('')
           + '</div>'
@@ -4585,6 +4639,7 @@ function renderDetail() {
   updateBottomNav();
   // Render food section separately (avoids nested template literal issues)
   renderFoodSection(days[currentDay].stops[currentStop], currentStop, currentDay);
+  setTimeout(_initPhotoDrag, 50); // Init touch drag-reorder for photos
 }
 
 // ── TEXT TO SPEECH ────────────────────────────────────────────────
