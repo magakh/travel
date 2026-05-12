@@ -1913,6 +1913,16 @@ function applyRemoteData(row) {
       if (dd.note) days[i].note = dd.note;
     });
   }
+
+  // Remove phantom days beyond numDays that have no stops (e.g. "Jul 10" from a mis-saved setting)
+  const maxDays = APP_CONFIG.numDays || 4;
+  if (days.length > maxDays) {
+    const before = days.length;
+    while (days.length > maxDays && !(days[days.length-1].stops && days[days.length-1].stops.length)) {
+      days.pop();
+    }
+    if (days.length < before) schedulePush(); // persist the cleanup
+  }
   if (Array.isArray(d.completed)) completed = d.completed;
   if (d.hotel) {
     window.HOTEL_DATA = d.hotel;
