@@ -4397,18 +4397,26 @@ function goBackToList() {
 // ── STOP PHOTOS ──────────────────────────────────────────────────
 async function resizeStopPhoto(file, maxPx) {
   return new Promise(function(resolve, reject) {
+    // Reject formats the canvas can't decode (e.g. HEIC from iPhone)
+    if (file.type && (file.type === 'image/heic' || file.type === 'image/heif')) {
+      reject(new Error('HEIC/HEIF not supported — convert to JPEG first')); return;
+    }
     const img = new Image();
     const url = URL.createObjectURL(file);
     img.onload = function() {
       URL.revokeObjectURL(url);
+      if (!img.width || !img.height) { reject(new Error('Image has zero dimensions')); return; }
       const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
       const c = document.createElement('canvas');
-      c.width = Math.round(img.width * scale);
-      c.height = Math.round(img.height * scale);
+      c.width = Math.max(1, Math.round(img.width * scale));
+      c.height = Math.max(1, Math.round(img.height * scale));
       c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-      resolve(c.toDataURL('image/jpeg', 0.65));
+      const dataUrl = c.toDataURL('image/jpeg', 0.65);
+      // A valid JPEG data URI is always well over 1 KB — anything shorter is a blank canvas
+      if (!dataUrl || dataUrl.length < 1000) { reject(new Error('Canvas produced blank output')); return; }
+      resolve(dataUrl);
     };
-    img.onerror = reject;
+    img.onerror = function() { URL.revokeObjectURL(url); reject(new Error('Could not decode image')); };
     img.src = url;
   });
 }
