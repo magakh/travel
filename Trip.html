@@ -4687,8 +4687,8 @@ function renderDetail() {
         ? '<div id="photoGrid-'+currentDay+'-'+currentStop+'" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">'
           + s.userPhotos.filter(_isValidPhoto).map(function(p,pi){
               const safe = (p||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
-              return '<div class="photo-drag-item" data-day="'+currentDay+'" data-stop="'+currentStop+'" data-idx="'+pi+'" style="position:relative;aspect-ratio:1;cursor:grab;">'
-                + '<img src="'+safe+'" onclick="_openPhoto('+currentDay+','+currentStop+','+pi+')" onerror="_onPhotoError(this)" style="width:100%;height:100%;object-fit:cover;border-radius:8px;pointer-events:none;user-select:none;">'
+              return '<div class="photo-drag-item" data-day="'+currentDay+'" data-stop="'+currentStop+'" data-idx="'+pi+'" style="position:relative;aspect-ratio:1;cursor:pointer;" onclick="_openPhoto('+currentDay+','+currentStop+','+pi+')">'
+                + '<img src="'+safe+'" onerror="_onPhotoError(this)" style="width:100%;height:100%;object-fit:cover;border-radius:8px;pointer-events:none;user-select:none;">'
                 + (EDITOR_MODE ? '<button onclick="event.stopPropagation();deleteStopPhoto('+currentStop+','+currentDay+','+pi+')" style="position:absolute;top:3px;right:3px;background:rgba(0,0,0,0.6);border:none;color:#fff;border-radius:50%;width:22px;height:22px;font-size:11px;cursor:pointer;line-height:1;">✕</button>' : '')
                 + (EDITOR_MODE ? '<button onclick="event.stopPropagation();showMovePhotoSheet('+currentStop+','+currentDay+','+pi+')" style="position:absolute;bottom:3px;right:3px;background:rgba(26,115,232,0.85);border:none;color:#fff;border-radius:50%;width:22px;height:22px;font-size:13px;cursor:pointer;line-height:22px;text-align:center;">⇄</button>' : '')
                 + '<div style="position:absolute;top:3px;left:3px;background:rgba(0,0,0,0.4);border-radius:3px;padding:1px 3px;font-size:10px;color:rgba(255,255,255,0.8);pointer-events:none;">⠿</div>'
