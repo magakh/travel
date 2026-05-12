@@ -1511,6 +1511,7 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
           <button onclick="exportFile()" style="flex:1;padding:11px;border-radius:10px;border:1px solid #444;background:#1e1e1e;color:#ccc;font-size:13px;font-weight:700;cursor:pointer;">📤 Export JSON</button>
           <button onclick="document.getElementById('import-input').click()" style="flex:1;padding:11px;border-radius:10px;border:1px solid #444;background:#1e1e1e;color:#ccc;font-size:13px;font-weight:700;cursor:pointer;">📥 Import JSON</button>
         </div>
+        <button onclick="showPhotoDiagnostics()" style="width:100%;padding:11px;border-radius:10px;border:1px solid #555;background:#1a1a1a;color:#aaa;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:6px;">🔍 Show photo filenames (diagnostic)</button>
         <button onclick="clearBrokenPhotoUrls()" style="width:100%;padding:11px;border-radius:10px;border:1px solid #c0392b;background:#1a0a0a;color:#e74c3c;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:6px;">🗑 Clear broken photo links (re-add from phone)</button>
         <button onclick="forcePushToSupabase()" style="width:100%;padding:12px;border-radius:10px;border:2px solid #1a7a3a;background:#0d2e18;color:#4caf50;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:6px;">☁️ Force push everything to Supabase</button>
         <button onclick="forceLoadFromSupabase()" style="width:100%;padding:12px;border-radius:10px;border:2px solid #1a73e8;background:#0d1e3a;color:#64b5f6;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:8px;">🔄 Force load fresh from Supabase</button>
@@ -2640,6 +2641,36 @@ function clearBrokenPhotoUrls() {
   renderStopList();
   renderDetail();
   showToast(cleared > 0 ? '🗑 Removed ' + cleared + ' broken link' + (cleared>1?'s':'') : 'No broken links found');
+}
+
+function showPhotoDiagnostics() {
+  const lines = [];
+  days.forEach((day, di) => {
+    (day.stops || []).forEach((stop, si) => {
+      if (!stop.userPhotos || !stop.userPhotos.length) return;
+      lines.push('\n📍 ' + stop.name + ' (d' + di + 's' + si + ') — ' + stop.userPhotos.length + ' photos:');
+      stop.userPhotos.forEach((p, pi) => {
+        if (!p) { lines.push('  [' + pi + '] NULL'); return; }
+        if (p.startsWith('data:')) {
+          lines.push('  [' + pi + '] BASE64 fp:' + _photoFingerprint(p));
+        } else if (p.startsWith('http')) {
+          const fn = _fingerprintFromUrl(p);
+          const isOld = /\/d\d+s\d+p\d+_/.test(p);
+          lines.push('  [' + pi + '] ' + (isOld ? '⚠️OLD ' : '✅ ') + (fn || 'unknown') + '.jpg');
+        } else {
+          lines.push('  [' + pi + '] INVALID: ' + p.slice(0, 60));
+        }
+      });
+    });
+  });
+
+  const text = lines.join('\n') || 'No photos found';
+  const el = document.createElement('div');
+  el.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.85);display:flex;flex-direction:column;padding:20px;overflow:auto;';
+  el.innerHTML = '<div style="background:#1a1a1a;border-radius:12px;padding:16px;color:#ccc;font-size:11px;font-family:monospace;white-space:pre-wrap;max-height:80vh;overflow:auto;">'
+    + '<b style="color:#fff;font-size:14px;">📷 Photo Diagnostic</b>\n' + text.replace(/</g,'&lt;')
+    + '</div><button onclick="this.parentNode.remove()" style="margin-top:12px;padding:12px 24px;background:#333;border:none;color:#fff;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;">Close</button>';
+  document.body.appendChild(el);
 }
 
 async function forcePushToSupabase() {
