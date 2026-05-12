@@ -1904,12 +1904,14 @@ function applyRemoteData(row) {
     d.days.forEach((dd, i) => {
       if (!days[i]) days[i] = { title: '', note: '', stops: [] };
       const incoming = (dd.stops || []).map(sanitizeStop);
-      // Smart merge: keep local base64 + add new URLs from other devices
+      // Supabase wins for Storage URLs — only add local base64 not already in Supabase
+      // This prevents stale localStorage URLs from polluting good Supabase data
       incoming.forEach((s, si) => {
         const cur = days[i].stops && days[i].stops[si];
-        const localPhotos = (cur && cur.userPhotos) || [];
         const remotePhotos = (s.userPhotos || []).filter(p => _isValidPhoto(p) && (_isAliveStorageUrl(p) || p.startsWith('data:')));
-        s.userPhotos = _dedupePhotos(_mergePhotos(localPhotos, remotePhotos));
+        // Only add local base64 (new photos not yet uploaded) — NOT local URLs (could be stale)
+        const localNewBase64 = (cur && cur.userPhotos || []).filter(p => p && p.startsWith('data:'));
+        s.userPhotos = _dedupePhotos(_mergePhotos(remotePhotos, localNewBase64));
       });
       days[i].stops = incoming;
       if (dd.title) days[i].title = dd.title;
@@ -2616,14 +2618,20 @@ function saveToStorage() {
   showToast('Saved ✓');
 }
 function clearBrokenPhotoUrls() {
-  if (!confirm('This will remove broken photo links from all stops. You\'ll need to re-add photos from your phone. Continue?')) return;
+  if (!confirm('This removes blank/broken photo links (old format that no longer exist in Storage). Good photos are NOT affected. Continue?')) return;
   let cleared = 0;
   days.forEach(day => {
     (day.stops || []).forEach(stop => {
       if (!stop.userPhotos) return;
       const before = stop.userPhotos.length;
-      // Remove Storage URLs (they point to deleted files) — keep any remaining base64
-      stop.userPhotos = stop.userPhotos.filter(p => p && p.startsWith('data:'));
+      stop.userPhotos = stop.userPhotos.filter(p => {
+        if (!p) return false;
+        if (p.startsWith('data:')) return true; // keep base64
+        if (!p.startsWith('http')) return false; // remove invalid strings
+        // Remove OLD positional format (d0s2p10_xxx.jpg) — files deleted from Storage
+        if (/\/d\d+s\d+p\d+_/.test(p)) return false;
+        return true; // keep all other Storage URLs
+      });
       cleared += before - stop.userPhotos.length;
     });
   });
@@ -2631,7 +2639,7 @@ function clearBrokenPhotoUrls() {
   schedulePush();
   renderStopList();
   renderDetail();
-  showToast('🗑 Cleared ' + cleared + ' broken links — re-add photos from your phone');
+  showToast(cleared > 0 ? '🗑 Removed ' + cleared + ' broken link' + (cleared>1?'s':'') : 'No broken links found');
 }
 
 async function forcePushToSupabase() {
