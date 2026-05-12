@@ -1786,9 +1786,14 @@ function getTripCenter() {
 
 // Extract fingerprint from Storage URL filename (e.g. .../5hs66w.jpg?token=... → "5hs66w")
 function _fingerprintFromUrl(url) {
-  // Extract stable filename (fingerprint) from Storage URL — ignores ?token= part
-  const m = url && url.match(/\/([a-z0-9]+)\.jpg(?:\?|$)/i);
-  return m ? m[1] : null;
+  if (!url) return null;
+  // New format: /5hs66w.jpg  (fingerprint only)
+  // Old format: /d0s2p10_5hs66w.jpg  (positional_fingerprint)
+  const m = url.match(/\/([a-z0-9]+(?:_[a-z0-9]+)*)\.jpg(?:\?|$)/i);
+  if (!m) return null;
+  // For old format, use the part after the last underscore (the actual fingerprint)
+  const parts = m[1].split('_');
+  return parts[parts.length - 1];
 }
 
 // Merge two photo arrays intelligently:
@@ -1903,7 +1908,7 @@ function applyRemoteData(row) {
       incoming.forEach((s, si) => {
         const cur = days[i].stops && days[i].stops[si];
         const localPhotos = (cur && cur.userPhotos) || [];
-        const remotePhotos = s.userPhotos || [];
+        const remotePhotos = (s.userPhotos || []).filter(p => _isValidPhoto(p) && (_isAliveStorageUrl(p) || p.startsWith('data:')));
         s.userPhotos = _dedupePhotos(_mergePhotos(localPhotos, remotePhotos));
       });
       days[i].stops = incoming;
@@ -4030,7 +4035,7 @@ async function init() {
       remoteDays.forEach((dd, i) => {
         if (!dd || !dd.stops || !days[i]) return;
         dd.stops.forEach((rs, si) => {
-          const remotePhotos = (rs.userPhotos || []).filter(_isValidPhoto);
+          const remotePhotos = (rs.userPhotos || []).filter(p => _isValidPhoto(p) && (_isAliveStorageUrl(p) || p.startsWith('data:')));
           if (!remotePhotos.length) return;
           const cur = days[i].stops && days[i].stops[si];
           if (!cur) return;
@@ -4384,6 +4389,14 @@ function addStopPhotos(stopIdx, dayIdx) {
     }
   };
   setTimeout(function(){ input.click(); }, 30);
+}
+
+function _isAliveStorageUrl(url) {
+  if (!url || !url.startsWith('http')) return false;
+  if (!url.includes('supabase.co/storage')) return false;
+  // Old positional format (d0s2p10_xxx.jpg) — files deleted from Storage, skip
+  if (/\/d\d+s\d+p\d+_/.test(url)) return false;
+  return true;
 }
 
 function _isValidPhoto(p) {
