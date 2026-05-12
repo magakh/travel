@@ -2645,35 +2645,42 @@ function clearBrokenPhotoUrls() {
 }
 
 async function verifyPhotosAgainstStorage() {
-  showToast('🔍 Checking photos against Storage…');
-  try {
-    // Get actual list of files in Storage
-    const { data: files, error } = await supa.storage.from(PHOTO_BUCKET).list(TRIP_ID + '/');
-    if (error) { showToast('⚠️ Could not list Storage: ' + error.message, true); return; }
-    const existingFiles = new Set((files || []).map(f => f.name));
-    console.log('Files in Storage:', [...existingFiles]);
+  showToast('🔍 Verifying photos… (checking each URL)');
+  let checked = 0, removed = 0, kept = 0;
 
-    let removed = 0;
+  // Collect all Storage URLs
+  const allUrls = [];
+  days.forEach((day, di) => (day.stops || []).forEach((stop, si) => {
+    (stop.userPhotos || []).forEach((p, pi) => {
+      if (p && p.startsWith('http')) allUrls.push({ di, si, pi, url: p });
+    });
+  }));
+
+  // Check each URL with a HEAD request
+  const deadUrls = new Set();
+  await Promise.all(allUrls.map(async ({ url }) => {
+    try {
+      const r = await fetch(url, { method: 'GET', headers: { Range: 'bytes=0-0' } });
+      if (r.ok || r.status === 206) { kept++; }
+      else { deadUrls.add(url); removed++; }
+    } catch(e) { deadUrls.add(url); removed++; }
+    checked++;
+    if (checked % 5 === 0) _syncBarShow('🔍 Checked ' + checked + '/' + allUrls.length + ' photos…', '#1a73e8', Math.round(checked/allUrls.length*90));
+  }));
+
+  _syncBarHide();
+
+  if (removed > 0) {
     days.forEach(day => (day.stops || []).forEach(stop => {
       if (!stop.userPhotos) return;
-      const before = stop.userPhotos.length;
-      stop.userPhotos = stop.userPhotos.filter(p => {
-        if (!p || p.startsWith('data:')) return true; // keep base64
-        const fn = _fingerprintFromUrl(p);
-        if (!fn) return true; // can't determine filename, keep
-        if (!existingFiles.has(fn + '.jpg')) { removed++; return false; } // not in Storage!
-        return true;
-      });
+      stop.userPhotos = stop.userPhotos.filter(p => !deadUrls.has(p));
     }));
-
-    if (removed > 0) {
-      saveToStorage(); schedulePush();
-      renderStopList(); renderDetail();
-      showToast('🗑 Removed ' + removed + ' photo' + (removed>1?'s':'') + ' not found in Storage');
-    } else {
-      showToast('✅ All ' + existingFiles.size + ' Storage files verified — no dead links');
-    }
-  } catch(e) { showToast('⚠️ Verify failed: ' + e.message, true); }
+    saveToStorage(); schedulePush();
+    renderStopList(); renderDetail();
+    showToast('🗑 Removed ' + removed + ' dead photo' + (removed>1?'s':'') + ', kept ' + kept);
+  } else {
+    showToast('✅ All ' + kept + ' photos verified — none broken');
+  }
 }
 
 function showPhotoDiagnostics() {
