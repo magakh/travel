@@ -1516,10 +1516,10 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
               const m = document.getElementById('unitMetricPill');
               const i = document.getElementById('unitImperialPill');
               if (!m||!i) return;
-              m.style.cssText = 'padding:5px 16px;border-radius:18px;font-size:13px;font-weight:700;transition:all 0.15s;'
-                + (imp ? 'color:#999;background:transparent;' : 'background:#1a1a1a;color:#fff;box-shadow:0 1px 4px rgba(0,0,0,0.2);');
-              i.style.cssText = 'padding:5px 16px;border-radius:18px;font-size:13px;font-weight:700;transition:all 0.15s;'
-                + (imp ? 'background:#1a1a1a;color:#fff;box-shadow:0 1px 4px rgba(0,0,0,0.2);' : 'color:#999;background:transparent;');
+              m.style.cssText = 'padding:5px 16px;border-radius:18px;font-size:13px;font-weight:700;transition:all 0.2s;'
+                + (imp ? 'color:#555;background:transparent;' : 'background:#fff;color:#1a7a3a;box-shadow:0 1px 4px rgba(0,0,0,0.12);');
+              i.style.cssText = 'padding:5px 16px;border-radius:18px;font-size:13px;font-weight:700;transition:all 0.2s;'
+                + (imp ? 'background:#fff;color:#1a7a3a;box-shadow:0 1px 4px rgba(0,0,0,0.12);' : 'color:#555;background:transparent;');
             }
             refresh();
             window._updateUnitsBtn = refresh;
