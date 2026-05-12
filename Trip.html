@@ -2322,27 +2322,33 @@ async function _migrateAndResave() {
     const data = getSaveData();
     const hasBase64 = data.days.some(d => (d.stops||[]).some(s => (s.userPhotos||[]).some(p => p && p.startsWith('data:'))));
     if (!hasBase64) return;
-    _syncBarShow('☁️ Uploading photos to Storage…', '#5c4db1', 10);
+    _syncBarShow('\u2601\ufe0f Uploading photos to Storage\u2026', '#5c4db1', 10);
     const migratedDays = await _migratePhotosToStorage(data.days);
     const migratedPayload = {
-      id: TRIP_ID,
-      title: APP_CONFIG.title,
-      subtitle: APP_CONFIG.subtitle,
-      config: getTripConfig(),
-      data: { ...data, days: migratedDays }
+      id: TRIP_ID, title: APP_CONFIG.title, subtitle: APP_CONFIG.subtitle,
+      config: getTripConfig(), data: { ...data, days: migratedDays }
     };
     const sizeMB = (JSON.stringify(migratedPayload).length / 1024 / 1024).toFixed(1);
-    _syncBarShow('☁️ Saving ' + sizeMB + 'MB with photo URLs…', '#5c4db1', 90);
+    _syncBarShow('\u2601\ufe0f Saving ' + sizeMB + 'MB with photo URLs\u2026', '#5c4db1', 90);
     const { error } = await supa.from('trips').upsert(migratedPayload, { onConflict: 'id' });
     if (error) {
-      _syncBarShow('⚠️ Photo save failed: ' + error.message.slice(0,50), '#e74c3c', 100);
+      _syncBarShow('\u26a0\ufe0f Photo save failed: ' + error.message.slice(0,50), '#e74c3c', 100);
       setTimeout(_syncBarHide, 5000);
     } else {
-      _syncBarShow('✅ All ' + uploaded + ' photos in Storage — ' + sizeMB + 'MB saved', '#1a7a3a', 100);
-      setTimeout(_syncBarHide, 4000);
+      // CRITICAL: update local days[] with Storage URLs to stop infinite re-migration
+      migratedDays.forEach((md, i) => {
+        if (!days[i] || !md.stops) return;
+        md.stops.forEach((ms, si) => {
+          if (days[i].stops[si] && ms.userPhotos) days[i].stops[si].userPhotos = ms.userPhotos;
+        });
+      });
+      saveToStorage(); // localStorage now has URLs — hasBase64 will be false next time
+      _syncBarShow('\u2705 Photos uploaded & saved (' + sizeMB + 'MB)', '#1a7a3a', 100);
+      setTimeout(_syncBarHide, 3000);
     }
   } catch(e) { console.warn('_migrateAndResave failed:', e.message); _syncBarHide(); }
 }
+
 
 // Build a stable JSON signature of the "meaningful" trip state. Used to
 // decide whether a realtime event actually changed anything vs. being an
