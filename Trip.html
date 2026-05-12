@@ -2076,7 +2076,7 @@ async function _migratePhotosToStorage(daysData) {
             newPhotos.push(url); uploaded++;
             _migratedFps.add(_photoFingerprint(p));
             _syncBarShow('☁️ Uploading photo ' + (uploaded+verified) + '/' + total, '#5c4db1', Math.min(85, 10 + ((uploaded+verified)/total)*75));
-          } catch(e) { console.warn('photo upload fail:', e.message); newPhotos.push(p); }
+          } catch(e) { console.warn('photo upload fail:', e.message); /* skip broken upload — don't save blank */ }
 
         } else if (p.includes(APP_CONFIG.supabaseUrl + '/storage')) {
           // Our own Storage URL — extract filename and get a fresh signed URL
@@ -4525,7 +4525,13 @@ function _cleanInvalidPhotos() {
   days.forEach(day => (day.stops||[]).forEach(stop => {
     if (!stop.userPhotos) return;
     const before = stop.userPhotos.length;
-    stop.userPhotos = stop.userPhotos.filter(_isValidPhoto);
+    stop.userPhotos = stop.userPhotos.filter(p => {
+      if (!_isValidPhoto(p)) return false;
+      // Strip base64 blobs that never made it to Storage (still data: URI after sync)
+      // These are the "blank" images — they failed the Storage upload silently
+      if (p.startsWith('data:') && p.length < 5000) return false; // tiny = blank canvas
+      return true;
+    });
     cleaned += before - stop.userPhotos.length;
   }));
   if (cleaned > 0) { saveToStorage(); console.log('Cleaned', cleaned, 'invalid photo entries'); }
