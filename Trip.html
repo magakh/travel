@@ -4247,13 +4247,13 @@ function addStopPhotos(stopIdx, dayIdx) {
     if (!files.length) return;
     const s = days[dayIdx].stops[stopIdx];
     if (!s.userPhotos) s.userPhotos = [];
+    if (!s.userPhotosMeta) s.userPhotosMeta = [];
     showToast('⏳ Resizing ' + files.length + ' photo' + (files.length>1?'s':'') + '…');
     let added = 0;
     for (const file of files) {
       try {
         const b64 = await resizeStopPhoto(file, 1200);
         const fp = _photoFingerprint(b64);
-        // Check if this photo already exists (same fingerprint as base64 or Storage URL filename)
         const alreadyExists = s.userPhotos.some(p => {
           if (p && p.startsWith('data:')) return _photoFingerprint(p) === fp;
           if (p && p.startsWith('http')) return _fingerprintFromUrl(p) === fp;
@@ -4261,6 +4261,7 @@ function addStopPhotos(stopIdx, dayIdx) {
         });
         if (alreadyExists) { showToast('⚠️ Photo already added to this stop — skipped'); continue; }
         s.userPhotos.push(b64);
+        s.userPhotosMeta.push({ taken: file.lastModified || Date.now() });
         added++;
       } catch(e) {
         console.error('Photo resize failed:', e);
@@ -4268,6 +4269,15 @@ function addStopPhotos(stopIdx, dayIdx) {
       }
     }
     if (!added) return;
+
+    // Sort ALL photos in this stop by time taken (globally, across all upload sessions)
+    if (s.userPhotosMeta.length === s.userPhotos.length) {
+      const pairs = s.userPhotos.map((p, i) => ({ p, taken: s.userPhotosMeta[i] ? s.userPhotosMeta[i].taken : 0 }));
+      pairs.sort((a, b) => a.taken - b.taken);
+      s.userPhotos = pairs.map(x => x.p);
+      s.userPhotosMeta = pairs.map(x => ({ taken: x.taken }));
+    }
+
     renderStopList(); renderDetail();
     // Save and explicitly report cloud save result
     const ok = await doAutoPush();
