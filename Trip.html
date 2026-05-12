@@ -4242,7 +4242,8 @@ function addStopPhotos(stopIdx, dayIdx) {
   document.body.appendChild(input);
   input.onchange = async function() {
     document.body.removeChild(input);
-    const files = Array.from(input.files || []);
+    const files = Array.from(input.files || [])
+      .sort((a, b) => a.lastModified - b.lastModified); // oldest first = chronological order
     if (!files.length) return;
     const s = days[dayIdx].stops[stopIdx];
     if (!s.userPhotos) s.userPhotos = [];
