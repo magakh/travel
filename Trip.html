@@ -4340,9 +4340,10 @@ async function _deleteFromStorage(photoUrl) {
     const match = photoUrl.match(/\/trip-photos\/([^?#]+)/);
     if (!match) return;
     const path = decodeURIComponent(match[1]);
-    await supa.storage.from(PHOTO_BUCKET).remove([path]);
-    console.log('Deleted from storage:', path);
-  } catch(e) { console.warn('Storage delete failed:', e.message); }
+    const { error } = await supa.storage.from(PHOTO_BUCKET).remove([path]);
+    if (error) console.warn('Storage delete failed:', error.message);
+    else console.log('Deleted from Storage:', path);
+  } catch(e) { console.warn('Storage delete error:', e.message); }
 }
 
 function deleteStopPhoto(stopIdx, dayIdx, photoIdx) {
