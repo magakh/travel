@@ -1502,6 +1502,24 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
         <p class="gen-hint" style="margin-bottom:10px;font-size:12px;">Current trip: <strong id="setCurrentTrip">london2026</strong></p>
       </div>
 
+      <!-- ── UNITS ── -->
+      <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
+        <h3 style="margin:0 0 4px 0;font-size:14px;">📐 Measurement units</h3>
+        <p style="font-size:12px;color:#888;margin-bottom:10px;">Distances, temperatures and speed throughout the app</p>
+        <button id="unitsToggleBtn" onclick="_toggleUnits()" style="width:100%;padding:12px 16px;border-radius:12px;border:1px solid #444;background:#1e1e1e;color:#ccc;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:12px;transition:all 0.2s;"></button>
+        <p id="unitsHint" style="font-size:11px;color:#666;margin-top:6px;text-align:center;"></p>
+        <script>
+          (function() {
+            const btn = document.getElementById('unitsToggleBtn');
+            const hint = document.getElementById('unitsHint');
+            if (btn) _updateUnitsBtn(btn);
+            if (hint) hint.textContent = APP_CONFIG.units === 'imperial'
+              ? 'Showing: feet · miles · °F'
+              : 'Showing: meters · km · °C';
+          })();
+        </script>
+      </div>
+
       <!-- ── DATA ── -->
       <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
         <p style="font-size:12px;color:#888;margin-bottom:8px;">Data</p>
@@ -1659,6 +1677,7 @@ const DEFAULT_TRIP_CONFIG = {
   subtitle: 'May 7–10 · hidden gems · rooftop dining',
   numDays: 4,
   dayLabels: ['May 7', 'May 8', 'May 9', 'May 10'],
+  units: 'metric',   // 'metric' | 'imperial'
   dayTitles: [
     'May 7 — Arrival · Royal & River',
     'May 8 — Greenwich & the East',
@@ -1684,6 +1703,33 @@ const TRIP_ID = (new URLSearchParams(location.search).get('trip') || 'london2026
 
 // Merge default trip config with anything we've got locally for this trip
 APP_CONFIG = Object.assign({}, DEFAULT_TRIP_CONFIG, APP_CONFIG);
+
+// ── Unit helpers — respects APP_CONFIG.units ('metric' | 'imperial') ──────
+function _fmtDist(metres) {
+  if (APP_CONFIG.units === 'imperial') {
+    const ft = Math.round(metres * 3.28084);
+    return ft < 528 ? ft + ' ft' : (metres / 1609.344).toFixed(2).replace(/\.?0+$/, '') + ' mi';
+  }
+  return metres < 1000 ? Math.round(metres) + 'm' : (metres / 1000).toFixed(1) + 'km';
+}
+function _fmtTemp(celsius) {
+  if (APP_CONFIG.units === 'imperial') return Math.round(celsius * 9/5 + 32) + '°F';
+  return Math.round(celsius) + '°C';
+}
+function _toggleUnits() {
+  APP_CONFIG.units = APP_CONFIG.units === 'imperial' ? 'metric' : 'imperial';
+  try { localStorage.setItem('app_config_v2', JSON.stringify(APP_CONFIG)); } catch(e) {}
+  renderAll();
+  // Update the toggle button label if visible
+  const btn = document.getElementById('unitsToggleBtn');
+  if (btn) _updateUnitsBtn(btn);
+}
+function _updateUnitsBtn(btn) {
+  const isImp = APP_CONFIG.units === 'imperial';
+  btn.innerHTML = isImp
+    ? '<span style="opacity:0.5">📏 Metric</span> <span style="color:#fff;background:#1a73e8;padding:2px 10px;border-radius:20px;font-weight:800;">Imperial 🇺🇸</span>'
+    : '<span style="color:#fff;background:#1a7a3a;padding:2px 10px;border-radius:20px;font-weight:800;">🌍 Metric</span> <span style="opacity:0.5">Imperial 📏</span>';
+}
 
 // ── SUPABASE CLIENT ──────────────────────────────────────────────
 let supa = null;
@@ -5361,11 +5407,11 @@ function _showIdentifyCard(lm) {
   let distStr = '';
   if (lm.userLat && lm.lmLat) {
     const d = _haversineMetres(lm.userLat, lm.userLng, lm.lmLat, lm.lmLng);
-    distStr = d < 1000 ? Math.round(d) + 'm away' : (d/1000).toFixed(1) + 'km away';
+    distStr = _fmtDist(d) + ' away';
   }
 
   // Big prominent distance + direction banner
-  function fmtM(m) { return m < 1000 ? Math.round(m) + 'm' : (m/1000).toFixed(1) + 'km'; }
+  function fmtM(m) { return _fmtDist(m); }
   let locationBanner = '';
   if (lm.relPos && lm.relPos.side) {
     const rp = lm.relPos;
@@ -6623,7 +6669,6 @@ function getLandmarkRelativePos(userLat, userLng, lmLat, lmLng) {
 function buildDistLabel(pos) {
   if (!pos) return '';
   const { side, metersAhead, metersCross, totalDist } = pos;
-  function fmt(m) { return m < 1000 ? Math.round(m) + 'm' : (m/1000).toFixed(1) + 'km'; }
   if (side === null) return fmt(totalDist) + ' away';
   if (metersAhead < -5) return fmt(Math.abs(metersAhead)) + ' behind you'; // passed it
   // Primarily ahead
@@ -6698,7 +6743,7 @@ function showLandmarkAlert(lm, idx, dist) {
   el.id = 'walkAlert';
   el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:30000;background:#fff;border-radius:20px 20px 0 0;box-shadow:0 -4px 30px rgba(0,0,0,0.3);max-height:82vh;overflow-y:auto;transform:translateY(100%);transition:transform 0.35s ease;';
 
-  const distLabel = dist >= 0 ? (dist < 1000 ? Math.round(dist) + 'm' : (dist/1000).toFixed(1) + 'km') : '';
+  const distLabel = dist >= 0 ? _fmtDist(dist) : '';
   const idxLabel = idx >= 0 ? '#' + (idx+1) : '';
   const hasGps = _currentGpsLat !== null;
   const relPos = (hasGps && dist >= 0) ? getLandmarkRelativePos(_currentGpsLat, _currentGpsLng, lm.lat, lm.lng) : null;
@@ -7344,7 +7389,7 @@ function paintWeather(dayIdx, w) {
   if (!strip) return;
   const icon = WMO_ICONS[w.code]||'🌡️', desc = WMO_DESC[w.code]||'';
   strip.style.cssText = 'display:flex;align-items:center;gap:6px;padding:4px 12px;background:linear-gradient(135deg,#e8f4fd,#f0f8ff);border-bottom:1px solid #d0e8f8;font-size:11px;';
-  strip.innerHTML = '<span style="font-size:18px;">'+icon+'</span><span style="font-weight:600;color:#1a4a6b;flex:1;">'+desc+'</span><span style="font-weight:800;color:#1a4a6b;">'+w.tmax+'° <span style="font-size:11px;font-weight:400;color:#7a9aaa;">/ '+w.tmin+'°C</span></span>';
+  strip.innerHTML = '<span style="font-size:18px;">'+icon+'</span><span style="font-weight:600;color:#1a4a6b;flex:1;">'+desc+'</span><span style="font-weight:800;color:#1a4a6b;">'+_fmtTemp(w.tmax)+' <span style="font-size:11px;font-weight:400;color:#7a9aaa;">/ '+_fmtTemp(w.tmin)+'</span></span>';
   // Per-stop hourly weather
   const stops = days[dayIdx]&&days[dayIdx].stops; if (!stops) return;
   stops.forEach((s,i) => {
