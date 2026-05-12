@@ -1505,26 +1505,10 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
       <!-- ── UNITS ── -->
       <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
         <p style="font-size:13px;font-weight:600;color:#555;margin:0 0 8px;">Measurement units</p>
-        <div id="unitsToggleBtn" style="display:inline-flex;align-items:center;gap:1px;background:#e9e9eb;border-radius:20px;padding:3px;user-select:none;">
-          <span id="unitMetricPill"   onclick="APP_CONFIG.units='metric';  try{localStorage.setItem('app_config_v2',JSON.stringify(APP_CONFIG));}catch(e){} if(window._updateUnitsBtn)_updateUnitsBtn(); renderAll();" style="padding:5px 16px;border-radius:18px;font-size:13px;font-weight:700;transition:all 0.2s;cursor:pointer;">°C / m</span>
-          <span id="unitImperialPill" onclick="APP_CONFIG.units='imperial'; try{localStorage.setItem('app_config_v2',JSON.stringify(APP_CONFIG));}catch(e){} if(window._updateUnitsBtn)_updateUnitsBtn(); renderAll();" style="padding:5px 16px;border-radius:18px;font-size:13px;font-weight:700;transition:all 0.2s;cursor:pointer;">°F / mi</span>
+        <div style="display:inline-flex;align-items:center;gap:1px;background:#e9e9eb;border-radius:20px;padding:3px;">
+          <span id="unitMetricPill"   onclick="_setUnits('metric')"   style="padding:5px 16px;border-radius:18px;font-size:13px;font-weight:700;cursor:pointer;transition:background 0.2s,color 0.2s;">°C / m</span>
+          <span id="unitImperialPill" onclick="_setUnits('imperial')" style="padding:5px 16px;border-radius:18px;font-size:13px;font-weight:700;cursor:pointer;transition:background 0.2s,color 0.2s;">°F / mi</span>
         </div>
-        <script>
-          (function() {
-            function refresh() {
-              const imp = APP_CONFIG.units === 'imperial';
-              const m = document.getElementById('unitMetricPill');
-              const i = document.getElementById('unitImperialPill');
-              if (!m||!i) return;
-              m.style.cssText = 'padding:5px 16px;border-radius:18px;font-size:13px;font-weight:700;transition:all 0.2s;'
-                + (imp ? 'color:#555;background:transparent;' : 'background:#fff;color:#1a7a3a;box-shadow:0 1px 4px rgba(0,0,0,0.12);');
-              i.style.cssText = 'padding:5px 16px;border-radius:18px;font-size:13px;font-weight:700;transition:all 0.2s;'
-                + (imp ? 'background:#fff;color:#1a7a3a;box-shadow:0 1px 4px rgba(0,0,0,0.12);' : 'color:#555;background:transparent;');
-            }
-            refresh();
-            window._updateUnitsBtn = refresh;
-          })();
-        </script>
       </div>
 
       <!-- ── DATA ── -->
@@ -1723,19 +1707,19 @@ function _fmtTemp(celsius) {
   if (APP_CONFIG.units === 'imperial') return Math.round(celsius * 9/5 + 32) + '°F';
   return Math.round(celsius) + '°C';
 }
-function _toggleUnits() {
-  APP_CONFIG.units = APP_CONFIG.units === 'imperial' ? 'metric' : 'imperial';
+function _setUnits(u) {
+  APP_CONFIG.units = u;
   try { localStorage.setItem('app_config_v2', JSON.stringify(APP_CONFIG)); } catch(e) {}
-  if (typeof _updateUnitsBtn === 'function') _updateUnitsBtn();
-  renderAll();
+  var m = document.getElementById('unitMetricPill');
+  var i = document.getElementById('unitImperialPill');
+  if (m) { m.style.background = u === 'metric' ? '#fff' : 'transparent'; m.style.color = u === 'metric' ? '#1a7a3a' : '#555'; m.style.boxShadow = u === 'metric' ? '0 1px 4px rgba(0,0,0,0.12)' : 'none'; }
+  if (i) { i.style.background = u === 'imperial' ? '#fff' : 'transparent'; i.style.color = u === 'imperial' ? '#1a7a3a' : '#555'; i.style.boxShadow = u === 'imperial' ? '0 1px 4px rgba(0,0,0,0.12)' : 'none'; }
+  try { renderAll(); } catch(e) {}
 }
-function _updateUnitsBtn(btn) {
-  const isImp = APP_CONFIG.units === 'imperial';
-  btn.innerHTML = isImp
-    ? '<span style="opacity:0.5">📏 Metric</span> <span style="color:#fff;background:#1a73e8;padding:2px 10px;border-radius:20px;font-weight:800;">Imperial 🇺🇸</span>'
-    : '<span style="color:#fff;background:#1a7a3a;padding:2px 10px;border-radius:20px;font-weight:800;">🌍 Metric</span> <span style="opacity:0.5">Imperial 📏</span>';
+function _toggleUnits() { _setUnits(APP_CONFIG.units === 'imperial' ? 'metric' : 'imperial'); }
+function _updateUnitsBtn() {
+  _setUnits(APP_CONFIG.units);
 }
-
 // ── SUPABASE CLIENT ──────────────────────────────────────────────
 let supa = null;
 let _realtimeChannel = null;
@@ -4224,6 +4208,7 @@ function showView(v) {
   if (v === 'hotel') v = 'settings';
   // Stop reading if navigating away from story
   if (v !== 'story' && typeof _stopReadAloud === 'function') _stopReadAloud();
+  if (v === 'settings') setTimeout(function() { if (typeof _updateUnitsBtn === 'function') _updateUnitsBtn(); }, 50);
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   const panelEl = document.getElementById('panel-' + v);
   if (!panelEl) { console.warn('No panel:', v); return; }
