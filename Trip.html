@@ -1506,8 +1506,8 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
       <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
         <p style="font-size:13px;font-weight:600;color:#555;margin:0 0 8px;">Measurement units</p>
         <div onclick="_toggleUnits()" id="unitsToggleBtn" style="display:inline-flex;align-items:center;gap:1px;background:#e9e9eb;border-radius:20px;padding:3px;cursor:pointer;user-select:none;">
-          <span id="unitMetricPill"  style="padding:5px 16px;border-radius:18px;font-size:13px;font-weight:700;transition:all 0.15s;">°C · km</span>
-          <span id="unitImperialPill" style="padding:5px 16px;border-radius:18px;font-size:13px;font-weight:700;transition:all 0.15s;">°F · mi</span>
+          <span id="unitMetricPill"  style="padding:5px 16px;border-radius:18px;font-size:13px;font-weight:700;transition:all 0.15s;">Celsius / m</span>
+          <span id="unitImperialPill" style="padding:5px 16px;border-radius:18px;font-size:13px;font-weight:700;transition:all 0.15s;">F° / mi</span>
         </div>
         <script>
           (function() {
@@ -1516,8 +1516,10 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
               const m = document.getElementById('unitMetricPill');
               const i = document.getElementById('unitImperialPill');
               if (!m||!i) return;
-              m.style.cssText = 'padding:5px 16px;border-radius:18px;font-size:13px;font-weight:700;transition:all 0.15s;'+(imp?'color:#999;':'background:#fff;color:#1a1a1a;box-shadow:0 1px 4px rgba(0,0,0,0.12);');
-              i.style.cssText = 'padding:5px 16px;border-radius:18px;font-size:13px;font-weight:700;transition:all 0.15s;'+(imp?'background:#fff;color:#1a1a1a;box-shadow:0 1px 4px rgba(0,0,0,0.12);':'color:#999;');
+              m.style.cssText = 'padding:5px 16px;border-radius:18px;font-size:13px;font-weight:700;transition:all 0.15s;'
+                + (imp ? 'color:#999;background:transparent;' : 'background:#1a1a1a;color:#fff;box-shadow:0 1px 4px rgba(0,0,0,0.2);');
+              i.style.cssText = 'padding:5px 16px;border-radius:18px;font-size:13px;font-weight:700;transition:all 0.15s;'
+                + (imp ? 'background:#1a1a1a;color:#fff;box-shadow:0 1px 4px rgba(0,0,0,0.2);' : 'color:#999;background:transparent;');
             }
             refresh();
             window._updateUnitsBtn = refresh;
