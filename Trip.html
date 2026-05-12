@@ -2146,19 +2146,35 @@ function _initPhotoDrag() {
 
   const cleanup = () => {
     clearTimeout(dragTimer); dragTimer = null; dragActive = false;
+    document.removeEventListener('touchmove', onDragMove);
     if (ghost) { ghost.remove(); ghost = null; }
-    if (dragSrc) { dragSrc.style.opacity = ''; }
-    dragSrc = null;
+    if (dragSrc) { dragSrc.style.opacity = ''; dragSrc = null; }
     document.querySelectorAll('.photo-drag-item').forEach(x => x.style.outline = '');
+  };
+
+  // Single document-level non-passive listener — only active while dragging
+  const onDragMove = (e) => {
+    if (!dragActive || !ghost || !dragSrc) return;
+    e.preventDefault();
+    const t = e.touches[0];
+    const r = dragSrc.getBoundingClientRect();
+    ghost.style.left = (r.left + t.clientX - startX) + 'px';
+    ghost.style.top = (r.top + t.clientY - startY) + 'px';
+    document.querySelectorAll('.photo-drag-item').forEach(x => x.style.outline = '');
+    const over = document.elementFromPoint(t.clientX, t.clientY);
+    const item = over && over.closest('.photo-drag-item');
+    if (item && item !== dragSrc) item.style.outline = '2px solid #1a73e8';
   };
 
   const beginDrag = (el) => {
     dragActive = true; dragSrc = el;
     const r = el.getBoundingClientRect();
     ghost = el.cloneNode(true);
-    ghost.style.cssText = 'position:fixed;z-index:9999;width:'+r.width+'px;height:'+r.height+'px;left:'+r.left+'px;top:'+r.top+'px;opacity:0.85;pointer-events:none;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.5);transform:scale(1.08);transition:transform 0.1s;';
+    ghost.style.cssText = 'position:fixed;z-index:9999;width:'+r.width+'px;height:'+r.height+'px;left:'+r.left+'px;top:'+r.top+'px;opacity:0.85;pointer-events:none;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.5);transform:scale(1.08);';
     document.body.appendChild(ghost);
     el.style.opacity = '0.3';
+    // Add the non-passive listener only now — scroll is unaffected before this
+    document.addEventListener('touchmove', onDragMove, {passive: false});
   };
 
   document.querySelectorAll('.photo-drag-item').forEach(el => {
@@ -2166,26 +2182,17 @@ function _initPhotoDrag() {
       const t = e.touches[0];
       startX = t.clientX; startY = t.clientY;
       srcDay = +el.dataset.day; srcStop = +el.dataset.stop; srcIdx = +el.dataset.idx;
-      dragTimer = setTimeout(() => beginDrag(el), 350);
+      dragTimer = setTimeout(() => beginDrag(el), 400);
     }, {passive: true});
 
+    // Passive listener just to cancel timer if scrolling
     el.addEventListener('touchmove', e => {
+      if (dragActive) return; // handled by document listener
       const t = e.touches[0];
-      if (!dragActive) {
-        if (Math.abs(t.clientX - startX) > 8 || Math.abs(t.clientY - startY) > 8) {
-          clearTimeout(dragTimer); dragTimer = null;
-        }
-        return;
+      if (Math.abs(t.clientX - startX) > 6 || Math.abs(t.clientY - startY) > 6) {
+        clearTimeout(dragTimer); dragTimer = null;
       }
-      e.preventDefault();
-      const r = dragSrc.getBoundingClientRect();
-      ghost.style.left = (r.left + t.clientX - startX) + 'px';
-      ghost.style.top = (r.top + t.clientY - startY) + 'px';
-      document.querySelectorAll('.photo-drag-item').forEach(x => x.style.outline = '');
-      const over = document.elementFromPoint(t.clientX, t.clientY);
-      const item = over && over.closest('.photo-drag-item');
-      if (item && item !== dragSrc) item.style.outline = '2px solid #1a73e8';
-    }, {passive: false});
+    }, {passive: true});
 
     el.addEventListener('touchend', e => {
       clearTimeout(dragTimer); dragTimer = null;
@@ -2194,14 +2201,14 @@ function _initPhotoDrag() {
       const over = document.elementFromPoint(t.clientX, t.clientY);
       const item = over && over.closest('.photo-drag-item');
       const toIdx = item ? +item.dataset.idx : -1;
-      const savedSrcDay = srcDay, savedSrcStop = srcStop, savedSrcIdx = srcIdx;
+      const sd = srcDay, ss = srcStop, si = srcIdx;
       cleanup();
-      if (toIdx < 0 || toIdx === savedSrcIdx) return;
-      const stop = days[savedSrcDay].stops[savedSrcStop];
-      const [p] = stop.userPhotos.splice(savedSrcIdx, 1);
+      if (toIdx < 0 || toIdx === si) return;
+      const stop = days[sd].stops[ss];
+      const [p] = stop.userPhotos.splice(si, 1);
       stop.userPhotos.splice(toIdx, 0, p);
       const meta = stop.userPhotosMeta || [];
-      if (meta.length > savedSrcIdx) { const [m] = meta.splice(savedSrcIdx, 1); meta.splice(toIdx, 0, m); stop.userPhotosMeta = meta; }
+      if (meta.length > si) { const [m] = meta.splice(si, 1); meta.splice(toIdx, 0, m); stop.userPhotosMeta = meta; }
       saveToStorage(); schedulePush();
       renderDetail(); renderStopList();
     }, {passive: true});
