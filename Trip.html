@@ -1391,7 +1391,13 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
   <!-- SETTINGS (merged with hotel) -->
   <div class="panel" id="panel-settings">
     <div class="add-view">
-      <h2>⚙ Trip Settings</h2>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <h2 style="margin:0;">⚙ Trip Settings</h2>
+        <div style="display:inline-flex;align-items:center;gap:1px;background:#e9e9eb;border-radius:20px;padding:3px;">
+          <span id="unitMetricPill"   onclick="_setUnits('metric')"   style="padding:5px 14px;border-radius:18px;font-size:12px;font-weight:700;cursor:pointer;transition:background 0.2s,color 0.2s;">°C / m</span>
+          <span id="unitImperialPill" onclick="_setUnits('imperial')" style="padding:5px 14px;border-radius:18px;font-size:12px;font-weight:700;cursor:pointer;transition:background 0.2s,color 0.2s;">°F / mi</span>
+        </div>
+      </div>
 
       <!-- ── TRIP BASICS ── -->
       <label class="form-label">Trip title</label>
@@ -1500,15 +1506,6 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
       <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
         <h3 style="margin:0 0 8px 0;font-size:14px;">🗂 Trips</h3>
         <p class="gen-hint" style="margin-bottom:10px;font-size:12px;">Current trip: <strong id="setCurrentTrip">london2026</strong></p>
-      </div>
-
-      <!-- ── UNITS ── -->
-      <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
-        <p style="font-size:13px;font-weight:600;color:#555;margin:0 0 8px;">Measurement units</p>
-        <div style="display:inline-flex;align-items:center;gap:1px;background:#e9e9eb;border-radius:20px;padding:3px;">
-          <span id="unitMetricPill"   onclick="_setUnits('metric')"   style="padding:5px 16px;border-radius:18px;font-size:13px;font-weight:700;cursor:pointer;transition:background 0.2s,color 0.2s;">°C / m</span>
-          <span id="unitImperialPill" onclick="_setUnits('imperial')" style="padding:5px 16px;border-radius:18px;font-size:13px;font-weight:700;cursor:pointer;transition:background 0.2s,color 0.2s;">°F / mi</span>
-        </div>
       </div>
 
       <!-- ── DATA ── -->
