@@ -1505,9 +1505,9 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
       <!-- ── UNITS ── -->
       <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
         <p style="font-size:13px;font-weight:600;color:#555;margin:0 0 8px;">Measurement units</p>
-        <div onclick="_toggleUnits()" id="unitsToggleBtn" style="display:inline-flex;align-items:center;gap:1px;background:#e9e9eb;border-radius:20px;padding:3px;cursor:pointer;user-select:none;">
-          <span id="unitMetricPill"  style="padding:5px 16px;border-radius:18px;font-size:13px;font-weight:700;transition:all 0.15s;">Celsius / m</span>
-          <span id="unitImperialPill" style="padding:5px 16px;border-radius:18px;font-size:13px;font-weight:700;transition:all 0.15s;">F° / mi</span>
+        <div id="unitsToggleBtn" style="display:inline-flex;align-items:center;gap:1px;background:#e9e9eb;border-radius:20px;padding:3px;user-select:none;">
+          <span id="unitMetricPill"   onclick="APP_CONFIG.units='metric';  try{localStorage.setItem('app_config_v2',JSON.stringify(APP_CONFIG));}catch(e){} if(window._updateUnitsBtn)_updateUnitsBtn(); renderAll();" style="padding:5px 16px;border-radius:18px;font-size:13px;font-weight:700;transition:all 0.2s;cursor:pointer;">°C / m</span>
+          <span id="unitImperialPill" onclick="APP_CONFIG.units='imperial'; try{localStorage.setItem('app_config_v2',JSON.stringify(APP_CONFIG));}catch(e){} if(window._updateUnitsBtn)_updateUnitsBtn(); renderAll();" style="padding:5px 16px;border-radius:18px;font-size:13px;font-weight:700;transition:all 0.2s;cursor:pointer;">°F / mi</span>
         </div>
         <script>
           (function() {
