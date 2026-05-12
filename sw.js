@@ -17,13 +17,12 @@ self.addEventListener('activate', e => {
   );
 });
 
-// Always fetch Trip.html fresh from network — never serve stale
+// Always fetch Trip.html fresh — never cache it (prevents serving corrupted versions)
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
-  if (url.pathname.endsWith('Trip.html') || url.pathname.endsWith('/')) {
-    e.respondWith(
-      fetch(e.request, { cache: 'no-store' }).catch(() => caches.match(e.request))
-    );
+  if (url.pathname.includes('Trip.html')) {
+    // Network only, no cache at all for the main app file
+    e.respondWith(fetch(e.request.url + (e.request.url.includes('?') ? '&' : '?') + '_sw=bypass', { cache: 'reload' }));
     return;
   }
   // Everything else: network first, cache fallback
