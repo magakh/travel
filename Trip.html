@@ -1763,7 +1763,10 @@ function _setUnits(u) {
   // Re-populate per-stop weather spans with updated unit
   try { refreshWeatherForDay(currentDay); } catch(e) {}
 }
+var _dpCloseHandler = null;
+function _dpRemoveClose() { if (_dpCloseHandler) { document.removeEventListener('click', _dpCloseHandler); _dpCloseHandler = null; } }
 function _toggleDayPicker() {
+  _dpRemoveClose();
   var existing = document.getElementById('dayPickerMenu');
   if (existing) { existing.remove(); return; }
   var btn = document.getElementById('dayPickerBtn');
@@ -1783,6 +1786,7 @@ function _toggleDayPicker() {
       row.innerHTML = day + (active ? '<span style="color:#1a7a3a;">✓</span>' : '');
       row.addEventListener('click', function(e) {
         e.stopPropagation();
+        _dpRemoveClose();
         switchDay(idx);
         var m = document.getElementById('dayPickerMenu'); if (m) m.remove();
         var lbl = document.getElementById('dayPickerLabel'); if (lbl) lbl.textContent = labels[idx] || ('Day '+(idx+1));
@@ -1795,13 +1799,11 @@ function _toggleDayPicker() {
   var lbl = document.getElementById('dayPickerLabel');
   if (lbl) lbl.textContent = labels[currentDay] || ('Day '+(currentDay+1));
   setTimeout(function() {
-    document.addEventListener('click', function _dpClose() {
-      var m = document.getElementById('dayPickerMenu'); if (m) m.remove();
-      document.removeEventListener('click', _dpClose);
-    });
+    _dpCloseHandler = function() { var m = document.getElementById('dayPickerMenu'); if (m) m.remove(); _dpRemoveClose(); };
+    document.addEventListener('click', _dpCloseHandler);
   }, 50);
 }
-function _closeDayPicker() { var m = document.getElementById('dayPickerMenu'); if (m) m.remove(); }
+function _closeDayPicker() { _dpRemoveClose(); var m = document.getElementById('dayPickerMenu'); if (m) m.remove(); }
 
 
 function _updateDayPicker(dayLabels, n, selected) {
