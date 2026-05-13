@@ -1465,27 +1465,32 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
       <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
           <h3 style="margin:0;font-size:14px;">🔑 AI settings</h3>
-          <button onclick="showApiKeyHelp()" style="background:none;border:1px solid #ddd;border-radius:20px;padding:3px 10px;font-size:12px;color:#555;cursor:pointer;">❓ How to get a key</button>
+          <button onclick="showApiKeyHelp()" style="background:none;border:1px solid #ddd;border-radius:20px;padding:3px 10px;font-size:12px;color:#555;cursor:pointer;">❓ How to get an API key</button>
         </div>
 
-        <label class="form-label">AI model</label>
-        <select class="form-input" id="setAiModel" style="margin-bottom:4px;" onchange="saveAiModel()">
-          <option value="claude-haiku-4-5-20251001">⚡ Haiku 4.5 — fastest &amp; cheapest</option>
-          <option value="claude-sonnet-4-6">✨ Sonnet 4.6 — balanced (recommended)</option>
-          <option value="claude-opus-4-6">🧠 Opus 4.6 — most capable</option>
-        </select>
-        <p class="gen-hint" id="modelHint" style="margin-bottom:12px;font-size:11px;"></p>
-
-        <label class="form-label">Personal API key <span style="font-weight:400;color:var(--muted);">(optional)</span></label>
-        <input class="form-input" id="setApiKey" type="password" placeholder="sk-ant-... (paste and save)" autocomplete="off" style="margin-bottom:6px;font-family:monospace;font-size:12px;">
-        <div id="apiKeyStatus" class="gen-hint" style="margin-bottom:8px;font-size:12px;"></div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-          <button onclick="saveApiKey()" style="padding:7px 16px;background:#1a73e8;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">Save key</button>
-          <button onclick="clearApiKey()" style="padding:7px 16px;background:#fff;color:#c0392b;border:1px solid #c0392b;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">Clear key</button>
+        <div style="background:#fff;border-radius:12px;overflow:hidden;margin-bottom:10px;">
+          <div style="display:flex;align-items:center;padding:10px 14px;">
+            <span style="font-size:12px;color:#888;width:60px;flex-shrink:0;">Model</span>
+            <select id="setAiModel" onchange="saveAiModel()" style="border:none;padding:0;font-size:14px;flex:1;background:transparent;outline:none;color:#1a1a1a;cursor:pointer;">
+              <option value="claude-haiku-4-5-20251001">⚡ Haiku 4.5 — fastest</option>
+              <option value="claude-sonnet-4-6">✨ Sonnet 4.6 — balanced</option>
+              <option value="claude-opus-4-6">🧠 Opus 4.6 — most capable</option>
+            </select>
+          </div>
+          <div id="modelHint" style="padding:0 14px 8px;font-size:11px;color:#888;display:none;"></div>
         </div>
-        <p class="gen-hint" style="margin-top:8px;font-size:11px;color:#888;line-height:1.5;">
-          🔄 Syncs across all your devices via Supabase. Hit <b>Clear key</b> before passing the app to someone else so they add their own.
-        </p>
+
+        <div style="background:#fff;border-radius:12px;overflow:hidden;margin-bottom:10px;">
+          <div style="display:flex;align-items:center;padding:10px 14px;">
+            <span style="font-size:12px;color:#888;width:60px;flex-shrink:0;">API key</span>
+            <input id="setApiKey" type="password" placeholder="sk-ant-... (optional)" autocomplete="off" style="border:none;padding:0;font-size:13px;flex:1;background:transparent;outline:none;font-family:monospace;color:#1a1a1a;">
+          </div>
+          <div id="apiKeyStatus" style="padding:0 14px 6px;font-size:11px;color:#888;"></div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button onclick="saveApiKey()" style="flex:1;padding:8px;background:#1a73e8;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">Save key</button>
+          <button onclick="clearApiKey()" style="flex:1;padding:8px;background:#fff;color:#c0392b;border:1px solid #c0392b;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">Clear key</button>
+        </div>
       </div>
 
       <!-- ── SAVE ── -->
