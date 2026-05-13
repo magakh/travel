@@ -1019,8 +1019,8 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
 .form-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(26,115,232,0.12); }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .gen-btn {
-  width: 100%; padding: 16px; background: #1a1a1a; color: #fff; border: none;
-  border-radius: 12px; font-size: 16px; font-weight: 700; cursor: pointer;
+  width: 100%; padding: 10px 16px; background: #1a1a1a; color: #fff; border: none;
+  border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer;
   transition: background 0.15s; font-family: inherit;
 }
 .gen-btn:disabled { background: #666; }
@@ -1470,7 +1470,7 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
 
       <!-- Repair coords (kept here, fill moved to Add/Search) -->
       <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
-        <button class="gen-btn" onclick="repairAllCoords()" style="background:#b03a00;margin-bottom:0;">🔧 Repair all coordinates</button>
+        <button onclick="repairAllCoords()" style="padding:8px 16px;background:#b03a00;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">🔧 Repair coordinates</button>
       </div>
 
       <!-- Personal Anthropic API key + model selector -->
@@ -1492,8 +1492,8 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
         <input class="form-input" id="setApiKey" type="password" placeholder="sk-ant-... (paste and save)" autocomplete="off" style="margin-bottom:6px;font-family:monospace;font-size:12px;">
         <div id="apiKeyStatus" class="gen-hint" style="margin-bottom:8px;font-size:12px;"></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-          <button class="gen-btn" onclick="saveApiKey()" style="background:#1a73e8;margin:0;">Save key</button>
-          <button class="gen-btn" onclick="clearApiKey()" style="background:#fff;color:#c0392b;border:1px solid #c0392b;margin:0;">Clear key</button>
+          <button onclick="saveApiKey()" style="padding:7px 16px;background:#1a73e8;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">Save key</button>
+          <button onclick="clearApiKey()" style="padding:7px 16px;background:#fff;color:#c0392b;border:1px solid #c0392b;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">Clear key</button>
         </div>
         <p class="gen-hint" style="margin-top:8px;font-size:11px;color:#888;line-height:1.5;">
           🔄 Syncs across all your devices via Supabase. Hit <b>Clear key</b> before passing the app to someone else so they add their own.
@@ -1506,8 +1506,8 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
 
       <!-- ── DATA ── -->
         <div style="display:flex;gap:8px;margin-bottom:8px;">
-          <button onclick="exportFile()" style="flex:1;padding:11px;border-radius:10px;border:1px solid #444;background:#1e1e1e;color:#ccc;font-size:13px;font-weight:700;cursor:pointer;">📤 Export JSON</button>
-          <button onclick="document.getElementById('import-input').click()" style="flex:1;padding:11px;border-radius:10px;border:1px solid #444;background:#1e1e1e;color:#ccc;font-size:13px;font-weight:700;cursor:pointer;">📥 Import JSON</button>
+          <button onclick="exportFile()" style="flex:1;padding:8px 12px;border-radius:8px;border:1px solid #444;background:#1e1e1e;color:#ccc;font-size:12px;font-weight:700;cursor:pointer;">📤 Export</button>
+          <button onclick="document.getElementById('import-input').click()" style="flex:1;padding:8px 12px;border-radius:8px;border:1px solid #444;background:#1e1e1e;color:#ccc;font-size:12px;font-weight:700;cursor:pointer;">📥 Import</button>
         </div>
       </div>
 
