@@ -4348,13 +4348,6 @@ function renderStopList() {
         <div class="stop-tags">
           ${(s.prebook && !(s.reservation && (s.reservation.confirmed || s.reservation.time))) ? '<span class="tag-pill prebook">Pre-book</span>' : ''}
         </div>
-        <div onclick="event.stopPropagation();" style="margin-top:5px;">
-          <select onchange="moveStopToDay(parseInt(this.value), ${i}); this.selectedIndex=0;"
-            style="font-size:11px;color:#1a73e8;border:1px solid #c5d8fa;background:#e8f0fd;border-radius:6px;padding:2px 6px;font-weight:700;cursor:pointer;max-width:160px;">
-            <option value="" disabled selected>↔ Move to day…</option>
-            ${days.map((d,di) => di !== currentDay ? `<option value="${di}">${d.title.split('—')[0].trim()}</option>` : '').join('')}
-          </select>
-        </div>
         ${stopPhotosHtml(i, currentDay)}
       </div>
       ${s.isHotel ? '<span style="font-size:16px;padding:4px 8px;color:#aaa;" title="Hotel anchor">🏨</span>' : `
