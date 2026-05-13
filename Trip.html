@@ -1718,7 +1718,7 @@ function _setUnits(u) {
 function _toggleDayPicker() {
   const menu = document.getElementById('dayPickerMenu');
   if (!menu) return;
-  if (menu.style.display !== 'none') { menu.style.display = 'none'; return; }
+  if (menu.style.display !== 'none') { _closeDayPicker(); return; }
   const btn = document.getElementById('dayPickerBtn');
   if (btn) {
     const r = btn.getBoundingClientRect();
@@ -1726,11 +1726,15 @@ function _toggleDayPicker() {
     menu.style.left = r.left + 'px';
   }
   menu.style.display = 'block';
-  setTimeout(function() { document.addEventListener('click', _closeDayPicker, { once: true }); }, 10);
+  // Use setTimeout so this open-click doesn't immediately trigger close
+  setTimeout(function() {
+    document.addEventListener('click', _closeDayPicker);
+  }, 50);
 }
 function _closeDayPicker() {
   const menu = document.getElementById('dayPickerMenu');
   if (menu) menu.style.display = 'none';
+  document.removeEventListener('click', _closeDayPicker);
 }
 function _updateDayPicker(dayLabels, n, selected) {
   const menu = document.getElementById('dayPickerMenu');
@@ -1743,7 +1747,7 @@ function _updateDayPicker(dayLabels, n, selected) {
     const isActive = i === selected;
     row.style.cssText = 'padding:10px 16px;font-size:14px;font-weight:'+(isActive?'700':'500')+';color:'+(isActive?'#1a7a3a':'#1a1a1a')+';cursor:pointer;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;justify-content:space-between;gap:12px;';
     row.innerHTML = day + (isActive ? '<span style="color:#1a7a3a;font-size:16px;">✓</span>' : '');
-    row.onclick = function(e) { e.stopPropagation(); switchDay(i); _closeDayPicker(); };
+    row.onclick = function() { switchDay(i); _closeDayPicker(); };
     menu.appendChild(row);
   }
   const last = menu.lastChild;
