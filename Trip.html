@@ -2555,14 +2555,16 @@ function updateLockUI() {
   const settingsLock = document.getElementById('settingsLockBtn');
   const svgOpen  = '<svg width="14" height="16" viewBox="0 0 24 26" fill="none"><rect x="3" y="13" width="18" height="12" rx="2.5" fill="currentColor"/><path d="M8 13V8a4 4 0 0 1 8 0" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" opacity="0.4"/><circle cx="12" cy="19" r="2" fill="white"/></svg>';
   const svgClosed = '<svg width="14" height="16" viewBox="0 0 24 26" fill="none"><rect x="3" y="13" width="18" height="12" rx="2.5" fill="currentColor"/><path d="M8 13V8a4 4 0 0 1 8 0v0a4 4 0 0 1 0 0" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><circle cx="12" cy="19" r="2" fill="white"/></svg>';
-  const svgOpenDark  = '<svg width="14" height="16" viewBox="0 0 24 26" fill="none"><rect x="3" y="13" width="18" height="12" rx="2.5" fill="#1a7a3a"/><path d="M8 13V8a4 4 0 0 1 8 0" stroke="#1a7a3a" stroke-width="2.5" stroke-linecap="round" opacity="0.5"/><circle cx="12" cy="19" r="2" fill="white"/></svg>';
-  const svgClosedDark = '<svg width="14" height="16" viewBox="0 0 24 26" fill="none"><rect x="3" y="13" width="18" height="12" rx="2.5" fill="#555"/><path d="M8 13V8a4 4 0 0 1 8 0" stroke="#555" stroke-width="2.5" stroke-linecap="round"/><path d="M8 8a4 4 0 0 1 8 0" stroke="#555" stroke-width="2.5" stroke-linecap="round"/><circle cx="12" cy="19" r="2" fill="white"/></svg>';
+  const svgOpenDark   = '<svg width="14" height="16" viewBox="0 0 24 26" fill="none"><rect x="3" y="13" width="18" height="12" rx="2.5" fill="#1a7a3a"/><path d="M8 13V9a4 4 0 0 1 8 0" stroke="#1a7a3a" stroke-width="2.5" stroke-linecap="round" opacity="0.4"/><circle cx="12" cy="19" r="2" fill="white"/></svg>';
+  const svgClosedDark = '<svg width="14" height="16" viewBox="0 0 24 26" fill="none"><rect x="3" y="13" width="18" height="12" rx="2.5" fill="#555"/><path d="M8 13V9a4 4 0 0 1 8 0v4" stroke="#555" stroke-width="2.5" stroke-linecap="round"/><circle cx="12" cy="19" r="2" fill="white"/></svg>'
   if (lock) {
     lock.title = EDITOR_MODE ? 'Lock (view-only)' : 'Unlock to edit';
     lock.style.opacity = EDITOR_MODE ? '1' : '0.55';
     lock.innerHTML = EDITOR_MODE
-      ? '<svg width="16" height="18" viewBox="0 0 24 26" fill="none"><rect x="3" y="13" width="18" height="12" rx="2.5" fill="#fff"/><path d="M8 13V8a4 4 0 0 1 8 0" stroke="#fff" stroke-width="2.5" stroke-linecap="round" opacity="0.35"/><circle cx="12" cy="19" r="2" fill="#1a1a1a"/></svg>'
-      : '<svg width="16" height="18" viewBox="0 0 24 26" fill="none"><rect x="3" y="13" width="18" height="12" rx="2.5" fill="#fff"/><path d="M8 13V8a4 4 0 0 1 8 0v0" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/><path d="M12 4a4 4 0 0 1 4 4v1" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/><circle cx="12" cy="19" r="2" fill="#1a1a1a"/></svg>';
+      // UNLOCKED: shackle open — left stem in body, right side free/raised
+      ? '<svg width="16" height="18" viewBox="0 0 24 26" fill="none"><rect x="3" y="13" width="18" height="12" rx="2.5" fill="#fff"/><path d="M8 13V9a4 4 0 0 1 8 0" stroke="#fff" stroke-width="2.5" stroke-linecap="round" opacity="0.4"/><circle cx="12" cy="19" r="2" fill="#1a1a1a"/></svg>'
+      // LOCKED: shackle closed — both sides in body, U-shape complete
+      : '<svg width="16" height="18" viewBox="0 0 24 26" fill="none"><rect x="3" y="13" width="18" height="12" rx="2.5" fill="#fff"/><path d="M8 13V9a4 4 0 0 1 8 0v4" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/><circle cx="12" cy="19" r="2" fill="#1a1a1a"/></svg>';
   }
   if (settingsLock) {
     settingsLock.innerHTML = EDITOR_MODE ? svgOpenDark : svgClosedDark;
