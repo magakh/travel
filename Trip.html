@@ -3914,9 +3914,7 @@ function bookingArrivalHtml(dayIdx, idx) {
     statusColor = '#155724';
     statusBg = '#d4edda';
   }
-  return '<div class="booking-arrival" style="margin-top:4px;font-size:12px;padding:6px 8px;border-radius:6px;background:' + statusBg + ';color:' + statusColor + ';">' +
-    '🎟 Booked <strong>' + s.reservation.time + '</strong> · Arrive <strong>' + minsToTimeStr(arriveMin) + '</strong> · ' + statusText +
-    '</div>';
+  return '<span style="background:' + statusBg + ';color:' + statusColor + ';padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;white-space:nowrap;margin-left:6px;">🎟 ' + s.reservation.time + ' · arrive ' + minsToTimeStr(arriveMin) + ' · ' + statusText + '</span>';
 }
 
 // ── MOVE STOP BETWEEN DAYS ────────────────────────────────────────
@@ -4341,9 +4339,8 @@ function renderStopList() {
           &nbsp;→&nbsp;<span style="color:var(--hint);">${endTime}</span>
           <span id="wx-${currentDay}-${i}" style="margin-left:5px;font-size:11px;color:#5a7a8a;"></span>
         </div>
-        ${bookingArrivalHtml(currentDay, i)}
+        <div class="stop-name-label">${s.name}${s.passedBy ? ' <span class="res-badge" style="background:#f3e5f5;border-color:#9c27b0;color:#6a1b9a;">📷 Passed by</span>' : ''}${s.checkIn ? ' <span class="res-badge" style="background:#fef3e2;border-color:#e67e22;color:#b35400;">📍 Check-in</span>' : ''}${s.reservation ? ' <span class="res-badge ' + (s.reservation.confirmed?'confirmed':'') + '">' + (s.reservation.confirmed?'✓ Booked':'⏳ Pending') + '</span>' : ''}${s.reservation ? bookingArrivalHtml(currentDay, i) : ''}</div>
         ${getConflict(i) ? '<div class="conflict-banner">⚠️ Time conflict with previous stop</div>' : ''}
-        <div class="stop-name-label">${s.name}${s.passedBy ? ' <span class="res-badge" style="background:#f3e5f5;border-color:#9c27b0;color:#6a1b9a;">📷 Passed by</span>' : ''}${s.checkIn ? ' <span class="res-badge" style="background:#fef3e2;border-color:#e67e22;color:#b35400;">📍 Check-in</span>' : ''}${s.reservation ? ' <span class="res-badge ' + (s.reservation.confirmed?'confirmed':'') + '">' + (s.reservation.confirmed?'✓ Booked':'⏳ Pending') + '</span>' : ''}</div>
         <div class="stop-type-label">${s.type}${(s.free && !s.passedBy && !s.checkIn && !(s.reservation)) ? ' · <span style="color:#2e7d32;font-weight:700;font-size:11px;">Free</span>' : ''}</div>
         <div class="stop-tags">
           ${(s.prebook && !(s.reservation && (s.reservation.confirmed || s.reservation.time))) ? '<span class="tag-pill prebook">Pre-book</span>' : ''}
