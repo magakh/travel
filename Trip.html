@@ -1717,14 +1717,19 @@ function _setUnits(u) {
   try { refreshWeatherForDay(currentDay); } catch(e) {}
 }
 function _toggleDayPicker() {
-  const menu = document.getElementById('dayPickerMenu');
+  let menu = document.getElementById('dayPickerMenu');
   if (!menu) return;
-  if (menu.style.display === 'none') {
-    menu.style.display = 'block';
-    setTimeout(function() { document.addEventListener('click', _closeDayPicker, { once: true }); }, 10);
-  } else {
-    menu.style.display = 'none';
+  if (menu.style.display !== 'none') { menu.style.display = 'none'; return; }
+  // Move menu to body so it's not clipped by sticky header overflow
+  if (menu.parentElement.id !== 'body' && menu.parentElement !== document.body) {
+    document.body.appendChild(menu);
   }
+  const btn = document.getElementById('dayPickerBtn');
+  if (btn) {
+    const r = btn.getBoundingClientRect();
+    menu.style.cssText = 'display:block;position:fixed;top:'+(r.bottom+6)+'px;left:'+r.left+'px;background:#fff;border-radius:14px;box-shadow:0 4px 24px rgba(0,0,0,0.2);z-index:99999;min-width:140px;overflow:hidden;';
+  }
+  setTimeout(function() { document.addEventListener('click', _closeDayPicker, { once: true }); }, 10);
 }
 function _closeDayPicker() {
   const menu = document.getElementById('dayPickerMenu');
