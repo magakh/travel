@@ -4330,8 +4330,11 @@ function renderStopList() {
          ondragend="dragEnd()"
          id="srow${i}"
          onclick="selectStop(${i})">
-      <div class="stop-check ${completed.includes(currentDay+'-'+i) ? 'done' : ''}"
-           onclick="event.stopPropagation(); toggleDone(${i})"></div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex-shrink:0;">
+        <div class="stop-check ${completed.includes(currentDay+'-'+i) ? 'done' : ''}"
+             onclick="event.stopPropagation(); toggleDone(${i})"></div>
+        <span style="color:#ccc;font-size:13px;line-height:1;cursor:grab;letter-spacing:1px;" onclick="event.stopPropagation()">⠿</span>
+      </div>
       <div class="stop-meta">
         <div class="stop-time-label">
           <span style="display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:50%;background:${s.color};color:#fff;font-size:10px;font-weight:800;flex-shrink:0;margin-right:5px;">${i+1}</span>
