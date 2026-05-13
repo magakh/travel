@@ -4330,19 +4330,8 @@ function renderStopList() {
          ondragend="dragEnd()"
          id="srow${i}"
          onclick="selectStop(${i})">
-      <div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex-shrink:0;">
-        <div style="display:flex;flex-direction:column;align-items:center;gap:5px;flex-shrink:0;">
-        <div class="stop-check ${completed.includes(currentDay+'-'+i) ? 'done' : ''}"
-             onclick="event.stopPropagation(); toggleDone(${i})"></div>
-        <div style="display:grid;grid-template-columns:repeat(2,3px);gap:3px;opacity:0.25;cursor:grab;" onclick="event.stopPropagation()">
-          <span style="width:3px;height:3px;border-radius:50%;background:#555;display:block;"></span>
-          <span style="width:3px;height:3px;border-radius:50%;background:#555;display:block;"></span>
-          <span style="width:3px;height:3px;border-radius:50%;background:#555;display:block;"></span>
-          <span style="width:3px;height:3px;border-radius:50%;background:#555;display:block;"></span>
-          <span style="width:3px;height:3px;border-radius:50%;background:#555;display:block;"></span>
-          <span style="width:3px;height:3px;border-radius:50%;background:#555;display:block;"></span>
-        </div>
-      </div>
+      <div class="stop-check ${completed.includes(currentDay+'-'+i) ? 'done' : ''}"
+           onclick="event.stopPropagation(); toggleDone(${i})"></div>
       <div class="stop-meta">
         <div class="stop-time-label">
           <span style="display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:50%;background:${s.color};color:#fff;font-size:10px;font-weight:800;flex-shrink:0;margin-right:5px;">${i+1}</span>
@@ -4355,7 +4344,10 @@ function renderStopList() {
         ${bookingArrivalHtml(currentDay, i)}
         ${getConflict(i) ? '<div class="conflict-banner">⚠️ Time conflict with previous stop</div>' : ''}
         <div class="stop-name-label">${s.name}${s.passedBy ? ' <span class="res-badge" style="background:#f3e5f5;border-color:#9c27b0;color:#6a1b9a;">📷 Passed by</span>' : ''}${s.checkIn ? ' <span class="res-badge" style="background:#fef3e2;border-color:#e67e22;color:#b35400;">📍 Check-in</span>' : ''}${s.reservation ? ' <span class="res-badge ' + (s.reservation.confirmed?'confirmed':'') + '">' + (s.reservation.confirmed?'✓ Booked':'⏳ Pending') + '</span>' : ''}</div>
-        <div class="stop-type-label">${s.type}${(s.free && !s.passedBy && !s.checkIn && !(s.reservation)) ? ' · <span style="color:#2e7d32;font-weight:700;font-size:12px;">Free</span>' : ''}${(s.prebook && !(s.reservation && (s.reservation.confirmed || s.reservation.time))) ? ' · <span style="color:#c0392b;font-weight:700;font-size:12px;">Pre-book</span>' : ''}</div>
+        <div class="stop-type-label">${s.type}${(s.free && !s.passedBy && !s.checkIn && !(s.reservation)) ? ' · <span style="color:#2e7d32;font-weight:700;font-size:11px;">Free</span>' : ''}</div>
+        <div class="stop-tags">
+          ${(s.prebook && !(s.reservation && (s.reservation.confirmed || s.reservation.time))) ? '<span class="tag-pill prebook">Pre-book</span>' : ''}
+        </div>
         ${stopPhotosHtml(i, currentDay)}
       </div>
       ${s.isHotel ? '<span style="font-size:16px;padding:4px 8px;color:#aaa;" title="Hotel anchor">🏨</span>' : `
