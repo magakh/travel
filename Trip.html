@@ -1258,6 +1258,7 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
   </div>
 
   <div class="day-tabs" id="dayTabs">
+    <select id="dayDropdown" onchange="switchDay(parseInt(this.value))" style="appearance:none;-webkit-appearance:none;background:#fff;color:#1a1a1a;border:2px solid #fff;border-radius:20px;padding:6px 28px 6px 12px;font-size:13px;font-weight:700;cursor:pointer;background-image:url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2210%22 height=%226%22><path d=%22M0 0l5 6 5-6z%22 fill=%22%231a1a1a%22/></svg>');background-repeat:no-repeat;background-position:right 10px center;min-width:90px;"></select>
     <button class="day-tab green-tab" onclick="showAllMap()" id="dtabAll">All Days Map</button>
     <button class="day-tab" onclick="showView('search')" id="dtabSearch" style="border-color:#1a73e8;color:#1a73e8;">+ Add / Search</button>
     <button class="day-tab" onclick="showView('settings')" id="dtabSettings" style="border-color:#666;color:#ccc;padding:6px 10px;font-size:16px;">⚙</button>
@@ -4245,8 +4246,8 @@ function updateTabHighlight() {
     el.classList.remove('active');
   });
   if (currentView === 'list' || currentView === 'detail') {
-    const tab = document.getElementById('dtab' + currentDay);
-    if (tab) tab.classList.add('active');
+    const dd = document.getElementById('dayDropdown');
+    if (dd) dd.value = currentDay;
   }
 }
 
@@ -8531,20 +8532,16 @@ function applyConfig() {
   }
 
   // Rebuild day tabs dynamically — no hardcoded limit
-  const dayTabs = document.getElementById('dayTabs');
-  const dtabAnchor = document.getElementById('dtabAll');
-  if (dayTabs && dtabAnchor) {
-    // Remove old day buttons
-    dayTabs.querySelectorAll('.day-tab[id^="dtab"]:not(#dtabMap):not(#dtabAll):not(#dtabSearch):not(#dtabSettings)').forEach(el => el.remove());
-    // Insert new ones before All Days Map
+  const dayDropdown = document.getElementById('dayDropdown');
+  if (dayDropdown) {
+    dayDropdown.innerHTML = '';
     for (let i = 0; i < _n; i++) {
       const lbl = (c.dayLabels || [])[i] || ('Day ' + (i + 1));
-      const btn = document.createElement('button');
-      btn.className = 'day-tab' + (i === currentDay ? ' active' : '');
-      btn.id = 'dtab' + i;
-      btn.textContent = lbl;
-      btn.onclick = () => switchDay(i);
-      dayTabs.insertBefore(btn, dtabAnchor);
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = lbl;
+      if (i === currentDay) opt.selected = true;
+      dayDropdown.appendChild(opt);
     }
   }
 
