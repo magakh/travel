@@ -4304,14 +4304,15 @@ function _stopTimeRowHtml(s, i, dayIdx, endTime) {
   const wxSpan = '<span id="wx-'+dayIdx+'-'+i+'" style="margin-left:5px;font-size:11px;color:#5a7a8a;"></span>';
   const bk = s.reservation && s.reservation.time ? bookingTimeRowHtml(dayIdx, i) : null;
   if (bk) {
-    return '<div class="stop-time-label">'
+    const tintBg = bk.statusText.includes('late') ? 'rgba(240,180,60,0.12)' : 'rgba(60,180,80,0.10)';
+    const statusColor = bk.statusColor;
+    return '<div class="stop-time-label" style="background:'+tintBg+';border-radius:6px;padding:4px 6px;margin-bottom:2px;">'
       + numDot
-      + '🎟 Reserved <strong>' + bk.resTime + '</strong>'
-      + ' &nbsp;·&nbsp; Arrive <strong>' + bk.arriveTime + '</strong>'
-      + ' &nbsp;·&nbsp; <span style="color:' + bk.statusColor + ';font-weight:700;">' + bk.statusText + '</span>'
+      + '⏱ ' + s.time
       + ' &nbsp;·&nbsp; ⏳ ' + s.duration
-      + ' &nbsp;→&nbsp; <span style="color:var(--hint);">Done ' + endTime + '</span>'
+      + ' &nbsp;→&nbsp; <span style="color:var(--hint);">' + endTime + '</span>'
       + wxSpan
+      + '<br><span style="font-size:11px;color:' + statusColor + ';font-weight:700;margin-left:22px;">Arriving ' + bk.arriveTime + ' · ' + bk.statusText + '</span>'
       + '</div>';
   }
   return '<div class="stop-time-label">'
