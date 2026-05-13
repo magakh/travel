@@ -860,8 +860,8 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
 .action-bar button.blue-btn { border-color: var(--accent); color: var(--accent); background: #e8f0fd; }
 
 .stop-row {
-  display: flex; align-items: flex-start; gap: 8px;
-  padding: 12px 10px 12px 14px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: flex-start; gap: 6px;
+  padding: 10px 10px 10px 12px; border-bottom: 1px solid var(--border);
   background: var(--surface); cursor: pointer; transition: background 0.1s;
   position: relative;
 }
@@ -4332,10 +4332,9 @@ function renderStopList() {
          onclick="selectStop(${i})">
       <div class="stop-check ${completed.includes(currentDay+'-'+i) ? 'done' : ''}"
            onclick="event.stopPropagation(); toggleDone(${i})"></div>
-      <span class="drag-h" onclick="event.stopPropagation()">⠿</span>
-      <div class="stop-dot" style="background:${s.color};width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:800;flex-shrink:0;margin-top:2px;">${i+1}</div>
       <div class="stop-meta">
         <div class="stop-time-label">
+          <span style="display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:50%;background:${s.color};color:#fff;font-size:10px;font-weight:800;flex-shrink:0;margin-right:5px;">${i+1}</span>
           <span onclick="event.stopPropagation(); editStopTime(${i});" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;" title="Tap to edit start time">⏱ ${s.time}</span>
           &nbsp;·&nbsp;
           <span onclick="event.stopPropagation(); editDuration(${i});" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;color:var(--muted);" title="Tap to edit duration">⏳ ${s.duration}</span>
