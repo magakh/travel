@@ -1247,7 +1247,7 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
         <h1 id="appTitleEl">Trip</h1>
         <div class="header-sub" id="appSubtitleEl">May 7–10 · hidden gems · rooftop dining</div>
       </div>
-      <button id="lockBtn" onclick="showLockDialog()" title="Edit / Lock mode" style="background:none;border:none;cursor:pointer;font-size:20px;padding:2px;opacity:0.7;flex-shrink:0;">🔒</button>
+      <button id="lockBtn" onclick="showLockDialog()" title="Edit / Lock mode" style="background:none;border:none;cursor:pointer;font-size:15px;padding:2px 3px;opacity:0.7;flex-shrink:0;line-height:1;">🔒</button>
     </div>
     <div style="display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;flex-shrink:1;align-self:flex-start;padding-top:2px;">
       <button class="prebook-pill" id="saveBtn" onclick="_autoPushInFlight=false;_forceSave();" title="Save to cloud" style="border-color:#88d8a0;color:#88d8a0;pointer-events:auto !important;">💾</button>
@@ -10414,6 +10414,7 @@ function showMovePhotoSheet(fromStop, fromDay, photoIdx) {
 // Stop reading if user navigates away from story — hooked in showView()
 
 init();
+document.addEventListener('DOMContentLoaded', function() { if (typeof updateLockState === 'function') updateLockState(); });
 </script>
   <!-- Sync status bar — fixed bottom so it never covers the nav tabs -->
   <div id="syncBar" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;height:2px;background:#1a1a1a;overflow:hidden;">
