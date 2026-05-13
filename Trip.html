@@ -3914,7 +3914,23 @@ function bookingArrivalHtml(dayIdx, idx) {
     statusColor = '#155724';
     statusBg = '#d4edda';
   }
-  return '<span style="background:' + statusBg + ';color:' + statusColor + ';padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;white-space:nowrap;margin-left:6px;">🎟 ' + s.reservation.time + ' · arrive ' + minsToTimeStr(arriveMin) + ' · ' + statusText + '</span>';
+  return ''; // booking info now shown in time row via bookingTimeRowHtml
+}
+
+// Time-row portion for booked stops: Reserved → Arrive → Status · Duration → End
+function bookingTimeRowHtml(dayIdx, idx) {
+  const s = days[dayIdx] && days[dayIdx].stops && days[dayIdx].stops[idx];
+  if (!s || !s.reservation || !s.reservation.time) return null;
+  const arriveMin = computeArrivalMins(dayIdx, idx);
+  if (arriveMin == null) return null;
+  const stopMin = timeStrToMins(s.time);
+  const diff = stopMin - arriveMin;
+  let statusText, statusColor;
+  if (diff < 0)      { statusText = Math.abs(diff) + ' min late';  statusColor = '#c0392b'; }
+  else if (diff === 0) { statusText = 'on time';                   statusColor = '#7a5a00'; }
+  else               { statusText = diff + ' min early';           statusColor = '#155724'; }
+  return { resTime: s.reservation.time, arriveTime: minsToTimeStr(arriveMin), statusText, statusColor,
+           confirmed: s.reservation.confirmed };
 }
 
 // ── MOVE STOP BETWEEN DAYS ────────────────────────────────────────
@@ -4282,6 +4298,32 @@ function renderAll() {
 }
 
 
+// Build the time-row HTML for a stop — booking-aware
+function _stopTimeRowHtml(s, i, dayIdx, endTime) {
+  const numDot = '<span style="display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:50%;background:'+s.color+';color:#fff;font-size:10px;font-weight:800;flex-shrink:0;margin-right:5px;">'+(i+1)+'</span>';
+  const wxSpan = '<span id="wx-'+dayIdx+'-'+i+'" style="margin-left:5px;font-size:11px;color:#5a7a8a;"></span>';
+  const bk = s.reservation && s.reservation.time ? bookingTimeRowHtml(dayIdx, i) : null;
+  if (bk) {
+    return '<div class="stop-time-label">'
+      + numDot
+      + '🎟 Reserved <strong>' + bk.resTime + '</strong>'
+      + ' &nbsp;·&nbsp; Arrive <strong>' + bk.arriveTime + '</strong>'
+      + ' &nbsp;·&nbsp; <span style="color:' + bk.statusColor + ';font-weight:700;">' + bk.statusText + '</span>'
+      + ' &nbsp;·&nbsp; ⏳ ' + s.duration
+      + ' &nbsp;→&nbsp; <span style="color:var(--hint);">Done ' + endTime + '</span>'
+      + wxSpan
+      + '</div>';
+  }
+  return '<div class="stop-time-label">'
+    + numDot
+    + '⏱ ' + s.time
+    + ' &nbsp;·&nbsp; ⏳ ' + s.duration
+    + ' &nbsp;→&nbsp; <span style="color:var(--hint);">' + endTime + '</span>'
+    + wxSpan
+    + '</div>';
+}
+
+
 function renderStopList() {
   if (!days[currentDay] || !days[currentDay].stops) {
     document.getElementById('stopList').innerHTML = '<div style="text-align:center;padding:40px;color:#aaa;font-size:14px;">No stops for this day yet.<br><br><button onclick="showView(\'search\')" style="padding:10px 18px;background:#1a1a1a;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer;">+ Add a stop</button></div>';
@@ -4331,15 +4373,8 @@ function renderStopList() {
       <div class="stop-check ${completed.includes(currentDay+'-'+i) ? 'done' : ''}"
            onclick="event.stopPropagation(); toggleDone(${i})"></div>
       <div class="stop-meta">
-        <div class="stop-time-label">
-          <span style="display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:50%;background:${s.color};color:#fff;font-size:10px;font-weight:800;flex-shrink:0;margin-right:5px;">${i+1}</span>
-          <span onclick="event.stopPropagation(); editStopTime(${i});" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;" title="Tap to edit start time">⏱ ${s.time}</span>
-          &nbsp;·&nbsp;
-          <span onclick="event.stopPropagation(); editDuration(${i});" style="cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;color:var(--muted);" title="Tap to edit duration">⏳ ${s.duration}</span>
-          &nbsp;→&nbsp;<span style="color:var(--hint);">${endTime}</span>
-          <span id="wx-${currentDay}-${i}" style="margin-left:5px;font-size:11px;color:#5a7a8a;"></span>
-        </div>
-        <div class="stop-name-label">${s.name}${s.passedBy ? ' <span class="res-badge" style="background:#f3e5f5;border-color:#9c27b0;color:#6a1b9a;">📷 Passed by</span>' : ''}${s.checkIn ? ' <span class="res-badge" style="background:#fef3e2;border-color:#e67e22;color:#b35400;">📍 Check-in</span>' : ''}${s.reservation ? ' <span class="res-badge ' + (s.reservation.confirmed?'confirmed':'') + '">' + (s.reservation.confirmed?'✓ Booked':'⏳ Pending') + '</span>' : ''}${s.reservation ? bookingArrivalHtml(currentDay, i) : ''}</div>
+        ${_stopTimeRowHtml(s, i, currentDay, endTime)}
+        <div class="stop-name-label">${s.name}${s.passedBy ? ' <span class="res-badge" style="background:#f3e5f5;border-color:#9c27b0;color:#6a1b9a;">📷 Passed by</span>' : ''}${s.checkIn ? ' <span class="res-badge" style="background:#fef3e2;border-color:#e67e22;color:#b35400;">📍 Check-in</span>' : ''}${s.reservation ? ' <span class="res-badge ' + (s.reservation.confirmed?'confirmed':'') + '">' + (s.reservation.confirmed?'✓ Booked':'⏳ Pending') + '</span>' : ''}</div>
         ${getConflict(i) ? '<div class="conflict-banner">⚠️ Time conflict with previous stop</div>' : ''}
         <div class="stop-type-label">${s.type}${(s.free && !s.passedBy && !s.checkIn && !(s.reservation)) ? ' · <span style="color:#2e7d32;font-weight:700;font-size:11px;">Free</span>' : ''}</div>
         <div class="stop-tags">
