@@ -1400,7 +1400,10 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
             <span id="unitMetricPill"   onclick="_setUnits('metric')"   style="padding:5px 14px;border-radius:18px;font-size:12px;font-weight:700;cursor:pointer;transition:background 0.2s,color 0.2s;">°C / m</span>
           <span id="unitImperialPill" onclick="_setUnits('imperial')" style="padding:5px 14px;border-radius:18px;font-size:12px;font-weight:700;cursor:pointer;transition:background 0.2s,color 0.2s;">°F / mi</span>
           </div>
-          <button id="settingsLockBtn" onclick="showLockDialog()" style="background:#e9e9eb;border:none;border-radius:20px;padding:5px 10px;cursor:pointer;display:flex;align-items:center;"></button>
+          <div style="display:inline-flex;align-items:center;gap:1px;background:#e9e9eb;border-radius:20px;padding:3px;">
+            <span id="editModeEditPill" onclick="showLockDialog()" style="padding:5px 12px;border-radius:18px;font-size:12px;font-weight:700;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;gap:4px;"><svg width="11" height="13" viewBox="0 0 24 26" fill="none"><rect x="3" y="13" width="18" height="12" rx="2.5" fill="currentColor"/><path d="M8 13V9a4 4 0 0 1 8 0" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" opacity="0.4"/><circle cx="12" cy="19" r="2" fill="white"/></svg>Edit</span>
+            <span id="editModeLockPill" onclick="showLockDialog()" style="padding:5px 12px;border-radius:18px;font-size:12px;font-weight:700;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;gap:4px;"><svg width="11" height="13" viewBox="0 0 24 26" fill="none"><rect x="3" y="13" width="18" height="12" rx="2.5" fill="currentColor"/><path d="M8 13V9a4 4 0 0 1 8 0v4" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><circle cx="12" cy="19" r="2" fill="white"/></svg>Lock</span>
+          </div>
         </div>
       </div>
 
@@ -1513,20 +1516,6 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
         <p class="gen-hint" style="margin-bottom:10px;font-size:12px;">Current trip: <strong id="setCurrentTrip">london2026</strong></p>
       </div>
 
-      <!-- ── EDIT MODE ── -->
-      <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;">
-          <div>
-            <div style="font-size:14px;font-weight:700;">Access mode</div>
-            <div id="editModeHint" style="font-size:12px;color:#888;margin-top:2px;"></div>
-          </div>
-          <div style="display:inline-flex;align-items:center;gap:1px;background:#e9e9eb;border-radius:20px;padding:3px;">
-            <span id="editModeEditPill"  onclick="showLockDialog()" style="padding:5px 14px;border-radius:18px;font-size:13px;font-weight:700;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;gap:5px;"><svg width="12" height="14" viewBox="0 0 24 26" fill="none"><rect x="3" y="13" width="18" height="12" rx="2.5" fill="currentColor"/><path d="M8 13V8a4 4 0 0 1 8 0" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" opacity="0.35"/><circle cx="12" cy="19" r="2" fill="white"/></svg> Edit</span>
-            <span id="editModeLockPill"  onclick="showLockDialog()" style="padding:5px 14px;border-radius:18px;font-size:13px;font-weight:700;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;gap:5px;"><svg width="12" height="14" viewBox="0 0 24 26" fill="none"><rect x="3" y="13" width="18" height="12" rx="2.5" fill="currentColor"/><path d="M8 13V8a4 4 0 0 1 8 0" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><path d="M12 4a4 4 0 0 1 4 4v1" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><circle cx="12" cy="19" r="2" fill="white"/></svg> Lock</span>
-          </div>
-        </div>
-      </div>
-      <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
         <p style="font-size:12px;color:#888;margin-bottom:8px;">Data</p>
         <div style="display:flex;gap:8px;margin-bottom:8px;">
           <button onclick="exportFile()" style="flex:1;padding:11px;border-radius:10px;border:1px solid #444;background:#1e1e1e;color:#ccc;font-size:13px;font-weight:700;cursor:pointer;">📤 Export JSON</button>
