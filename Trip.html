@@ -7386,7 +7386,7 @@ function paintWeather(dayIdx, w) {
     if ((m[3]||'').toUpperCase()==='PM' && h24<12) h24+=12;
     if ((m[3]||'').toUpperCase()==='AM' && h24===12) h24=0;
     const hw = w.hourly[h24]||w.hourly[Math.max(0,h24-1)]; if (!hw) return;
-    el.textContent = (WMO_ICONS[hw.code]||'')+'  '+hw.temp+'°'+(hw.precip>10?' 💧'+hw.precip+'%':'');
+    el.textContent = (WMO_ICONS[hw.code]||'')+'  '+_fmtTemp(hw.temp)+(hw.precip>10?' 💧'+hw.precip+'%':'');
   });
 }
 
