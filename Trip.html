@@ -2270,6 +2270,7 @@ function _syncBarShow(label, color, pct) {
     fill.style.width = (pct || 0) + '%';
     lbl.style.display = 'block';
     lbl.style.color = color || '#1a73e8';
+    lbl.style.borderLeft = '3px solid ' + (color || '#1a73e8');
     lbl.textContent = label || '';
   } catch(e) {}
 }
@@ -10346,10 +10347,10 @@ function showMovePhotoSheet(fromStop, fromDay, photoIdx) {
 init();
 </script>
   <!-- Sync status bar — fixed bottom so it never covers the nav tabs -->
-  <div id="syncBar" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;height:3px;background:#1a1a1a;overflow:hidden;">
+  <div id="syncBar" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;height:2px;background:#1a1a1a;overflow:hidden;">
     <div id="syncBarFill" style="height:100%;width:0%;transition:width 0.3s;"></div>
   </div>
-  <div id="syncLabel" style="display:none;position:fixed;bottom:3px;left:0;right:0;z-index:9999;font-size:10px;font-weight:700;text-align:center;padding:3px 0;letter-spacing:.04em;background:rgba(255,255,255,0.92);"></div>
+  <div id="syncLabel" style="display:none;position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:9999;font-size:12px;font-weight:700;padding:6px 18px;border-radius:24px;white-space:nowrap;box-shadow:0 2px 12px rgba(0,0,0,0.15);background:#fff;"></div>
 </body>
 </html><!-- cache bust Sun May 10 2026 story-tab -->
 <!-- restored Tue May 12 03:36:15 UTC 2026 build:1778556975 -->
