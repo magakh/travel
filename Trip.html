@@ -1764,28 +1764,46 @@ function _setUnits(u) {
   try { refreshWeatherForDay(currentDay); } catch(e) {}
 }
 function _toggleDayPicker() {
-  const menu = document.getElementById('dayPickerMenu');
-  if (!menu) return;
-  if (menu.style.display !== 'none') { _closeDayPicker(); return; }
-  // Always rebuild so label + items reflect current day/labels even on first open
-  _updateDayPicker(APP_CONFIG.dayLabels, APP_CONFIG.numDays || days.length, currentDay);
-  const btn = document.getElementById('dayPickerBtn');
-  if (btn) {
-    const r = btn.getBoundingClientRect();
-    menu.style.top = (r.bottom + 6) + 'px';
-    menu.style.left = r.left + 'px';
+  var existing = document.getElementById('dayPickerMenu');
+  if (existing) { existing.remove(); return; }
+  var btn = document.getElementById('dayPickerBtn');
+  if (!btn) return;
+  var r = btn.getBoundingClientRect();
+  var menu = document.createElement('div');
+  menu.id = 'dayPickerMenu';
+  menu.style.cssText = 'position:fixed;top:'+(r.bottom+6)+'px;left:'+r.left+'px;background:#fff;border-radius:14px;box-shadow:0 4px 24px rgba(0,0,0,0.2);z-index:99999;min-width:150px;overflow:hidden;';
+  var labels = APP_CONFIG.dayLabels || [];
+  var n = APP_CONFIG.numDays || days.length || 4;
+  for (var i = 0; i < n; i++) {
+    (function(idx) {
+      var day = labels[idx] || ('Day '+(idx+1));
+      var row = document.createElement('div');
+      var active = idx === currentDay;
+      row.style.cssText = 'padding:11px 16px;font-size:14px;font-weight:'+(active?'700':'500')+';color:'+(active?'#1a7a3a':'#222')+';cursor:pointer;border-bottom:1px solid #f0f0f0;display:flex;justify-content:space-between;align-items:center;';
+      row.innerHTML = day + (active ? '<span style="color:#1a7a3a;">✓</span>' : '');
+      row.addEventListener('click', function(e) {
+        e.stopPropagation();
+        switchDay(idx);
+        var m = document.getElementById('dayPickerMenu'); if (m) m.remove();
+        var lbl = document.getElementById('dayPickerLabel'); if (lbl) lbl.textContent = labels[idx] || ('Day '+(idx+1));
+      });
+      menu.appendChild(row);
+    })(i);
   }
-  menu.style.display = 'block';
-  // Use setTimeout so this open-click doesn't immediately trigger close
+  if (menu.lastChild) menu.lastChild.style.borderBottom = 'none';
+  document.body.appendChild(menu);
+  var lbl = document.getElementById('dayPickerLabel');
+  if (lbl) lbl.textContent = labels[currentDay] || ('Day '+(currentDay+1));
   setTimeout(function() {
-    document.addEventListener('click', _closeDayPicker);
+    document.addEventListener('click', function _dpClose() {
+      var m = document.getElementById('dayPickerMenu'); if (m) m.remove();
+      document.removeEventListener('click', _dpClose);
+    });
   }, 50);
 }
-function _closeDayPicker() {
-  const menu = document.getElementById('dayPickerMenu');
-  if (menu) menu.style.display = 'none';
-  document.removeEventListener('click', _closeDayPicker);
-}
+function _closeDayPicker() { var m = document.getElementById('dayPickerMenu'); if (m) m.remove(); }
+
+
 function _updateDayPicker(dayLabels, n, selected) {
   const menu = document.getElementById('dayPickerMenu');
   const lbl = document.getElementById('dayPickerLabel');
