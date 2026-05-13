@@ -1456,20 +1456,10 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
           <input id="setDepartureTime" type="time" style="border:none;padding:0;font-size:14px;flex:1;background:transparent;outline:none;color:#1a1a1a;">
         </div>
       </div>
-      <p class="gen-hint" id="hotelGeocodeStatus" style="font-size:11px;margin-bottom:10px;"></p>
-      <div id="hotelPreview" style="margin-bottom:10px;"></div>
-      <details style="margin-bottom:12px;">
-        <summary style="font-size:12px;color:#888;cursor:pointer;">Advanced: hotel coordinates</summary>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
-          <input class="form-input" id="hotelLat" type="number" step="0.0001" placeholder="Latitude e.g. 40.7580">
-          <input class="form-input" id="hotelLng" type="number" step="0.0001" placeholder="Longitude e.g. -73.9855">
-        </div>
-      </details>
+<p id="hotelGeocodeStatus" style="display:none;"></p>
+<div id="hotelPreview" style="display:none;"></div>
+<input type="hidden" id="hotelLat"><input type="hidden" id="hotelLng">
 
-      <!-- Repair coords (kept here, fill moved to Add/Search) -->
-      <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
-        <button onclick="repairAllCoords()" style="padding:8px 16px;background:#b03a00;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;">🔧 Repair coordinates</button>
-      </div>
 
       <!-- Personal Anthropic API key + model selector -->
       <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
@@ -8086,6 +8076,8 @@ async function saveSettings() {
   if (EDITOR_MODE) await cloudSave('updated trip settings');
 
   showToast('Settings saved ✓');
+  // Auto-repair any missing stop coordinates silently
+  try { repairAllCoords(true); } catch(e) {}
   showView('list');
 }
 
