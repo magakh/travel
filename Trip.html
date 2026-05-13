@@ -1712,6 +1712,8 @@ function _setUnits(u) {
   if (m) { m.style.background = u === 'metric' ? '#fff' : 'transparent'; m.style.color = u === 'metric' ? '#1a7a3a' : '#555'; m.style.boxShadow = u === 'metric' ? '0 1px 4px rgba(0,0,0,0.12)' : 'none'; }
   if (i) { i.style.background = u === 'imperial' ? '#fff' : 'transparent'; i.style.color = u === 'imperial' ? '#1a7a3a' : '#555'; i.style.boxShadow = u === 'imperial' ? '0 1px 4px rgba(0,0,0,0.12)' : 'none'; }
   try { renderAll(); } catch(e) {}
+  // Re-populate per-stop weather spans with updated unit
+  try { refreshWeatherForDay(currentDay); } catch(e) {}
 }
 function _toggleUnits() { _setUnits(APP_CONFIG.units === 'imperial' ? 'metric' : 'imperial'); }
 function _updateUnitsBtn() {
