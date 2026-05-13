@@ -1290,11 +1290,10 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
       <div class="split-list" id="splitListCol">
         <div class="progress-wrap"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
         <div style="position:sticky;top:0;z-index:12;background:var(--surface,#fff);">
-          <div id="weatherStrip" style="display:none;"></div>
-          <div class="action-bar">
+          <div class="action-bar" style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;">
             <button onclick="optimizeRoute()">⚡ Optimize route</button>
             <button onclick="showRouteMap()">🗺 Route Map</button>
-            <button class="blue-btn" onclick="showView('search')">+ Add location</button>
+            <div id="weatherStrip" style="margin-left:auto;display:none;"></div>
           </div>
         </div>
         <div id="stopList"></div>
@@ -7380,8 +7379,8 @@ function paintWeather(dayIdx, w) {
   const strip = document.getElementById('weatherStrip');
   if (!strip) return;
   const icon = WMO_ICONS[w.code]||'🌡️', desc = WMO_DESC[w.code]||'';
-  strip.style.cssText = 'display:flex;align-items:center;gap:6px;padding:4px 12px;background:linear-gradient(135deg,#e8f4fd,#f0f8ff);border-bottom:1px solid #d0e8f8;font-size:11px;';
-  strip.innerHTML = '<span style="font-size:18px;">'+icon+'</span><span style="font-weight:600;color:#1a4a6b;flex:1;">'+desc+'</span><span style="font-weight:800;color:#1a4a6b;">'+_fmtTemp(w.tmax)+' <span style="font-size:11px;font-weight:400;color:#7a9aaa;">/ '+_fmtTemp(w.tmin)+'</span></span>';
+  strip.style.cssText = 'display:flex;align-items:center;gap:5px;padding:4px 10px;background:#f0f7ff;border-radius:20px;font-size:12px;white-space:nowrap;';
+  strip.innerHTML = '<span style="font-size:14px;">'+icon+'</span><span style="font-weight:600;color:#1a4a6b;">'+desc+'</span><span style="font-weight:800;color:#1a4a6b;margin-left:2px;">'+_fmtTemp(w.tmax)+'<span style="font-size:10px;font-weight:400;color:#7a9aaa;"> / '+_fmtTemp(w.tmin)+'</span></span>';
   // Per-stop hourly weather
   const stops = days[dayIdx]&&days[dayIdx].stops; if (!stops) return;
   stops.forEach((s,i) => {
