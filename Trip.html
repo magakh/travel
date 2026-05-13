@@ -1242,12 +1242,14 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
 <input type="file" id="import-input" accept=".json" style="display:none" onchange="importFile(this); this.value='';">
 <div class="header" id="appHeader">
   <div class="header-top" style="align-items:flex-start;">
-    <div style="flex-shrink:0;">
-      <h1 id="appTitleEl">Trip</h1>
-      <div class="header-sub" id="appSubtitleEl">May 7–10 · hidden gems · rooftop dining</div>
+    <div style="flex-shrink:0;display:flex;align-items:center;gap:8px;">
+      <div>
+        <h1 id="appTitleEl">Trip</h1>
+        <div class="header-sub" id="appSubtitleEl">May 7–10 · hidden gems · rooftop dining</div>
+      </div>
+      <button id="lockBtn" onclick="showLockDialog()" title="Edit / Lock mode" style="background:none;border:none;cursor:pointer;font-size:20px;padding:2px;opacity:0.7;flex-shrink:0;">🔒</button>
     </div>
     <div style="display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;flex-shrink:1;align-self:flex-start;padding-top:2px;">
-      <button class="prebook-pill" id="lockBtn" onclick="showLockDialog()" title="Edit access" style="border-color:#aaa;color:#555;">🔒 View</button>
       <button class="prebook-pill" id="saveBtn" onclick="_autoPushInFlight=false;_forceSave();" title="Save to cloud" style="border-color:#88d8a0;color:#88d8a0;pointer-events:auto !important;">💾</button>
       <button class="prebook-pill" id="walkGuideBtn" onclick="toggleWalkingGuide()" title="Live walking guide" style="border-color:#1a7a3a;color:#1a7a3a;font-size:16px;padding:4px 8px;">🚶</button>
       <button class="prebook-pill" onclick="checkInHere()" title="Check in at current location" style="border-color:#e67e22;color:#e67e22;font-size:16px;padding:4px 8px;">📍</button>
@@ -1508,7 +1510,19 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
         <p class="gen-hint" style="margin-bottom:10px;font-size:12px;">Current trip: <strong id="setCurrentTrip">london2026</strong></p>
       </div>
 
-      <!-- ── DATA ── -->
+      <!-- ── EDIT MODE ── -->
+      <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div>
+            <div style="font-size:14px;font-weight:700;">Access mode</div>
+            <div id="editModeHint" style="font-size:12px;color:#888;margin-top:2px;"></div>
+          </div>
+          <div style="display:inline-flex;align-items:center;gap:1px;background:#e9e9eb;border-radius:20px;padding:3px;">
+            <span id="editModeEditPill"  onclick="showLockDialog()" style="padding:5px 14px;border-radius:18px;font-size:13px;font-weight:700;cursor:pointer;transition:all 0.2s;">🔓 Edit</span>
+            <span id="editModeLockPill"  onclick="showLockDialog()" style="padding:5px 14px;border-radius:18px;font-size:13px;font-weight:700;cursor:pointer;transition:all 0.2s;">🔒 Lock</span>
+          </div>
+        </div>
+      </div>
       <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
         <p style="font-size:12px;color:#888;margin-bottom:8px;">Data</p>
         <div style="display:flex;gap:8px;margin-bottom:8px;">
@@ -2536,14 +2550,16 @@ function lockEditor() {
 function updateLockUI() {
   const lock = document.getElementById('lockBtn');
   if (lock) {
-    lock.textContent = EDITOR_MODE ? '🔓 Edit' : '🔒 View';
+    lock.textContent = EDITOR_MODE ? '🔓' : '🔒';
     lock.title = EDITOR_MODE ? 'Lock (view-only)' : 'Unlock to edit';
-    // Strong visual state: background + border + color change together
-    lock.style.borderColor = EDITOR_MODE ? '#28a745' : '#aaa';
-    lock.style.color = EDITOR_MODE ? '#28a745' : '#555';
-    lock.style.background = EDITOR_MODE ? '#e8f5ee' : '#fff';
-    lock.style.fontWeight = EDITOR_MODE ? '700' : '400';
+    lock.style.opacity = EDITOR_MODE ? '1' : '0.6';
   }
+  const ep = document.getElementById('editModeEditPill');
+  const lp = document.getElementById('editModeLockPill');
+  const eh = document.getElementById('editModeHint');
+  if (ep) { ep.style.background = EDITOR_MODE ? '#fff' : 'transparent'; ep.style.color = EDITOR_MODE ? '#1a7a3a' : '#999'; ep.style.boxShadow = EDITOR_MODE ? '0 1px 4px rgba(0,0,0,0.12)' : 'none'; }
+  if (lp) { lp.style.background = EDITOR_MODE ? 'transparent' : '#fff'; lp.style.color = EDITOR_MODE ? '#999' : '#1a1a1a'; lp.style.boxShadow = EDITOR_MODE ? 'none' : '0 1px 4px rgba(0,0,0,0.12)'; }
+  if (eh) eh.textContent = EDITOR_MODE ? 'Can edit stops, times and details' : 'View only — tap to unlock';
   document.body.classList.toggle('viewer-mode', !EDITOR_MODE);
   try { renderStopList(); } catch(e) {}
 }
@@ -4260,7 +4276,7 @@ function showView(v) {
   if (v === 'hotel') v = 'settings';
   // Stop reading if navigating away from story
   if (v !== 'story' && typeof _stopReadAloud === 'function') _stopReadAloud();
-  if (v === 'settings') setTimeout(function() { if (typeof _updateUnitsBtn === 'function') _updateUnitsBtn(); }, 50);
+  if (v === 'settings') setTimeout(function() { if (typeof _updateUnitsBtn === 'function') _updateUnitsBtn(); updateLockState(); }, 50);
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   const panelEl = document.getElementById('panel-' + v);
   if (!panelEl) { console.warn('No panel:', v); return; }
