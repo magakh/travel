@@ -1410,70 +1410,60 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
       </div>
 
       <!-- ── TRIP BASICS ── -->
-      <label class="form-label">Trip title</label>
-      <input class="form-input" id="setTitle" type="text" placeholder="e.g. NYC 2026">
-      <label class="form-label">Subtitle</label>
-      <input class="form-input" id="setSubtitle" type="text" placeholder="e.g. hidden gems · rooftop dining">
-
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px;">
-        <div>
-          <label class="form-label">First day</label>
-          <input class="form-input" id="setStartDate" type="date" style="margin:0;" oninput="previewDayTabs()">
+      <div style="background:#fff;border-radius:12px;overflow:hidden;margin-bottom:12px;">
+        <div style="display:flex;align-items:center;padding:10px 14px;border-bottom:1px solid #f0f0f0;">
+          <span style="font-size:12px;color:#888;width:80px;flex-shrink:0;">Title</span>
+          <input class="form-input" id="setTitle" type="text" placeholder="e.g. NYC 2026" style="margin:0;border:none;padding:0;font-size:14px;flex:1;background:transparent;outline:none;">
         </div>
-        <div>
-          <label class="form-label">Last day</label>
-          <input class="form-input" id="setEndDate" type="date" style="margin:0;" oninput="previewDayTabs()">
+        <div style="display:flex;align-items:center;padding:10px 14px;">
+          <span style="font-size:12px;color:#888;width:80px;flex-shrink:0;">Subtitle</span>
+          <input class="form-input" id="setSubtitle" type="text" placeholder="hidden gems · rooftop dining" style="margin:0;border:none;padding:0;font-size:14px;flex:1;background:transparent;outline:none;">
         </div>
       </div>
-      <div id="setDayTabPreview" style="margin-top:10px;margin-bottom:4px;"></div>
+
+      <div style="background:#fff;border-radius:12px;overflow:hidden;margin-bottom:12px;">
+        <div style="display:flex;align-items:center;padding:10px 14px;border-bottom:1px solid #f0f0f0;">
+          <span style="font-size:12px;color:#888;width:80px;flex-shrink:0;">First day</span>
+          <input id="setStartDate" type="date" oninput="previewDayTabs()" style="border:none;padding:0;font-size:14px;flex:1;background:transparent;outline:none;color:#1a1a1a;">
+        </div>
+        <div style="display:flex;align-items:center;padding:10px 14px;">
+          <span style="font-size:12px;color:#888;width:80px;flex-shrink:0;">Last day</span>
+          <input id="setEndDate" type="date" oninput="previewDayTabs()" style="border:none;padding:0;font-size:14px;flex:1;background:transparent;outline:none;color:#1a1a1a;">
+        </div>
+      </div>
+      <div id="setDayTabPreview" style="margin-bottom:12px;font-size:12px;color:#888;"></div>
       <input type="hidden" id="setNumDays" value="4">
       <div id="setDayLabelsWrap" style="display:none;"></div>
 
-      <!-- ── HOTEL & TIMING (combined) ── -->
-      <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
-        <h3 style="margin:0 0 10px 0;font-size:14px;">🏨 Hotel & arrival/departure times</h3>
-
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-          <div>
-            <label class="form-label">Hotel name</label>
-            <input class="form-input" id="hotelName" type="text" placeholder="e.g. Hotel Edison" oninput="updateHotelPreview()" style="margin:0;">
-          </div>
-          <div>
-            <label class="form-label">Day 1 hotel arrival</label>
-            <input class="form-input" id="setArrivalTime" type="time" style="margin:0;">
-            <p class="gen-hint" style="font-size:11px;margin-top:2px;">No stops before this on Day 1.</p>
-          </div>
+      <!-- ── HOTEL & TIMING ── -->
+      <div style="background:#fff;border-radius:12px;overflow:hidden;margin-bottom:12px;">
+        <div style="padding:8px 14px 4px;font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid #f0f0f0;">🏨 Hotel & Times</div>
+        <div style="display:flex;align-items:center;padding:10px 14px;border-bottom:1px solid #f0f0f0;">
+          <span style="font-size:12px;color:#888;width:100px;flex-shrink:0;">Hotel name</span>
+          <input class="form-input" id="hotelName" type="text" placeholder="e.g. Hotel Edison" oninput="updateHotelPreview()" style="margin:0;border:none;padding:0;font-size:14px;flex:1;background:transparent;outline:none;">
         </div>
-
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px;">
-          <div>
-            <label class="form-label">Hotel address</label>
-            <input class="form-input" id="hotelAddress" type="text" placeholder="e.g. 228 W 47th St, New York, NY" oninput="updateHotelPreview()" onblur="geocodeHotelAddress()" style="margin:0;">
-          </div>
-          <div>
-            <label class="form-label">Last day flight departure</label>
-            <input class="form-input" id="setDepartureTime" type="time" style="margin:0;">
-            <p class="gen-hint" style="font-size:11px;margin-top:2px;">No stops within 3h of flight.</p>
-          </div>
+        <div style="display:flex;align-items:center;padding:10px 14px;border-bottom:1px solid #f0f0f0;">
+          <span style="font-size:12px;color:#888;width:100px;flex-shrink:0;">Address</span>
+          <input class="form-input" id="hotelAddress" type="text" placeholder="228 W 47th St, New York" oninput="updateHotelPreview()" onblur="geocodeHotelAddress()" style="margin:0;border:none;padding:0;font-size:14px;flex:1;background:transparent;outline:none;">
         </div>
-
-        <p class="gen-hint" id="hotelGeocodeStatus" style="margin-top:6px;font-size:11px;">💡 Address coordinates are looked up automatically when you tab out.</p>
-
-        <details style="margin-top:4px;">
-          <summary style="font-size:12px;color:#888;cursor:pointer;">Advanced: set hotel coordinates manually</summary>
-          <div class="form-row" style="margin-top:8px;">
-            <div>
-              <label class="form-label">Latitude</label>
-              <input class="form-input" id="hotelLat" type="number" step="0.0001" placeholder="e.g. 40.7580">
-            </div>
-            <div>
-              <label class="form-label">Longitude</label>
-              <input class="form-input" id="hotelLng" type="number" step="0.0001" placeholder="e.g. -73.9855">
-            </div>
-          </div>
-        </details>
-        <div id="hotelPreview" style="margin-top:8px;"></div>
+        <div style="display:flex;align-items:center;padding:10px 14px;border-bottom:1px solid #f0f0f0;">
+          <span style="font-size:12px;color:#888;width:100px;flex-shrink:0;">Arrival</span>
+          <input id="setArrivalTime" type="time" style="border:none;padding:0;font-size:14px;flex:1;background:transparent;outline:none;color:#1a1a1a;">
+        </div>
+        <div style="display:flex;align-items:center;padding:10px 14px;">
+          <span style="font-size:12px;color:#888;width:100px;flex-shrink:0;">Departure</span>
+          <input id="setDepartureTime" type="time" style="border:none;padding:0;font-size:14px;flex:1;background:transparent;outline:none;color:#1a1a1a;">
+        </div>
       </div>
+      <p class="gen-hint" id="hotelGeocodeStatus" style="font-size:11px;margin-bottom:10px;"></p>
+      <div id="hotelPreview" style="margin-bottom:10px;"></div>
+      <details style="margin-bottom:12px;">
+        <summary style="font-size:12px;color:#888;cursor:pointer;">Advanced: hotel coordinates</summary>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;">
+          <input class="form-input" id="hotelLat" type="number" step="0.0001" placeholder="Latitude e.g. 40.7580">
+          <input class="form-input" id="hotelLng" type="number" step="0.0001" placeholder="Longitude e.g. -73.9855">
+        </div>
+      </details>
 
       <!-- Repair coords (kept here, fill moved to Add/Search) -->
       <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
