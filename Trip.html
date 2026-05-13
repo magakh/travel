@@ -1767,6 +1767,8 @@ function _toggleDayPicker() {
   const menu = document.getElementById('dayPickerMenu');
   if (!menu) return;
   if (menu.style.display !== 'none') { _closeDayPicker(); return; }
+  // Always rebuild so label + items reflect current day/labels even on first open
+  _updateDayPicker(APP_CONFIG.dayLabels, APP_CONFIG.numDays || days.length, currentDay);
   const btn = document.getElementById('dayPickerBtn');
   if (btn) {
     const r = btn.getBoundingClientRect();
@@ -10459,7 +10461,10 @@ function showMovePhotoSheet(fromStop, fromDay, photoIdx) {
 // Stop reading if user navigates away from story — hooked in showView()
 
 init();
-document.addEventListener('DOMContentLoaded', function() { if (typeof updateLockState === 'function') updateLockState(); });
+document.addEventListener('DOMContentLoaded', function() {
+  if (typeof updateLockState === 'function') updateLockState();
+  if (typeof _updateDayPicker === 'function') _updateDayPicker(APP_CONFIG.dayLabels, APP_CONFIG.numDays || days.length, currentDay);
+});
 </script>
   <!-- Sync status bar — fixed bottom so it never covers the nav tabs -->
   <div id="syncBar" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9999;height:2px;background:#1a1a1a;overflow:hidden;">
