@@ -1407,8 +1407,6 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
             <span id="editModeLockPill" onclick="showLockDialog()" style="padding:5px 12px;border-radius:18px;font-size:12px;font-weight:700;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;gap:4px;"><svg width="11" height="13" viewBox="0 0 24 26" fill="none"><rect x="3" y="13" width="18" height="12" rx="2.5" fill="currentColor"/><path d="M8 13V9a4 4 0 0 1 8 0v4" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><circle cx="12" cy="19" r="2" fill="white"/></svg>Lock</span>
           </div>
         </div>
-          <button onclick="saveAllSettings()" style="background:#1a1a1a;border:none;color:#fff;border-radius:20px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;">💾 Save</button>
-        </div>
       </div>
 
       <!-- ── TRIP BASICS ── -->
@@ -1497,6 +1495,8 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
         </p>
       </div>
 
+      <!-- ── SAVE ── -->
+      <button class="gen-btn" onclick="saveAllSettings()" style="background:#1a1a1a;margin-top:14px;">💾 Save all settings</button>
       <button onclick="showFeatureTour()" style="width:100%;margin-top:10px;padding:10px;border-radius:12px;border:1px solid #ddd;background:#fff;font-size:13px;color:#666;cursor:pointer;">❓ Show app feature guide</button>
       <p class="gen-hint">Trip settings &amp; hotel sync to all devices via Supabase.</p>
 
