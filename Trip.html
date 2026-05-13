@@ -4331,9 +4331,17 @@ function renderStopList() {
          id="srow${i}"
          onclick="selectStop(${i})">
       <div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex-shrink:0;">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:5px;flex-shrink:0;">
         <div class="stop-check ${completed.includes(currentDay+'-'+i) ? 'done' : ''}"
              onclick="event.stopPropagation(); toggleDone(${i})"></div>
-        <span style="color:#ccc;font-size:13px;line-height:1;cursor:grab;letter-spacing:1px;" onclick="event.stopPropagation()">⠿</span>
+        <div style="display:grid;grid-template-columns:repeat(2,3px);gap:3px;opacity:0.25;cursor:grab;" onclick="event.stopPropagation()">
+          <span style="width:3px;height:3px;border-radius:50%;background:#555;display:block;"></span>
+          <span style="width:3px;height:3px;border-radius:50%;background:#555;display:block;"></span>
+          <span style="width:3px;height:3px;border-radius:50%;background:#555;display:block;"></span>
+          <span style="width:3px;height:3px;border-radius:50%;background:#555;display:block;"></span>
+          <span style="width:3px;height:3px;border-radius:50%;background:#555;display:block;"></span>
+          <span style="width:3px;height:3px;border-radius:50%;background:#555;display:block;"></span>
+        </div>
       </div>
       <div class="stop-meta">
         <div class="stop-time-label">
