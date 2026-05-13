@@ -1263,7 +1263,6 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
         <span id="dayPickerLabel">Day</span>
         <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="#1a1a1a" stroke-width="1.8" stroke-linecap="round"/></svg>
       </button>
-      <div id="dayPickerMenu" style="display:none;position:absolute;top:calc(100% + 6px);left:0;background:#fff;border-radius:14px;box-shadow:0 4px 20px rgba(0,0,0,0.18);z-index:9999;min-width:130px;overflow:hidden;"></div>
     </div>
     <button class="day-tab green-tab" onclick="showAllMap()" id="dtabAll">All Days Map</button>
     <button class="day-tab" onclick="showView('search')" id="dtabSearch" style="border-color:#1a73e8;color:#1a73e8;">+ Add / Search</button>
@@ -1717,18 +1716,16 @@ function _setUnits(u) {
   try { refreshWeatherForDay(currentDay); } catch(e) {}
 }
 function _toggleDayPicker() {
-  let menu = document.getElementById('dayPickerMenu');
+  const menu = document.getElementById('dayPickerMenu');
   if (!menu) return;
   if (menu.style.display !== 'none') { menu.style.display = 'none'; return; }
-  // Move menu to body so it's not clipped by sticky header overflow
-  if (menu.parentElement.id !== 'body' && menu.parentElement !== document.body) {
-    document.body.appendChild(menu);
-  }
   const btn = document.getElementById('dayPickerBtn');
   if (btn) {
     const r = btn.getBoundingClientRect();
-    menu.style.cssText = 'display:block;position:fixed;top:'+(r.bottom+6)+'px;left:'+r.left+'px;background:#fff;border-radius:14px;box-shadow:0 4px 24px rgba(0,0,0,0.2);z-index:99999;min-width:140px;overflow:hidden;';
+    menu.style.top = (r.bottom + 6) + 'px';
+    menu.style.left = r.left + 'px';
   }
+  menu.style.display = 'block';
   setTimeout(function() { document.addEventListener('click', _closeDayPicker, { once: true }); }, 10);
 }
 function _closeDayPicker() {
@@ -10403,6 +10400,9 @@ init();
     <div id="syncBarFill" style="height:100%;width:0%;transition:width 0.3s;"></div>
   </div>
   <div id="syncLabel" style="display:none;position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:9999;font-size:12px;font-weight:700;padding:6px 18px;border-radius:24px;white-space:nowrap;box-shadow:0 2px 12px rgba(0,0,0,0.15);background:#fff;"></div>
+<!-- Day picker menu — lives at body level to avoid overflow:hidden clipping -->
+<div id="dayPickerMenu" style="display:none;position:fixed;background:#fff;border-radius:14px;box-shadow:0 4px 24px rgba(0,0,0,0.2);z-index:99999;min-width:140px;overflow:hidden;"></div>
+
 </body>
 </html><!-- cache bust Sun May 10 2026 story-tab -->
 <!-- restored Tue May 12 03:36:15 UTC 2026 build:1778556975 -->
