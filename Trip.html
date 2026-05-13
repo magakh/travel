@@ -4352,7 +4352,7 @@ function renderStopList() {
         <div class="stop-name-label">${s.name}${s.passedBy ? ' <span class="res-badge" style="background:#f3e5f5;border-color:#9c27b0;color:#6a1b9a;">📷 Passed by</span>' : ''}${s.checkIn ? ' <span class="res-badge" style="background:#fef3e2;border-color:#e67e22;color:#b35400;">📍 Check-in</span>' : ''}${s.reservation ? ' <span class="res-badge ' + (s.reservation.confirmed?'confirmed':'') + '">' + (s.reservation.confirmed?'✓ Booked':'⏳ Pending') + '</span>' : ''}</div>
         <div class="stop-type-label">${s.type}</div>
         <div class="stop-tags">
-          ${s.prebook ? '<span class="tag-pill prebook">Pre-book</span>' : ''}
+          ${(s.prebook && !(s.reservation && (s.reservation.confirmed || s.reservation.time))) ? '<span class="tag-pill prebook">Pre-book</span>' : ''}
           ${s.free ? '<span class="tag-pill free">Free</span>' : ''}
           ${s.isUserAdded ? '<span class="tag-pill" style="background:#e8f0fd;color:#1565c0;">Custom</span>' : ''}
         </div>
@@ -4701,7 +4701,8 @@ function stopPhotosHtml(stopIdx, dayIdx) {
 function renderDetail() {
   const s = days[currentDay].stops[currentStop];
   const badgeLabels = { free:'Free entry', prebook:'Pre-book', paid:'Paid', food:'Healthy food', walk:'Walking', weekend:'Weekend only', weekday:'Weekday only' };
-  const badges = (s.badges || []).map(b => `<span class="badge ${b}">${badgeLabels[b]||b}</span>`).join('');
+  const isBooked = s.reservation && (s.reservation.confirmed || s.reservation.time);
+  const badges = (s.badges || []).filter(b => !(b === 'prebook' && isBooked)).map(b => `<span class="badge ${b}">${badgeLabels[b]||b}</span>`).join('');
   const gmSearch = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(s.name + ' ' + s.address)}`;
   const gmWalk = `https://www.google.com/maps/dir/?api=1&destination=${s.lat},${s.lng}&travelmode=walking`;
   const histParas = (s.history || '').split('\n\n').map((p,i) => `<p class="history-text${i>0?' history-para':''}">${p.replace(/\n/g,' ')}</p>`).join('');
