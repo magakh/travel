@@ -1255,8 +1255,9 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
       <div style="position:relative;flex-shrink:0;">
         <button onclick="_toggleActivityMenu()" id="activityMenuBtn" class="prebook-pill" style="border-color:#888;color:#ccc;font-size:15px;padding:4px 10px;gap:4px;display:flex;align-items:center;">⚡ ▾</button>
       </div>
-      <button class="prebook-pill" onclick="showView('prebook')">Book list</button>
-      <button class="prebook-pill" onclick="showStoryTab()" style="border-color:#c05621;color:#c05621;">✍️ Story</button>
+      <div style="position:relative;flex-shrink:0;">
+        <button onclick="_toggleContentMenu()" id="contentMenuBtn" class="prebook-pill" style="border-color:#c05621;color:#c05621;font-size:13px;padding:5px 10px;gap:4px;display:flex;align-items:center;">📋 ▾</button>
+      </div>
       <button onclick="showView('settings')" id="dtabSettings" style="background:none;border:none;cursor:pointer;color:#888;font-size:18px;padding:4px 6px;flex-shrink:0;line-height:1;" title="Settings">⚙</button>
     </div>
   </div>
@@ -1711,6 +1712,25 @@ function _fmtTemp(celsius) {
   if (APP_CONFIG.units === 'imperial') return Math.round(celsius * 9/5 + 32) + '°F';
   return Math.round(celsius) + '°C';
 }
+function _toggleContentMenu() {
+  const menu = document.getElementById('contentMenu');
+  if (!menu) return;
+  if (menu.style.display !== 'none') { menu.style.display = 'none'; return; }
+  const btn = document.getElementById('contentMenuBtn');
+  if (btn) { const r = btn.getBoundingClientRect(); menu.style.top = (r.bottom + 6) + 'px'; menu.style.right = (window.innerWidth - r.right) + 'px'; menu.style.left = 'auto'; }
+  menu.innerHTML = [
+    { icon:'📋', label:'Book list',  fn:"showView('prebook')" },
+    { icon:'✍️', label:'Trip story', fn:'showStoryTab()' },
+  ].map(function(item) {
+    return '<div onclick="'+item.fn+';document.getElementById(\'contentMenu\').style.display=\'none\';" '
+      + 'style="display:flex;align-items:center;gap:12px;padding:13px 16px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,0.07);color:#fff;font-size:14px;font-weight:600;">'
+      + '<span style="font-size:20px;">'+item.icon+'</span><span>'+item.label+'</span></div>';
+  }).join('');
+  const rows = menu.querySelectorAll('div'); if (rows.length) rows[rows.length-1].style.borderBottom='none';
+  menu.style.display = 'block';
+  setTimeout(function(){ document.addEventListener('click', function h(){ menu.style.display='none'; document.removeEventListener('click',h); }); }, 50);
+}
+
 function _toggleActivityMenu() {
   const menu = document.getElementById('activityMenu');
   if (!menu) return;
@@ -10448,6 +10468,9 @@ document.addEventListener('DOMContentLoaded', function() { if (typeof updateLock
     <div id="syncBarFill" style="height:100%;width:0%;transition:width 0.3s;"></div>
   </div>
   <div id="syncLabel" style="display:none;position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:9999;font-size:12px;font-weight:700;padding:6px 18px;border-radius:24px;white-space:nowrap;box-shadow:0 2px 12px rgba(0,0,0,0.15);background:#fff;"></div>
+<!-- Content menu (Book list + Story) — body level to avoid clipping -->
+<div id="contentMenu" style="display:none;position:fixed;background:#1a1a1a;border-radius:16px;box-shadow:0 6px 28px rgba(0,0,0,0.4);z-index:99999;min-width:180px;overflow:hidden;"></div>
+
 <!-- Activity menu — lives at body level to avoid overflow clipping -->
 <div id="activityMenu" style="display:none;position:fixed;background:#1a1a1a;border-radius:16px;box-shadow:0 6px 28px rgba(0,0,0,0.4);z-index:99999;min-width:180px;overflow:hidden;"></div>
 
