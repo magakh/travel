@@ -1258,7 +1258,13 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
   </div>
 
   <div class="day-tabs" id="dayTabs">
-    <select id="dayDropdown" onchange="switchDay(parseInt(this.value))" style="appearance:none;-webkit-appearance:none;background:#fff;color:#1a1a1a;border:2px solid #fff;border-radius:20px;padding:6px 28px 6px 12px;font-size:13px;font-weight:700;cursor:pointer;background-image:url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2210%22 height=%226%22><path d=%22M0 0l5 6 5-6z%22 fill=%22%231a1a1a%22/></svg>');background-repeat:no-repeat;background-position:right 10px center;min-width:90px;"></select>
+    <div style="position:relative;" id="dayPickerWrap">
+      <button id="dayPickerBtn" onclick="_toggleDayPicker()" style="display:flex;align-items:center;gap:6px;background:#fff;color:#1a1a1a;border:2px solid #fff;border-radius:20px;padding:6px 12px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">
+        <span id="dayPickerLabel">Day</span>
+        <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1l4 4 4-4" stroke="#1a1a1a" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
+      <div id="dayPickerMenu" style="display:none;position:absolute;top:calc(100% + 6px);left:0;background:#fff;border-radius:14px;box-shadow:0 4px 20px rgba(0,0,0,0.18);z-index:9999;min-width:130px;overflow:hidden;"></div>
+    </div>
     <button class="day-tab green-tab" onclick="showAllMap()" id="dtabAll">All Days Map</button>
     <button class="day-tab" onclick="showView('search')" id="dtabSearch" style="border-color:#1a73e8;color:#1a73e8;">+ Add / Search</button>
     <button class="day-tab" onclick="showView('settings')" id="dtabSettings" style="border-color:#666;color:#ccc;padding:6px 10px;font-size:16px;">⚙</button>
@@ -1710,7 +1716,38 @@ function _setUnits(u) {
   // Re-populate per-stop weather spans with updated unit
   try { refreshWeatherForDay(currentDay); } catch(e) {}
 }
-function _toggleUnits() { _setUnits(APP_CONFIG.units === 'imperial' ? 'metric' : 'imperial'); }
+function _toggleDayPicker() {
+  const menu = document.getElementById('dayPickerMenu');
+  if (!menu) return;
+  if (menu.style.display === 'none') {
+    menu.style.display = 'block';
+    setTimeout(function() { document.addEventListener('click', _closeDayPicker, { once: true }); }, 10);
+  } else {
+    menu.style.display = 'none';
+  }
+}
+function _closeDayPicker() {
+  const menu = document.getElementById('dayPickerMenu');
+  if (menu) menu.style.display = 'none';
+}
+function _updateDayPicker(dayLabels, n, selected) {
+  const menu = document.getElementById('dayPickerMenu');
+  const lbl = document.getElementById('dayPickerLabel');
+  if (!menu) return;
+  menu.innerHTML = '';
+  for (let i = 0; i < n; i++) {
+    const day = (dayLabels || [])[i] || ('Day ' + (i + 1));
+    const row = document.createElement('div');
+    const isActive = i === selected;
+    row.style.cssText = 'padding:10px 16px;font-size:14px;font-weight:'+(isActive?'700':'500')+';color:'+(isActive?'#1a7a3a':'#1a1a1a')+';cursor:pointer;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;justify-content:space-between;gap:12px;';
+    row.innerHTML = day + (isActive ? '<span style="color:#1a7a3a;font-size:16px;">✓</span>' : '');
+    row.onclick = function(e) { e.stopPropagation(); switchDay(i); _closeDayPicker(); };
+    menu.appendChild(row);
+  }
+  const last = menu.lastChild;
+  if (last) last.style.borderBottom = 'none';
+  if (lbl) lbl.textContent = (dayLabels || [])[selected] || ('Day ' + (selected + 1));
+}
 function _updateUnitsBtn() {
   _setUnits(APP_CONFIG.units);
 }
@@ -4246,8 +4283,7 @@ function updateTabHighlight() {
     el.classList.remove('active');
   });
   if (currentView === 'list' || currentView === 'detail') {
-    const dd = document.getElementById('dayDropdown');
-    if (dd) dd.value = currentDay;
+    _updateDayPicker(APP_CONFIG.dayLabels, APP_CONFIG.numDays || days.length, currentDay);
   }
 }
 
@@ -8532,18 +8568,7 @@ function applyConfig() {
   }
 
   // Rebuild day tabs dynamically — no hardcoded limit
-  const dayDropdown = document.getElementById('dayDropdown');
-  if (dayDropdown) {
-    dayDropdown.innerHTML = '';
-    for (let i = 0; i < _n; i++) {
-      const lbl = (c.dayLabels || [])[i] || ('Day ' + (i + 1));
-      const opt = document.createElement('option');
-      opt.value = i;
-      opt.textContent = lbl;
-      if (i === currentDay) opt.selected = true;
-      dayDropdown.appendChild(opt);
-    }
-  }
+  _updateDayPicker(c.dayLabels, _n, currentDay);
 
   // Populate the "Add to day" selects (AI search + manual add)
   populateDaySelects();
