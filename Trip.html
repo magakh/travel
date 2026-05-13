@@ -4351,9 +4351,7 @@ function updateTabHighlight() {
     if (['dtabMap','dtabAll','dtabSearch','dtabSettings'].includes(id)) return;
     el.classList.remove('active');
   });
-  if (currentView === 'list' || currentView === 'detail') {
-    _updateDayPicker(APP_CONFIG.dayLabels, APP_CONFIG.numDays || days.length, currentDay);
-  }
+  _updateDayPicker(APP_CONFIG.dayLabels, APP_CONFIG.numDays || days.length, currentDay);
 }
 
 function updateBottomNav() {
