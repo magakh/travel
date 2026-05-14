@@ -144,7 +144,17 @@
     color: var(--success);
     font-weight: 900;
   }
-  .photo-tile .stop-tag {
+  .photo-tile.broken { background: #1a0a0a; cursor: default; }
+  .photo-tile.broken::before {
+    content: '⚠️';
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    z-index: 1;
+  }
     position: absolute;
     bottom: 0;
     left: 0;
@@ -391,7 +401,7 @@ function renderGrid() {
     const tile = document.createElement('div');
     tile.className = 'photo-tile' + (photo.assigned ? ' assigned' : '');
     tile.dataset.idx = origIdx;
-    tile.innerHTML = `<img src="${photo.url}" loading="lazy" onerror="this.parentNode.style.background='#2a1a1a'">`;
+    tile.innerHTML = `<img src="${photo.url}" loading="lazy" onerror="this.parentNode.classList.add('broken');this.style.display='none'">`;
     if (photo.assigned) {
       const day = tripData[photo.assigned.tripId]?.days?.[photo.assigned.dayIdx];
       const stop = day?.stops?.[photo.assigned.stopIdx];
@@ -492,36 +502,49 @@ function assignPhoto(tripId, dayIdx, stopIdx) {
   }, 320);
 }
 
+// Convert any signed/old URL to canonical public URL
+function toPublicUrl(url) {
+  if (!url) return url;
+  if (url.includes('/object/public/')) return url; // already public
+  const match = url.match(/\/trip-photos\/([^?#]+)/);
+  if (!match) return url;
+  return SUPA_URL + '/storage/v1/object/public/' + BUCKET + '/' + decodeURIComponent(match[1]);
+}
+
 async function saveToTrip() {
   const btn = document.getElementById('saveBtn');
   btn.disabled = true;
   btn.textContent = '⏳ Saving…';
 
-  let saved = 0, errors = 0;
-  for (const tripId of TRIPS) {
-    const td = tripData[tripId];
-    if (!td) continue;
-    
-    // Only save if this trip has assigned photos
-    const hasAssigned = allPhotos.some(p => p.assigned && p.assigned.tripId === tripId);
-    if (!hasAssigned) continue;
+  // Build a map: tripId -> { dayIdx -> { stopIdx -> [publicUrls] } }
+  const assignments = {};
+  allPhotos.filter(p => p.assigned).forEach(photo => {
+    const { tripId, dayIdx, stopIdx } = photo.assigned;
+    if (!assignments[tripId]) assignments[tripId] = {};
+    if (!assignments[tripId][dayIdx]) assignments[tripId][dayIdx] = {};
+    if (!assignments[tripId][dayIdx][stopIdx]) assignments[tripId][dayIdx][stopIdx] = [];
+    assignments[tripId][dayIdx][stopIdx].push(photo.url); // already public URL
+  });
 
+  let saved = 0, errors = 0;
+  for (const tripId of Object.keys(assignments)) {
     const { data: current, error: loadErr } = await supa.from('trips').select('*').eq('id', tripId).maybeSingle();
     if (loadErr || !current) { errors++; continue; }
-    
-    // Merge photos into current trip data (don't lose other data)
-    const mergedDays = (current.data && current.data.days) ? JSON.parse(JSON.stringify(current.data.days)) : td.days;
-    
-    // Apply assignments
-    allPhotos.filter(p => p.assigned && p.assigned.tripId === tripId).forEach(photo => {
-      const { dayIdx, stopIdx } = photo.assigned;
-      if (mergedDays[dayIdx] && mergedDays[dayIdx].stops && mergedDays[dayIdx].stops[stopIdx]) {
-        const stop = mergedDays[dayIdx].stops[stopIdx];
-        if (!stop.userPhotos) stop.userPhotos = [];
-        if (!stop.userPhotos.includes(photo.url)) {
-          stop.userPhotos.push(photo.url);
-        }
-      }
+
+    const mergedDays = JSON.parse(JSON.stringify((current.data && current.data.days) || []));
+
+    // For each stop: REPLACE userPhotos with our recovered public URLs
+    // Also convert any remaining signed URLs that weren't in our recovery set
+    mergedDays.forEach((day, di) => {
+      (day.stops || []).forEach((stop, si) => {
+        // Convert existing signed URLs → public
+        const existing = (stop.userPhotos || []).map(toPublicUrl).filter(Boolean);
+        // Add recovered photos that aren't already there
+        const recovered = (assignments[tripId][di] && assignments[tripId][di][si]) || [];
+        const merged = [...existing];
+        recovered.forEach(u => { if (!merged.includes(u)) merged.push(u); });
+        stop.userPhotos = merged;
+      });
     });
 
     const payload = {
@@ -529,19 +552,18 @@ async function saveToTrip() {
       data: { ...(current.data || {}), days: mergedDays, savedAt: new Date().toISOString() }
     };
     const { error } = await supa.from('trips').upsert(payload, { onConflict: 'id' });
-    if (error) { console.error('Save error:', error); errors++; }
-    else saved++;
+    if (error) { console.error('Save error for', tripId, error); errors++; }
+    else { saved++; console.log('Saved', tripId); }
   }
 
   btn.disabled = false;
-  btn.textContent = '💾 Save to Trip';
-  
   if (errors) {
-    toast('⚠️ Saved ' + saved + ' trip(s), ' + errors + ' error(s). Check console.');
+    btn.textContent = '⚠️ ' + errors + ' error(s) — try again';
+    toast('⚠️ Saved ' + saved + ' trip(s), ' + errors + ' error(s)');
   } else {
-    toast('✅ Saved! Open Trip.html to see your photos.');
-    btn.textContent = '✅ Saved to Trip!';
+    btn.textContent = '✅ Saved!';
     btn.style.background = 'linear-gradient(135deg, #3ecf8e, #1a9e6a)';
+    toast('✅ Saved! Reload Trip.html to see your photos.');
   }
 }
 
