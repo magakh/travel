@@ -10442,20 +10442,22 @@ function _openPhoto(day, stop, idx) {
 }
 
 function _onPhotoError(img) {
-  // Photo failed to load — show a simple re-add placeholder
+  // Never auto-delete. Just show a placeholder with a manual remove button.
   const div = img.parentNode;
   if (!div) return;
-  div.style.background = '#fff0f0';
-  div.style.border = '2px dashed #e74c3c';
-  div.style.borderRadius = '8px';
-  div.style.display = 'flex';
-  div.style.alignItems = 'center';
-  div.style.justifyContent = 'center';
   img.style.display = 'none';
-  const lbl = document.createElement('span');
-  lbl.style.cssText = 'font-size:11px;color:#e74c3c;text-align:center;padding:4px;';
-  lbl.textContent = '📷 Tap ✕ then re-add';
-  div.appendChild(lbl);
+  if (div.querySelector('._photo-err')) return; // already shown
+  const ph = document.createElement('div');
+  ph.className = '_photo-err';
+  ph.style.cssText = 'width:100%;height:100%;background:#fff0f0;border:1.5px dashed #e74c3c;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#e74c3c;font-size:10px;gap:2px;position:relative;';
+  const stopIdx = parseInt(div.dataset.stop);
+  const dayIdx  = parseInt(div.dataset.day);
+  const photoIdx = parseInt(div.dataset.idx);
+  ph.innerHTML = '<span style="font-size:16px;">📷</span><span>Failed to load</span>'
+    + (!isNaN(stopIdx) && !isNaN(dayIdx) && !isNaN(photoIdx)
+      ? '<button onclick="event.stopPropagation();deleteStopPhoto('+stopIdx+','+dayIdx+','+photoIdx+')" style="position:absolute;top:3px;right:3px;background:rgba(200,0,0,0.7);border:none;color:#fff;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;line-height:1;">✕</button>'
+      : '');
+  div.appendChild(ph);
 }
 function showMovePhotoSheet(fromStop, fromDay, photoIdx) {
   const photo = days[fromDay] && days[fromDay].stops[fromStop] && days[fromDay].stops[fromStop].userPhotos && days[fromDay].stops[fromStop].userPhotos[photoIdx];
