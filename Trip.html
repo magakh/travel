@@ -2036,8 +2036,6 @@ function applyRemoteData(row) {
       if (dd.title) days[i].title = dd.title;
       if (dd.note) days[i].note = dd.note;
     });
-    // Convert any legacy signed URLs to permanent public URLs (no API call needed)
-    _normalizeAllPhotoUrls(days);
   }
 
   // Remove phantom days beyond numDays that have no stops (e.g. "Jul 10" from a mis-saved setting)
@@ -2192,9 +2190,11 @@ async function _uploadPhotoToStorage(base64DataUrl, stopKey) {
     throw error;
   }
 
-  // Use public URL — never expires, works on all devices without auth
-  const { data: pub } = supa.storage.from(PHOTO_BUCKET).getPublicUrl(filename);
-  return pub.publicUrl;
+  // Use a long-lived signed URL (1 year) — works cross-device without making bucket public
+  const { data: signed, error: signErr } = await supa.storage
+    .from(PHOTO_BUCKET).createSignedUrl(filename, 31536000);
+  if (signErr) throw signErr;
+  return signed.signedUrl;
 }
 
 async function _migratePhotosToStorage(daysData) {
@@ -2227,14 +2227,19 @@ async function _migratePhotosToStorage(daysData) {
           } catch(e) { console.warn('photo upload fail:', e.message); /* skip broken upload — don't save blank */ }
 
         } else if (p.includes(APP_CONFIG.supabaseUrl + '/storage')) {
-          // Our own Storage URL — convert to canonical public URL (never expires, works everywhere)
+          // Refresh the signed URL (handles expired tokens)
           try {
             const match = p.match(/\/trip-photos\/([^?#]+)/);
             if (match) {
               const filename = decodeURIComponent(match[1]);
-              const { data: pub } = supa.storage.from(PHOTO_BUCKET).getPublicUrl(filename);
-              newPhotos.push(pub.publicUrl); verified++;
-            } else { newPhotos.push(p); verified++; }
+              const { data: signed, error: se } = await supa.storage.from(PHOTO_BUCKET).createSignedUrl(filename, 31536000);
+              if (se || !signed) {
+                broken++; console.warn('Storage file gone:', filename);
+                newPhotos.push(p); // keep stale URL — _onPhotoError will show broken UI
+              } else {
+                newPhotos.push(signed.signedUrl); verified++;
+              }
+            } else { newPhotos.push(p); }
           } catch(e) { newPhotos.push(p); }
 
         } else {
@@ -2470,8 +2475,7 @@ async function _migrateAndResave() {
   try {
     const data = getSaveData();
     const hasBase64 = data.days.some(d => (d.stops||[]).some(s => (s.userPhotos||[]).some(p => p && p.startsWith('data:'))));
-    const hasSignedUrls = data.days.some(d => (d.stops||[]).some(s => (s.userPhotos||[]).some(p => p && p.includes('/storage/v1/sign/'))));
-    if (!hasBase64 && !hasSignedUrls) return;
+    if (!hasBase64) return;
     _syncBarShow('\u2601\ufe0f Uploading photos to Storage\u2026', '#5c4db1', 10);
     const migratedDays = await _migratePhotosToStorage(data.days);
     const migratedPayload = {
