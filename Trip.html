@@ -9599,7 +9599,10 @@ function showToast(msg, isError=false) {
 var _remoteApiKey = ''; // API key loaded from Supabase — preserved across devices
 
 function getApiKey() {
-  return APP_CONFIG.anthropicKey || _remoteApiKey || '';
+  // In edit (unlocked) mode: use the trip-shared key from Supabase config, or the locally-set key
+  // In view (locked) mode: no shared key — AI calls disabled unless a local key is set
+  if (EDITOR_MODE) return APP_CONFIG.anthropicKey || _remoteApiKey || '';
+  return APP_CONFIG.anthropicKey || '';
 }
 
 async function saveApiKey() {
@@ -9608,7 +9611,6 @@ async function saveApiKey() {
   if (!v) { if (status) status.innerHTML = '<span style="color:#c0392b;">Paste a key first.</span>'; return; }
   if (!v.startsWith('sk-ant-')) { if (status) status.innerHTML = '<span style="color:#c0392b;">Should start with <code>sk-ant-</code></span>'; return; }
   if (status) status.innerHTML = '<span style="color:#888;">Testing key…</span>';
-  // Quick test call
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -9617,20 +9619,37 @@ async function saveApiKey() {
     });
     if (!res.ok) { const t=await res.text(); if (status) status.innerHTML='<span style="color:#c0392b;">Key rejected: '+res.status+' — '+t.slice(0,80)+'</span>'; return; }
   } catch(e) { if (status) status.innerHTML='<span style="color:#c0392b;">Network error testing key</span>'; return; }
+
   APP_CONFIG.anthropicKey = v;
-  // Save to localStorage immediately as backup
-  try { localStorage.setItem('trip_'+TRIP_ID+'_config', JSON.stringify(getTripConfig())); } catch(e) {}
-  cloudSave('Saved API key').then(() => { refreshApiKeyStatus(); showToast('API key saved ✓'); });
+  _remoteApiKey = v;
+
+  // Save to Supabase config column directly so all devices on this trip get it immediately
+  if (supabaseReady() && EDITOR_MODE) {
+    try {
+      await supa.from('trips').update({ config: getTripConfig() }).eq('id', TRIP_ID);
+      showToast('API key saved — shared with all devices on this trip ✓');
+    } catch(e) {
+      showToast('API key saved locally ✓');
+    }
+  } else {
+    showToast('API key saved ✓');
+  }
+  refreshApiKeyStatus();
   document.getElementById('setApiKey').value = '';
 }
 
 function clearApiKey() {
   delete APP_CONFIG.anthropicKey;
-  _remoteApiKey = ''; // wipe from Supabase too on next save
-  cloudSave('Cleared API key').then(() => {
-    refreshApiKeyStatus();
+  _remoteApiKey = '';
+  // Remove from Supabase config directly
+  if (supabaseReady() && EDITOR_MODE) {
+    const cfg = getTripConfig();
+    delete cfg.anthropicKey;
+    supa.from('trips').update({ config: cfg }).eq('id', TRIP_ID).then(() => showToast('API key cleared from all devices'));
+  } else {
     showToast('API key cleared');
-  });
+  }
+  refreshApiKeyStatus();
   const inp = document.getElementById('setApiKey');
   if (inp) inp.value = '';
 }
