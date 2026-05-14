@@ -2036,6 +2036,8 @@ function applyRemoteData(row) {
       if (dd.title) days[i].title = dd.title;
       if (dd.note) days[i].note = dd.note;
     });
+    // Convert any legacy signed URLs to permanent public URLs (no API call needed)
+    _normalizeAllPhotoUrls(days);
   }
 
   // Remove phantom days beyond numDays that have no stops (e.g. "Jul 10" from a mis-saved setting)
@@ -2129,6 +2131,27 @@ async function cloudLoad() {
 // ── SUPABASE PHOTO STORAGE ─────────────────────────────────────────
 const PHOTO_BUCKET = 'trip-photos';
 
+// Convert any legacy signed URLs to stable public URLs (pure string transform, no API call).
+// Signed: /storage/v1/sign/trip-photos/PATH?token=XXX
+// Public: /storage/v1/object/public/trip-photos/PATH
+function _toPublicPhotoUrl(url) {
+  if (!url || typeof url !== 'string') return url;
+  if (!url.includes(PHOTO_BUCKET)) return url;
+  if (url.includes('/object/public/')) return url; // already public
+  const match = url.match(/\/trip-photos\/([^?#]+)/);
+  if (!match) return url;
+  const filepath = decodeURIComponent(match[1]);
+  return APP_CONFIG.supabaseUrl + '/storage/v1/object/public/' + PHOTO_BUCKET + '/' + filepath;
+}
+
+// Run on every data load — silently convert all signed/old URLs to public URLs in-memory.
+function _normalizeAllPhotoUrls(daysArr) {
+  (daysArr || []).forEach(day => (day.stops || []).forEach(stop => {
+    if (!stop.userPhotos) return;
+    stop.userPhotos = stop.userPhotos.map(p => _toPublicPhotoUrl(p));
+  }));
+}
+
 async function _ensurePhotoBucket() {
   try {
     const { error } = await supa.storage.getBucket(PHOTO_BUCKET);
@@ -2169,11 +2192,9 @@ async function _uploadPhotoToStorage(base64DataUrl, stopKey) {
     throw error;
   }
 
-  // Get signed URL (1 year) — works whether we just uploaded or file already existed
-  const { data: signed, error: signErr } = await supa.storage
-    .from(PHOTO_BUCKET).createSignedUrl(filename, 31536000);
-  if (signErr) throw signErr;
-  return signed.signedUrl;
+  // Use public URL — never expires, works on all devices without auth
+  const { data: pub } = supa.storage.from(PHOTO_BUCKET).getPublicUrl(filename);
+  return pub.publicUrl;
 }
 
 async function _migratePhotosToStorage(daysData) {
@@ -2206,23 +2227,14 @@ async function _migratePhotosToStorage(daysData) {
           } catch(e) { console.warn('photo upload fail:', e.message); /* skip broken upload — don't save blank */ }
 
         } else if (p.includes(APP_CONFIG.supabaseUrl + '/storage')) {
-          // Our own Storage URL — extract filename and get a fresh signed URL
-          // (handles case where old signed URL expired or bucket was cleared)
+          // Our own Storage URL — convert to canonical public URL (never expires, works everywhere)
           try {
             const match = p.match(/\/trip-photos\/([^?#]+)/);
             if (match) {
               const filename = decodeURIComponent(match[1]);
-              const { data: signed, error: se } = await supa.storage.from(PHOTO_BUCKET).createSignedUrl(filename, 31536000);
-              if (se || !signed) {
-                // File is gone — mark as broken so user knows to re-add
-                broken++;
-                console.warn('Storage file gone:', filename);
-                // Keep the URL as-is — _onPhotoError will show "broken" UI
-                newPhotos.push(p);
-              } else {
-                newPhotos.push(signed.signedUrl); verified++;
-              }
-            } else { newPhotos.push(p); }
+              const { data: pub } = supa.storage.from(PHOTO_BUCKET).getPublicUrl(filename);
+              newPhotos.push(pub.publicUrl); verified++;
+            } else { newPhotos.push(p); verified++; }
           } catch(e) { newPhotos.push(p); }
 
         } else {
@@ -2458,7 +2470,8 @@ async function _migrateAndResave() {
   try {
     const data = getSaveData();
     const hasBase64 = data.days.some(d => (d.stops||[]).some(s => (s.userPhotos||[]).some(p => p && p.startsWith('data:'))));
-    if (!hasBase64) return;
+    const hasSignedUrls = data.days.some(d => (d.stops||[]).some(s => (s.userPhotos||[]).some(p => p && p.includes('/storage/v1/sign/'))));
+    if (!hasBase64 && !hasSignedUrls) return;
     _syncBarShow('\u2601\ufe0f Uploading photos to Storage\u2026', '#5c4db1', 10);
     const migratedDays = await _migratePhotosToStorage(data.days);
     const migratedPayload = {
@@ -4707,28 +4720,20 @@ function _cleanInvalidPhotos() {
 function _onPhotoError(img) {
   const div = img.parentNode;
   if (!div) return;
+  const photoIdx = parseInt(div.dataset.idx);
   const stopIdx = parseInt(div.dataset.stop);
   const dayIdx  = parseInt(div.dataset.day);
-  const photoIdx = parseInt(div.dataset.idx);
 
-  // Auto-remove the broken photo from the data and push to Supabase
-  if (!isNaN(stopIdx) && !isNaN(dayIdx) && !isNaN(photoIdx)) {
-    const s = days[dayIdx] && days[dayIdx].stops && days[dayIdx].stops[stopIdx];
-    if (s && s.userPhotos && s.userPhotos[photoIdx]) {
-      s.userPhotos.splice(photoIdx, 1);
-      saveToStorage();
-      schedulePush();
-      // Re-render strip silently
-      try { renderStopList(); } catch(e) {}
-      return;
-    }
-  }
-
-  // Fallback: show broken indicator with delete button
-  div.innerHTML = '<div style="width:100%;height:100%;background:#f8f0f0;border:1.5px dashed #e74c3c;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#e74c3c;font-size:10px;gap:2px;position:relative;">'
-    + '<span style="font-size:16px;">📷</span><span>Broken</span>'
-    + (photoIdx >= 0 ? '<button onclick="event.stopPropagation();deleteStopPhoto('+stopIdx+','+dayIdx+','+photoIdx+')" style="position:absolute;top:3px;right:3px;background:rgba(200,0,0,0.7);border:none;color:#fff;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;line-height:1;">✕</button>' : '')
-    + '</div>';
+  // NEVER auto-delete — a load failure could be network, CORS, or temporary.
+  // Just show a placeholder with a manual delete button.
+  img.style.display = 'none';
+  const inner = document.createElement('div');
+  inner.style.cssText = 'width:100%;height:100%;background:#f8f0f0;border:1.5px dashed #e74c3c;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#e74c3c;font-size:10px;gap:2px;position:relative;';
+  inner.innerHTML = '<span style="font-size:16px;">📷</span><span>Failed</span>'
+    + (!isNaN(photoIdx) && !isNaN(stopIdx) && !isNaN(dayIdx)
+      ? '<button onclick="event.stopPropagation();deleteStopPhoto('+stopIdx+','+dayIdx+','+photoIdx+')" style="position:absolute;top:3px;right:3px;background:rgba(200,0,0,0.7);border:none;color:#fff;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;line-height:1;">✕</button>'
+      : '');
+  div.appendChild(inner);
 }
 
 async function _deleteFromStorage(photoUrl) {
@@ -4822,41 +4827,39 @@ function openPhotoGallery(stopIdx, dayIdx, startIdx) {
   render();
 }
 
-function _cleanBrokenPhotosNow() {
-  showToast('🔍 Checking photos...');
-  let removed = 0;
-  const checks = [];
-  days.forEach(function(day, di) {
-    (day.stops || []).forEach(function(s, si) {
-      if (!s.userPhotos || !s.userPhotos.length) return;
-      s.userPhotos.slice().forEach(function(p, pi) {
-        if (!p || p.length < 50) {
-          s.userPhotos.splice(s.userPhotos.indexOf(p), 1); removed++; return;
-        }
-        if (p.startsWith('http')) {
-          checks.push(new Promise(function(resolve) {
-            const img = new Image();
-            img.onload = resolve;
-            img.onerror = function() {
-              const idx = s.userPhotos.indexOf(p);
-              if (idx >= 0) { s.userPhotos.splice(idx, 1); removed++; }
-              resolve();
-            };
-            img.src = p;
-          }));
-        }
+async function _cleanBrokenPhotosNow() {
+  showToast('🔍 Listing Storage files...');
+  try {
+    const { data: files, error } = await supa.storage.from(PHOTO_BUCKET).list(TRIP_ID + '/', { limit: 2000 });
+    if (error) { showToast('❌ Could not list Storage: ' + error.message); return; }
+    const existingFiles = new Set((files || []).map(f => TRIP_ID + '/' + f.name));
+    let removed = 0;
+    days.forEach(function(day) {
+      (day.stops || []).forEach(function(s) {
+        if (!s.userPhotos || !s.userPhotos.length) return;
+        const before = s.userPhotos.length;
+        s.userPhotos = s.userPhotos.filter(function(p) {
+          if (!p || p.length < 10) return false; // obviously empty
+          if (p.startsWith('data:')) return true; // base64 — keep
+          // For Supabase Storage URLs, check the file actually exists
+          const match = p.match(/\/trip-photos\/([^?#]+)/);
+          if (match) {
+            const filename = decodeURIComponent(match[1]);
+            return existingFiles.has(filename);
+          }
+          return true; // external URL — keep
+        });
+        removed += before - s.userPhotos.length;
       });
     });
-  });
-  Promise.all(checks).then(function() {
     if (removed > 0) {
       saveToStorage(); schedulePush();
       renderStopList(); renderDetail();
-      showToast('🗑 Removed ' + removed + ' broken photo' + (removed > 1 ? 's' : '') + ' — saved to cloud');
+      showToast('🗑 Removed ' + removed + ' photo' + (removed > 1 ? 's' : '') + ' (not found in Storage)');
     } else {
-      showToast('✅ No broken photos found');
+      showToast('✅ All ' + (files || []).length + ' Storage files verified — nothing removed');
     }
-  });
+  } catch(e) { showToast('❌ Error: ' + e.message); }
 }
 
 function stopPhotosHtml(stopIdx, dayIdx) {
