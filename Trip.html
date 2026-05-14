@@ -4676,12 +4676,26 @@ function addStopPhotos(stopIdx, dayIdx) {
       try {
         const b64 = await resizeStopPhoto(file, 1200);
         const fp = _photoFingerprint(b64);
-        const alreadyExists = s.userPhotos.some(p => {
+        // Check if already in this stop
+        const existingIdx = s.userPhotos.findIndex(p => {
           if (p && p.startsWith('data:')) return _photoFingerprint(p) === fp;
           if (p && p.startsWith('http')) return _fingerprintFromUrl(p) === fp;
           return false;
         });
-        if (alreadyExists) { showToast('⚠️ Photo already added to this stop — skipped'); continue; }
+        if (existingIdx >= 0 && s.userPhotos[existingIdx].startsWith('data:')) {
+          // Exact base64 duplicate — truly already here
+          showToast('⚠️ Photo already added to this stop — skipped'); continue;
+        }
+        if (existingIdx >= 0 && s.userPhotos[existingIdx].startsWith('http')) {
+          // Signed URL exists for this fingerprint — could be broken. Re-upload to get fresh URL.
+          showToast('🔄 Refreshing photo URL…');
+          try {
+            const freshUrl = await _uploadPhotoToStorage(b64, TRIP_ID + '_s' + stopIdx + 'd' + dayIdx);
+            s.userPhotos[existingIdx] = freshUrl; // replace broken URL with fresh one
+            added++;
+            continue;
+          } catch(e) { /* fall through to normal add */ }
+        }
         s.userPhotos.push(b64);
         s.userPhotosMeta.push({ taken: file.lastModified || Date.now() });
         added++;
