@@ -4640,8 +4640,6 @@ function addStopPhotos(stopIdx, dayIdx) {
 function _isAliveStorageUrl(url) {
   if (!url || !url.startsWith('http')) return false;
   if (!url.includes('supabase.co/storage')) return false;
-  // Old positional format (d0s2p10_xxx.jpg) — files deleted from Storage, skip
-  if (/\/d\d+s\d+p\d+_/.test(url)) return false;
   return true;
 }
 
