@@ -1857,8 +1857,10 @@ function getTripConfig() {
     departureTime: APP_CONFIG.departureTime || '',
     startDate: APP_CONFIG.startDate || '',
   };
-  // Only include the personal API key if one is set — never write an empty field
-  if (APP_CONFIG.anthropicKey) cfg.anthropicKey = APP_CONFIG.anthropicKey;
+  // Preserve the API key: use local if set, else fall back to remote key loaded from Supabase
+  // This prevents one device overwriting another device's saved key
+  const keyToSave = APP_CONFIG.anthropicKey || _remoteApiKey;
+  if (keyToSave) cfg.anthropicKey = keyToSave;
   if (APP_CONFIG.aiModel) cfg.aiModel = APP_CONFIG.aiModel;
   return cfg;
 }
@@ -2012,6 +2014,7 @@ function applyRemoteData(row) {
   if (!row) return;
   TRIP_PW_HASH = row.edit_password_hash || null;
   const cfg = row.config || {};
+  if (cfg.anthropicKey) _remoteApiKey = cfg.anthropicKey; // preserve across devices
   APP_CONFIG = Object.assign({}, APP_CONFIG, cfg);
   try { localStorage.setItem('app_config_v2', JSON.stringify(APP_CONFIG)); } catch(e) {}
   try { applyConfig(); } catch(e) {}
@@ -9592,9 +9595,11 @@ function showToast(msg, isError=false) {
 }
 
 // ── API KEY / ANTHROPIC HELPER ────────────────────────────────────
+// API key loaded from Supabase — preserved even if this device never set one locally
+var _remoteApiKey = ''; // API key loaded from Supabase — preserved across devices
+
 function getApiKey() {
-  // APP_CONFIG.anthropicKey is synced from Supabase — works across all your devices
-  return APP_CONFIG.anthropicKey || '';
+  return APP_CONFIG.anthropicKey || _remoteApiKey || '';
 }
 
 async function saveApiKey() {
@@ -9621,6 +9626,7 @@ async function saveApiKey() {
 
 function clearApiKey() {
   delete APP_CONFIG.anthropicKey;
+  _remoteApiKey = ''; // wipe from Supabase too on next save
   cloudSave('Cleared API key').then(() => {
     refreshApiKeyStatus();
     showToast('API key cleared');
