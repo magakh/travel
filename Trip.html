@@ -4699,15 +4699,26 @@ function _cleanInvalidPhotos() {
 }
 
 function _onPhotoError(img) {
-  // Photo URL is broken — show indicator + always-visible remove button
   const div = img.parentNode;
   if (!div) return;
-  // Find the photo index from the grandparent grid
-  const grid = div.parentNode;
-  let stopIdx = -1, dayIdx = -1, photoIdx = -1;
-  if (div.dataset.stop !== undefined) stopIdx = parseInt(div.dataset.stop);
-  if (div.dataset.day !== undefined) dayIdx = parseInt(div.dataset.day);
-  if (div.dataset.idx !== undefined) photoIdx = parseInt(div.dataset.idx);
+  const stopIdx = parseInt(div.dataset.stop);
+  const dayIdx  = parseInt(div.dataset.day);
+  const photoIdx = parseInt(div.dataset.idx);
+
+  // Auto-remove the broken photo from the data and push to Supabase
+  if (!isNaN(stopIdx) && !isNaN(dayIdx) && !isNaN(photoIdx)) {
+    const s = days[dayIdx] && days[dayIdx].stops && days[dayIdx].stops[stopIdx];
+    if (s && s.userPhotos && s.userPhotos[photoIdx]) {
+      s.userPhotos.splice(photoIdx, 1);
+      saveToStorage();
+      schedulePush();
+      // Re-render strip silently
+      try { renderStopList(); } catch(e) {}
+      return;
+    }
+  }
+
+  // Fallback: show broken indicator with delete button
   div.innerHTML = '<div style="width:100%;height:100%;background:#f8f0f0;border:1.5px dashed #e74c3c;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#e74c3c;font-size:10px;gap:2px;position:relative;">'
     + '<span style="font-size:16px;">📷</span><span>Broken</span>'
     + (photoIdx >= 0 ? '<button onclick="event.stopPropagation();deleteStopPhoto('+stopIdx+','+dayIdx+','+photoIdx+')" style="position:absolute;top:3px;right:3px;background:rgba(200,0,0,0.7);border:none;color:#fff;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;line-height:1;">✕</button>' : '')
