@@ -180,9 +180,10 @@
     flex-direction: column;
     justify-content: flex-end;
     opacity: 0;
+    pointer-events: none;
     transition: opacity 0.25s;
   }
-  .sheet-overlay.open { opacity: 1; }
+  .sheet-overlay.open { opacity: 1; pointer-events: all; }
   .sheet {
     background: var(--surface);
     border-radius: 24px 24px 0 0;
