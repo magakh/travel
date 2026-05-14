@@ -1501,6 +1501,7 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
           <button onclick="exportFile()" style="flex:1;padding:8px 12px;border-radius:8px;border:1px solid #444;background:#1e1e1e;color:#ccc;font-size:12px;font-weight:700;cursor:pointer;">📤 Export</button>
           <button onclick="document.getElementById('import-input').click()" style="flex:1;padding:8px 12px;border-radius:8px;border:1px solid #444;background:#1e1e1e;color:#ccc;font-size:12px;font-weight:700;cursor:pointer;">📥 Import</button>
         </div>
+        <button onclick="_cleanBrokenPhotosNow()" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid #c0392b;background:#fef0f0;color:#c0392b;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:8px;">🗑 Remove all broken photos</button>
 
       <!-- ── DANGER ZONE ── -->
       <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
@@ -4816,12 +4817,51 @@ function openPhotoGallery(stopIdx, dayIdx, startIdx) {
   render();
 }
 
+function _cleanBrokenPhotosNow() {
+  showToast('🔍 Checking photos...');
+  let removed = 0;
+  const checks = [];
+  days.forEach(function(day, di) {
+    (day.stops || []).forEach(function(s, si) {
+      if (!s.userPhotos || !s.userPhotos.length) return;
+      s.userPhotos.slice().forEach(function(p, pi) {
+        if (!p || p.length < 50) {
+          s.userPhotos.splice(s.userPhotos.indexOf(p), 1); removed++; return;
+        }
+        if (p.startsWith('http')) {
+          checks.push(new Promise(function(resolve) {
+            const img = new Image();
+            img.onload = resolve;
+            img.onerror = function() {
+              const idx = s.userPhotos.indexOf(p);
+              if (idx >= 0) { s.userPhotos.splice(idx, 1); removed++; }
+              resolve();
+            };
+            img.src = p;
+          }));
+        }
+      });
+    });
+  });
+  Promise.all(checks).then(function() {
+    if (removed > 0) {
+      saveToStorage(); schedulePush();
+      renderStopList(); renderDetail();
+      showToast('🗑 Removed ' + removed + ' broken photo' + (removed > 1 ? 's' : '') + ' — saved to cloud');
+    } else {
+      showToast('✅ No broken photos found');
+    }
+  });
+}
+
 function stopPhotosHtml(stopIdx, dayIdx) {
   const s = days[dayIdx].stops[stopIdx];
   const photos = (s.userPhotos || []).filter(_isValidPhoto);
   const thumbs = photos.map(function(p, pi) {
-    return '<div style="position:relative;flex-shrink:0;">'
+    const realIdx = (s.userPhotos || []).indexOf(p);
+    return '<div data-stop="'+stopIdx+'" data-day="'+dayIdx+'" data-idx="'+realIdx+'" style="position:relative;flex-shrink:0;">'
       + '<img src="'+p+'" onclick="event.stopPropagation();openPhotoGallery('+stopIdx+','+dayIdx+','+pi+')" '
+      + 'onerror="_onPhotoError(this.parentNode)" '
       + 'style="width:52px;height:52px;border-radius:8px;object-fit:cover;cursor:pointer;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.2);">'
       + '</div>';
   }).join('');
