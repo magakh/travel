@@ -2023,7 +2023,7 @@ function applyRemoteData(row) {
       // This prevents stale localStorage URLs from polluting good Supabase data
       incoming.forEach((s, si) => {
         const cur = days[i].stops && days[i].stops[si];
-        const remotePhotos = (s.userPhotos || []).filter(p => _isValidPhoto(p) && (_isAliveStorageUrl(p) || p.startsWith('data:')));
+        const remotePhotos = (s.userPhotos || []).filter(p => _isValidPhoto(p));
         // Only add local base64 (new photos not yet uploaded) — NOT local URLs (could be stale)
         const localNewBase64 = (cur && cur.userPhotos || []).filter(p => p && p.startsWith('data:'));
         s.userPhotos = _dedupePhotos(_mergePhotos(remotePhotos, localNewBase64));
@@ -4266,18 +4266,21 @@ async function init() {
       remoteDays.forEach((dd, i) => {
         if (!dd || !dd.stops || !days[i]) return;
         dd.stops.forEach((rs, si) => {
-          const remotePhotos = (rs.userPhotos || []).filter(p => _isValidPhoto(p) && (_isAliveStorageUrl(p) || p.startsWith('data:')));
-          if (!remotePhotos.length) return;
           const cur = days[i].stops && days[i].stops[si];
           if (!cur) return;
-          const before = (cur.userPhotos || []).length;
-          cur.userPhotos = _dedupePhotos(_mergePhotos(cur.userPhotos, remotePhotos));
-          added += Math.max(0, cur.userPhotos.length - before);
+          // Use remote photos directly — don't merge, just take what Supabase has
+          const remotePhotos = (rs.userPhotos || []).filter(p => _isValidPhoto(p));
+          // Only add local-only base64 (photos not yet uploaded to storage)
+          const localOnly = (cur.userPhotos || []).filter(p => p && p.startsWith('data:') && !remotePhotos.some(r => _photoFingerprint(p) === _photoFingerprint(r)));
+          const merged = [...remotePhotos, ...localOnly];
+          if (merged.length !== (cur.userPhotos||[]).length) {
+            cur.userPhotos = merged;
+            added++;
+          }
         });
       });
       if (added > 0) {
         saveToStorage(); renderStopList(); renderDetail();
-        showToast('📷 ' + added + ' new photo' + (added > 1 ? 's' : '') + ' synced!');
       }
     } catch(e) {}
   }, 120000); // 2 minutes
