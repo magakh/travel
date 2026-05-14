@@ -1842,7 +1842,8 @@ function getSaveData() {
     days: days,
     completed: completed,
     hotel: window.HOTEL_DATA || null,
-    savedAt: new Date().toISOString()
+    savedAt: new Date().toISOString(),
+    photoUrlsRefreshedAt: window._photoUrlsRefreshedAt || null
   };
 }
 
@@ -2113,6 +2114,7 @@ async function cloudLoad() {
     if (error) { console.warn('cloudLoad', error); return false; }
     if (!data) return false;
     applyRemoteData(data);
+    _refreshSignedUrlsIfNeeded(data.data); // silently re-sign URLs older than 6 months
     // PHOTO RECOVERY: if Supabase has stops missing photos, restore from localStorage
     _recoverPhotosFromLocal();
     window._tripCloudData = data.data || {};
@@ -2130,6 +2132,53 @@ async function cloudLoad() {
 const PHOTO_BUCKET = 'trip-photos';
 
 // Convert any legacy signed URLs to stable public URLs (pure string transform, no API call).
+// ── SIGNED URL AUTO-REFRESH ─────────────────────────────────────────
+// Signed URLs last 1 year. Re-sign silently every 6 months in background.
+async function _refreshSignedUrlsIfNeeded(remoteData) {
+  try {
+    const SIX_MONTHS = 180 * 24 * 60 * 60 * 1000;
+    const refreshedAt = remoteData && remoteData.photoUrlsRefreshedAt;
+    const age = refreshedAt ? Date.now() - new Date(refreshedAt).getTime() : Infinity;
+    if (age < SIX_MONTHS) return;
+
+    const refs = [];
+    days.forEach((day, di) => {
+      (day.stops || []).forEach((stop, si) => {
+        (stop.userPhotos || []).forEach((url, pi) => {
+          if (!url || !url.includes('/storage/v1/sign/')) return;
+          const m = url.match(/\/trip-photos\/([^?#]+)/);
+          if (m) refs.push({ di, si, pi, path: decodeURIComponent(m[1]) });
+        });
+      });
+    });
+    if (!refs.length) return;
+
+    const uniquePaths = [...new Set(refs.map(r => r.path))];
+    console.log('[Photos] Refreshing', uniquePaths.length, 'signed URLs (age:', Math.round(age / 86400000), 'days)');
+    const { data: signed, error } = await supa.storage.from(PHOTO_BUCKET).createSignedUrls(uniquePaths, 31536000);
+    if (error || !signed) { console.warn('[Photos] Refresh failed:', error); return; }
+
+    const urlMap = {};
+    signed.forEach(s => { if (s.signedUrl) urlMap[s.path] = s.signedUrl; });
+
+    let updated = 0;
+    refs.forEach(({ di, si, pi, path }) => {
+      const newUrl = urlMap[path];
+      if (!newUrl) return;
+      if (days[di] && days[di].stops[si] && days[di].stops[si].userPhotos) {
+        days[di].stops[si].userPhotos[pi] = newUrl;
+        updated++;
+      }
+    });
+    if (!updated) return;
+
+    window._photoUrlsRefreshedAt = new Date().toISOString();
+    saveToStorage();
+    schedulePush();
+    console.log('[Photos] Refreshed', updated, 'URLs, pushed to Supabase');
+  } catch(e) { console.warn('[Photos] Auto-refresh error:', e); }
+}
+
 // Signed: /storage/v1/sign/trip-photos/PATH?token=XXX
 // Public: /storage/v1/object/public/trip-photos/PATH
 function _toPublicPhotoUrl(url) {
