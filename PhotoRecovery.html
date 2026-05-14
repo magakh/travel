@@ -3,608 +3,214 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Photo Recovery — London 2026</title>
+<title>Photo Recovery</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  :root {
-    --bg: #0f0f11;
-    --surface: #1a1a1f;
-    --card: #22222a;
-    --border: #2e2e38;
-    --accent: #7c6af7;
-    --accent2: #f7a26a;
-    --success: #3ecf8e;
-    --danger: #f06464;
-    --text: #e8e8f0;
-    --muted: #7777a0;
-  }
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
-    min-height: 100vh;
-  }
-
-  /* HEADER */
-  .header {
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    padding: 14px 16px;
-    position: sticky;
-    top: 0;
-    z-index: 100;
-  }
-  .header-top {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 10px;
-  }
-  .header-top h1 { font-size: 17px; font-weight: 700; letter-spacing: -0.3px; }
-  .badge {
-    background: var(--accent);
-    color: #fff;
-    font-size: 11px;
-    font-weight: 700;
-    border-radius: 20px;
-    padding: 2px 8px;
-    letter-spacing: 0.2px;
-  }
-  .progress-bar-wrap {
-    background: var(--border);
-    border-radius: 4px;
-    height: 6px;
-    overflow: hidden;
-  }
-  .progress-bar-fill {
-    height: 100%;
-    background: linear-gradient(90deg, var(--accent), var(--success));
-    border-radius: 4px;
-    transition: width 0.4s ease;
-  }
-  .progress-label {
-    display: flex;
-    justify-content: space-between;
-    font-size: 11px;
-    color: var(--muted);
-    margin-top: 4px;
-  }
-
-  .save-btn {
-    position: fixed;
-    bottom: max(16px, env(safe-area-inset-bottom));
-    left: 50%;
-    transform: translateX(-50%);
-    background: linear-gradient(135deg, var(--accent), #5b52d8);
-    color: #fff;
-    border: none;
-    border-radius: 16px;
-    padding: 14px 32px;
-    font-size: 15px;
-    font-weight: 700;
-    cursor: pointer;
-    z-index: 200;
-    box-shadow: 0 4px 24px rgba(124,106,247,0.5);
-    letter-spacing: -0.2px;
-    white-space: nowrap;
-  }
-  .save-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-  .save-btn:active { transform: translateX(-50%) scale(0.97); }
-
-  /* STATUS */
-  #status {
-    padding: 20px 16px;
-    text-align: center;
-    color: var(--muted);
-    font-size: 14px;
-  }
-  .spinner { display: inline-block; animation: spin 1s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* PHOTO GRID */
-  .section-label {
-    padding: 16px 16px 8px;
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.8px;
-    text-transform: uppercase;
-    color: var(--muted);
-  }
-  .photo-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 3px;
-    padding: 0 0 100px;
-  }
-  .photo-tile {
-    position: relative;
-    aspect-ratio: 1;
-    background: var(--card);
-    cursor: pointer;
-    overflow: hidden;
-  }
-  .photo-tile img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-    transition: transform 0.2s;
-  }
-  .photo-tile:active img { transform: scale(0.95); }
-  .photo-tile.assigned img { filter: brightness(0.55); }
-  .photo-tile.assigned::after {
-    content: '✓';
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 28px;
-    color: var(--success);
-    font-weight: 900;
-  }
-  .photo-tile.broken { background: #1a0a0a; cursor: default; }
-  .photo-tile.broken::before {
-    content: '⚠️';
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 22px;
-    z-index: 1;
-  }
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: linear-gradient(transparent, rgba(0,0,0,0.85));
-    padding: 20px 5px 5px;
-    font-size: 9px;
-    font-weight: 600;
-    color: #fff;
-    text-align: center;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  /* STOP PICKER SHEET */
-  .sheet-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.7);
-    z-index: 300;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.25s;
-  }
-  .sheet-overlay.open { opacity: 1; pointer-events: all; }
-  .sheet {
-    background: var(--surface);
-    border-radius: 24px 24px 0 0;
-    padding: 0 0 env(safe-area-inset-bottom, 16px);
-    max-height: 82vh;
-    display: flex;
-    flex-direction: column;
-    transform: translateY(100%);
-    transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
-  }
-  .sheet-overlay.open .sheet { transform: translateY(0); }
-  .sheet-handle {
-    width: 36px;
-    height: 4px;
-    background: var(--border);
-    border-radius: 2px;
-    margin: 12px auto 0;
-    flex-shrink: 0;
-  }
-  .sheet-header {
-    padding: 12px 16px 8px;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-  }
-  .sheet-header h2 { font-size: 15px; font-weight: 700; margin-bottom: 2px; }
-  .sheet-header p { font-size: 12px; color: var(--muted); }
-  .sheet-preview {
-    width: 56px;
-    height: 56px;
-    border-radius: 8px;
-    object-fit: cover;
-    float: right;
-    margin-left: 8px;
-  }
-  .sheet-body { overflow-y: auto; flex: 1; }
-  
-  .day-group { border-bottom: 1px solid var(--border); }
-  .day-label {
-    padding: 10px 16px 6px;
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.7px;
-    color: var(--accent);
-    background: var(--bg);
-    position: sticky;
-    top: 0;
-  }
-  .stop-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 11px 16px;
-    cursor: pointer;
-    border-top: 1px solid var(--border);
-    transition: background 0.15s;
-    -webkit-tap-highlight-color: transparent;
-  }
-  .stop-row:active { background: var(--card); }
-  .stop-num {
-    width: 26px;
-    height: 26px;
-    border-radius: 50%;
-    background: var(--accent);
-    color: #fff;
-    font-size: 11px;
-    font-weight: 800;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-  }
-  .stop-info { flex: 1; min-width: 0; }
-  .stop-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .stop-count { font-size: 11px; color: var(--muted); margin-top: 1px; }
-  .stop-arrow { color: var(--muted); font-size: 14px; }
-
-  /* TOAST */
-  #toast {
-    position: fixed;
-    bottom: 80px;
-    left: 50%;
-    transform: translateX(-50%) translateY(20px);
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 10px 16px;
-    font-size: 13px;
-    font-weight: 600;
-    white-space: nowrap;
-    opacity: 0;
-    transition: all 0.3s;
-    z-index: 500;
-    pointer-events: none;
-  }
-  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root { --bg:#0f0f11;--surface:#1a1a1f;--card:#22222a;--border:#2e2e38;--accent:#7c6af7;--success:#3ecf8e;--text:#e8e8f0;--muted:#7777a0; }
+body { background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,sans-serif;min-height:100vh; }
+.header { background:var(--surface);border-bottom:1px solid var(--border);padding:14px 16px;position:sticky;top:0;z-index:10; }
+.header-top { display:flex;align-items:center;gap:10px;margin-bottom:10px; }
+.header-top h1 { font-size:17px;font-weight:700; }
+.badge { background:var(--accent);color:#fff;font-size:11px;font-weight:700;border-radius:20px;padding:2px 8px; }
+.pbar-wrap { background:var(--border);border-radius:4px;height:6px;overflow:hidden; }
+.pbar-fill { height:100%;background:linear-gradient(90deg,var(--accent),var(--success));border-radius:4px;transition:width .4s; }
+.plabel { display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:4px; }
+#status { padding:30px 16px;text-align:center;color:var(--muted);font-size:14px; }
+.grid { display:grid;grid-template-columns:repeat(3,1fr);gap:3px;padding:8px 0 100px; }
+.tile { position:relative;aspect-ratio:1;background:var(--card);cursor:pointer;overflow:hidden;-webkit-tap-highlight-color:rgba(124,106,247,.3); }
+.tile img { width:100%;height:100%;object-fit:cover;display:block; }
+.tile .lbl { position:absolute;bottom:0;left:0;right:0;padding:18px 4px 5px;font-size:9px;font-weight:600;color:#fff;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+.tile.unassigned .lbl { background:linear-gradient(transparent,rgba(100,80,220,.85)); }
+.tile.assigned .lbl { background:linear-gradient(transparent,rgba(20,100,50,.85)); }
+.tile.broken { cursor:default; }
+.tile.broken img { opacity:.15; }
+.tile.broken::after { content:'⚠️';position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:24px; }
+.chk { position:absolute;top:4px;right:4px;background:var(--success);color:#fff;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900; }
+.save-btn { position:fixed;bottom:max(16px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);background:linear-gradient(135deg,var(--accent),#5b52d8);color:#fff;border:none;border-radius:16px;padding:14px 32px;font-size:15px;font-weight:700;cursor:pointer;z-index:20;box-shadow:0 4px 24px rgba(124,106,247,.5); }
+.save-btn:disabled { opacity:.4;cursor:not-allowed; }
+.overlay { position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;display:flex;flex-direction:column;justify-content:flex-end;opacity:0;pointer-events:none;transition:opacity .25s; }
+.overlay.open { opacity:1;pointer-events:all; }
+.sheet { background:var(--surface);border-radius:24px 24px 0 0;max-height:80vh;display:flex;flex-direction:column;transform:translateY(100%);transition:transform .3s cubic-bezier(.34,1.56,.64,1);padding-bottom:env(safe-area-inset-bottom,12px); }
+.overlay.open .sheet { transform:translateY(0); }
+.handle { width:36px;height:4px;background:var(--border);border-radius:2px;margin:12px auto 0;flex-shrink:0; }
+.sheet-head { padding:10px 16px;border-bottom:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:12px; }
+.sheet-head img { width:52px;height:52px;border-radius:8px;object-fit:cover;flex-shrink:0; }
+.sheet-head h2 { font-size:15px;font-weight:700; }
+.sheet-head p { font-size:11px;color:var(--muted);margin-top:2px; }
+.xbtn { margin-left:auto;background:var(--card);border:none;color:var(--text);border-radius:50%;width:30px;height:30px;font-size:16px;cursor:pointer;flex-shrink:0; }
+.sheet-body { overflow-y:auto;flex:1; }
+.day-lbl { padding:8px 16px 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--accent);background:var(--bg);position:sticky;top:0; }
+.stop-row { display:flex;align-items:center;gap:10px;padding:11px 16px;cursor:pointer;border-top:1px solid var(--border);-webkit-tap-highlight-color:rgba(124,106,247,.2); }
+.stop-row:active { background:var(--card); }
+.snum { width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0; }
+.sinfo { flex:1;min-width:0; }
+.sname { font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+.scount { font-size:11px;color:var(--muted);margin-top:1px; }
+#toast { position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px 16px;font-size:13px;font-weight:600;white-space:nowrap;opacity:0;transition:all .3s;z-index:200;pointer-events:none; }
+#toast.show { opacity:1;transform:translateX(-50%) translateY(0); }
 </style>
 </head>
 <body>
-
 <div class="header">
-  <div class="header-top">
-    <span>📷</span>
-    <h1>Photo Recovery</h1>
-    <span class="badge" id="totalBadge">Loading…</span>
-  </div>
-  <div class="progress-bar-wrap">
-    <div class="progress-bar-fill" id="progressFill" style="width:0%"></div>
-  </div>
-  <div class="progress-label">
-    <span id="progressLabel">Loading photos from Storage…</span>
-    <span id="progressRight"></span>
-  </div>
+  <div class="header-top"><span>📷</span><h1>Photo Recovery</h1><span class="badge" id="badge">Loading…</span></div>
+  <div class="pbar-wrap"><div class="pbar-fill" id="pbar" style="width:0%"></div></div>
+  <div class="plabel"><span id="pleft">Loading…</span><span id="pright"></span></div>
 </div>
-
-<div id="status"><span class="spinner">⏳</span> Connecting to Supabase…</div>
-<div class="section-label" id="gridLabel" style="display:none">Tap a photo to assign it to a stop</div>
-<div class="photo-grid" id="photoGrid"></div>
-
+<div id="status">⏳ Connecting to Supabase…</div>
+<div class="grid" id="grid"></div>
 <button class="save-btn" id="saveBtn" onclick="saveToTrip()" disabled>💾 Save to Trip</button>
-
-<!-- Stop picker sheet -->
-<div class="sheet-overlay" id="sheet" onclick="closeSheet(event)">
+<div class="overlay" id="overlay">
   <div class="sheet">
-    <div class="sheet-handle"></div>
-    <div class="sheet-header">
-      <img class="sheet-preview" id="sheetPreview" src="" alt="">
-      <h2>Assign to stop</h2>
-      <p id="sheetUrl"></p>
+    <div class="handle"></div>
+    <div class="sheet-head">
+      <img id="prev" src="" alt="">
+      <div><h2>Assign to stop</h2><p id="prevPath"></p></div>
+      <button class="xbtn" onclick="closeSheet()">✕</button>
     </div>
     <div class="sheet-body" id="sheetBody"></div>
   </div>
 </div>
-
 <div id="toast"></div>
-
 <script>
-const SUPA_URL = 'https://wnpanbjzmcsvhfyjdczv.supabase.co';
-const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InducGFuYmp6bWNzdmhmeWpkY3p2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0NzU4NjcsImV4cCI6MjA5MjA1MTg2N30.r3Vie2AAOfzYmLy4IRUk1s9mjkC6bDSoxAIYKfcz6jQ';
-const BUCKET = 'trip-photos';
-const TRIPS = ['london2026', 'newyork2026', 'stlouismo'];
+const SUPA_URL='https://wnpanbjzmcsvhfyjdczv.supabase.co';
+const ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InducGFuYmp6bWNzdmhmeWpkY3p2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0NzU4NjcsImV4cCI6MjA5MjA1MTg2N30.r3Vie2AAOfzYmLy4IRUk1s9mjkC6bDSoxAIYKfcz6jQ';
+const BUCKET='trip-photos';
+const TRIPS=['london2026','newyork2026','stlouismo'];
+const supa=supabase.createClient(SUPA_URL,ANON_KEY);
+let photos=[],trips={},cur=null;
 
-const supa = supabase.createClient(SUPA_URL, ANON_KEY);
-
-let allPhotos = []; // {url, filename, tripId, assigned: null|{dayIdx,stopIdx}}
-let tripData = {};  // tripId -> {days: [{title, stops:[{name,...,userPhotos:[]}]}]}
-let currentPhotoIdx = null;
-
-async function init() {
-  status('Fetching trip data…');
-  
-  // Load all trips
-  for (const tripId of TRIPS) {
-    const { data, error } = await supa.from('trips').select('*').eq('id', tripId).maybeSingle();
-    if (data && data.data && data.data.days) {
-      tripData[tripId] = data.data;
-    }
+async function init(){
+  st('Fetching trips…');
+  for(const id of TRIPS){const{data}=await supa.from('trips').select('*').eq('id',id).maybeSingle();if(data&&data.data&&data.data.days)trips[id]=data.data;}
+  st('Listing Storage…');
+  for(const id of TRIPS){
+    const{data:files,error}=await supa.storage.from(BUCKET).list(id+'/',{limit:1000});
+    if(error||!files||!files.length)continue;
+    const paths=files.filter(f=>f.name&&f.name!=='.emptyFolderPlaceholder').map(f=>id+'/'+f.name);
+    if(!paths.length)continue;
+    const{data:signed}=await supa.storage.from(BUCKET).createSignedUrls(paths,31536000);
+    for(const s of(signed||[])){if(s.signedUrl)photos.push({url:s.signedUrl,path:s.path,tripId:id,assigned:null});}
   }
-
-  status('Listing Storage files…');
-  
-  // List files from all trips
-  for (const tripId of TRIPS) {
-    const { data: files, error } = await supa.storage.from(BUCKET).list(tripId + '/', { limit: 1000 });
-    if (!files || !files.length) continue;
-
-    // Batch generate signed URLs for all files at once
-    const paths = files
-      .filter(f => f.name && f.name !== '.emptyFolderPlaceholder')
-      .map(f => tripId + '/' + f.name);
-
-    if (!paths.length) continue;
-
-    const { data: signed, error: signErr } = await supa.storage
-      .from(BUCKET).createSignedUrls(paths, 31536000);
-
-    if (signErr || !signed) { console.warn('Signing error', signErr); continue; }
-
-    for (const s of signed) {
-      if (!s.signedUrl) continue;
-      allPhotos.push({
-        url: s.signedUrl,
-        filename: s.path, // e.g. "london2026/16de72.jpg"
-        tripId,
-        assigned: null
-      });
-    }
-  }
-
-  if (!allPhotos.length) {
-    status('❌ No photos found in Storage. Check bucket name or permissions.');
-    return;
-  }
-
-  // Pre-assign: mark photos already referenced in trip data (match by filename/fingerprint)
-  for (const tripId of TRIPS) {
-    const td = tripData[tripId];
-    if (!td) continue;
-    (td.days || []).forEach((day, di) => {
-      (day.stops || []).forEach((stop, si) => {
-        (stop.userPhotos || []).forEach(photoUrl => {
-          if (!photoUrl || !photoUrl.includes(BUCKET)) return;
-          const match = photoUrl.match(/\/trip-photos\/([^?#]+)/);
-          if (!match) return;
-          const storedPath = decodeURIComponent(match[1]); // e.g. "london2026/16de72.jpg"
-          const found = allPhotos.find(p => p.filename === storedPath);
-          if (found && !found.assigned) {
-            found.assigned = { tripId, dayIdx: di, stopIdx: si };
-          }
-        });
-      });
-    });
-  }
-
-  document.getElementById('status').style.display = 'none';
-  document.getElementById('gridLabel').style.display = '';
-  renderGrid();
-  updateProgress();
+  if(!photos.length){st('❌ No photos found.');return;}
+  // Pre-assign
+  for(const id of TRIPS){const td=trips[id];if(!td)continue;(td.days||[]).forEach((day,di)=>{(day.stops||[]).forEach((stop,si)=>{(stop.userPhotos||[]).forEach(u=>{if(!u||!u.includes(BUCKET))return;const m=u.match(/\/trip-photos\/([^?#]+)/);if(!m)return;const p=decodeURIComponent(m[1]);const f=photos.find(x=>x.path===p);if(f&&!f.assigned)f.assigned={tripId:id,dayIdx:di,stopIdx:si};});});});}
+  document.getElementById('status').style.display='none';
+  render();prog();
 }
 
-function renderGrid() {
-  const grid = document.getElementById('photoGrid');
-  grid.innerHTML = '';
-  // Unassigned first, then assigned
-  const sorted = [
-    ...allPhotos.filter(p => !p.assigned),
-    ...allPhotos.filter(p => p.assigned)
-  ];
-  sorted.forEach((photo, i) => {
-    const origIdx = allPhotos.indexOf(photo);
-    const tile = document.createElement('div');
-    tile.className = 'photo-tile' + (photo.assigned ? ' assigned' : '');
-    tile.dataset.idx = origIdx;
-    tile.innerHTML = `<img src="${photo.url}" loading="lazy" onerror="this.parentNode.classList.add('broken');this.style.display='none'">`;
-    if (photo.assigned) {
-      const day = tripData[photo.assigned.tripId]?.days?.[photo.assigned.dayIdx];
-      const stop = day?.stops?.[photo.assigned.stopIdx];
-      const tag = document.createElement('div');
-      tag.className = 'stop-tag';
-      tag.textContent = stop ? stop.name : '✓ Assigned';
-      tile.appendChild(tag);
-    }
-    tile.addEventListener('click', () => openSheet(origIdx));
+function st(m){document.getElementById('status').textContent=m;}
+
+function render(){
+  const grid=document.getElementById('grid');
+  grid.innerHTML='';
+  const sorted=[...photos.filter(p=>!p.assigned),...photos.filter(p=>p.assigned)];
+  sorted.forEach(photo=>{
+    const idx=photos.indexOf(photo);
+    const tile=document.createElement('div');
+    tile.className='tile '+(photo.assigned?'assigned':'unassigned');
+    const img=document.createElement('img');
+    img.src=photo.url;img.loading='lazy';
+    img.onerror=()=>{tile.classList.add('broken');tile.classList.remove('unassigned','assigned');};
+    tile.appendChild(img);
+    if(photo.assigned){const c=document.createElement('div');c.className='chk';c.textContent='✓';tile.appendChild(c);}
+    const lbl=document.createElement('div');lbl.className='lbl';
+    if(photo.assigned){const s=trips[photo.assigned.tripId]?.days?.[photo.assigned.dayIdx]?.stops?.[photo.assigned.stopIdx];lbl.textContent=s?s.name:'✓';}
+    else lbl.textContent='👆 Tap to assign';
+    tile.appendChild(lbl);
+    tile.onclick=function(){openSheet(idx);};
     grid.appendChild(tile);
   });
 }
 
-function updateProgress() {
-  const total = allPhotos.length;
-  const assigned = allPhotos.filter(p => p.assigned).length;
-  const pct = total ? Math.round(assigned / total * 100) : 0;
-  document.getElementById('totalBadge').textContent = total + ' photos';
-  document.getElementById('progressFill').style.width = pct + '%';
-  document.getElementById('progressLabel').textContent = assigned + ' of ' + total + ' assigned';
-  document.getElementById('progressRight').textContent = pct + '%';
-  document.getElementById('saveBtn').disabled = assigned === 0;
+function prog(){
+  const total=photos.length,assigned=photos.filter(p=>p.assigned).length,pct=total?Math.round(assigned/total*100):0;
+  document.getElementById('badge').textContent=total+' photos';
+  document.getElementById('pbar').style.width=pct+'%';
+  document.getElementById('pleft').textContent=assigned+' of '+total+' assigned';
+  document.getElementById('pright').textContent=pct+'%';
+  document.getElementById('saveBtn').disabled=assigned===0;
 }
 
-function openSheet(photoIdx) {
-  currentPhotoIdx = photoIdx;
-  const photo = allPhotos[photoIdx];
-  document.getElementById('sheetPreview').src = photo.url;
-  document.getElementById('sheetUrl').textContent = photo.filename;
-  
-  // Build stop list
-  const body = document.getElementById('sheetBody');
-  body.innerHTML = '';
-  
-  TRIPS.forEach(tripId => {
-    const td = tripData[tripId];
-    if (!td) return;
-    (td.days || []).forEach((day, di) => {
-      if (!day.stops || !day.stops.length) return;
-      const group = document.createElement('div');
-      group.className = 'day-group';
-      const lbl = document.createElement('div');
-      lbl.className = 'day-label';
-      lbl.textContent = (tripId !== 'london2026' ? tripId + ' · ' : '') + (day.title || 'Day ' + (di+1));
-      group.appendChild(lbl);
-      day.stops.forEach((stop, si) => {
-        const count = (stop.userPhotos || []).filter(u => u && u.includes(BUCKET)).length;
-        const alreadyAssignedHere = photo.assigned && photo.assigned.tripId === tripId && photo.assigned.dayIdx === di && photo.assigned.stopIdx === si;
-        const row = document.createElement('div');
-        row.className = 'stop-row';
-        row.innerHTML = `
-          <div class="stop-num">${si+1}</div>
-          <div class="stop-info">
-            <div class="stop-name">${stop.name || 'Stop ' + (si+1)}</div>
-            <div class="stop-count">${count} photo${count !== 1 ? 's' : ''}${alreadyAssignedHere ? ' · ✓ assigned here' : ''}</div>
-          </div>
-          <div class="stop-arrow">${alreadyAssignedHere ? '✓' : '›'}</div>
-        `;
-        row.style.opacity = alreadyAssignedHere ? '0.6' : '1';
-        row.addEventListener('click', () => assignPhoto(tripId, di, si));
-        group.appendChild(row);
+function openSheet(idx){
+  cur=idx;
+  const photo=photos[idx];if(!photo)return;
+  document.getElementById('prev').src=photo.url;
+  document.getElementById('prevPath').textContent=photo.path||'';
+  const body=document.getElementById('sheetBody');body.innerHTML='';
+  TRIPS.forEach(id=>{
+    const td=trips[id];if(!td)return;
+    (td.days||[]).forEach((day,di)=>{
+      if(!day.stops||!day.stops.length)return;
+      const dl=document.createElement('div');dl.className='day-lbl';
+      dl.textContent=(id!=='london2026'?id+' · ':'')+( day.title||'Day '+(di+1));body.appendChild(dl);
+      day.stops.forEach((stop,si)=>{
+        const isHere=photo.assigned&&photo.assigned.tripId===id&&photo.assigned.dayIdx===di&&photo.assigned.stopIdx===si;
+        const count=(stop.userPhotos||[]).filter(u=>u&&u.includes(BUCKET)).length;
+        const row=document.createElement('div');row.className='stop-row';
+        row.innerHTML='<div class="snum">'+(si+1)+'</div><div class="sinfo"><div class="sname">'+(stop.name||'Stop '+(si+1))+'</div><div class="scount">'+count+' photo'+(count!==1?'s':'')+(isHere?' · ✓ here':'')+'</div></div><div style="color:var(--muted);font-size:14px;">'+(isHere?'✓':'›')+'</div>';
+        row.onclick=function(e){e.stopPropagation();assign(id,di,si);};
+        body.appendChild(row);
       });
-      body.appendChild(group);
     });
   });
-
-  const overlay = document.getElementById('sheet');
-  overlay.style.display = 'flex';
-  requestAnimationFrame(() => overlay.classList.add('open'));
+  const ov=document.getElementById('overlay');
+  ov.style.display='flex';
+  requestAnimationFrame(()=>ov.classList.add('open'));
 }
 
-function closeSheet(e) {
-  if (e && e.target !== document.getElementById('sheet')) return;
-  const overlay = document.getElementById('sheet');
-  overlay.classList.remove('open');
-  setTimeout(() => { overlay.style.display = 'none'; }, 300);
+document.getElementById('overlay').addEventListener('click',function(e){if(e.target===this)closeSheet();});
+
+function closeSheet(){
+  const ov=document.getElementById('overlay');
+  ov.classList.remove('open');
 }
 
-function assignPhoto(tripId, dayIdx, stopIdx) {
-  const photo = allPhotos[currentPhotoIdx];
-  photo.assigned = { tripId, dayIdx, stopIdx };
-  
-  // Add to trip data in memory
-  const stop = tripData[tripId].days[dayIdx].stops[stopIdx];
-  if (!stop.userPhotos) stop.userPhotos = [];
-  // Avoid duplicates
-  const pubUrl = photo.url;
-  if (!stop.userPhotos.includes(pubUrl)) {
-    stop.userPhotos.push(pubUrl);
-  }
-
-  closeSheet(null);
-  setTimeout(() => {
-    renderGrid();
-    updateProgress();
-    const stop = tripData[tripId].days[dayIdx].stops[stopIdx];
-    toast('📍 Added to ' + (stop.name || 'stop ' + (stopIdx+1)));
-  }, 320);
+function assign(tripId,di,si){
+  const photo=photos[cur];if(!photo)return;
+  photo.assigned={tripId,dayIdx:di,stopIdx:si};
+  const stop=trips[tripId]?.days?.[di]?.stops?.[si];
+  if(stop){if(!stop.userPhotos)stop.userPhotos=[];if(!stop.userPhotos.includes(photo.url))stop.userPhotos.push(photo.url);}
+  closeSheet();
+  setTimeout(()=>{render();prog();toast('📍 '+(stop?stop.name:'Assigned'));},300);
 }
 
-// Convert any URL (signed or public) to just the storage path
-function urlToPath(url) {
-  const match = url.match(/\/trip-photos\/([^?#]+)/);
-  return match ? decodeURIComponent(match[1]) : null;
-}
-
-async function saveToTrip() {
-  const btn = document.getElementById('saveBtn');
-  btn.disabled = true;
-  btn.textContent = '⏳ Saving…';
-
-  // Group assigned photos by tripId → dayIdx → stopIdx
-  const byTrip = {};
-  allPhotos.filter(p => p.assigned).forEach(photo => {
-    const { tripId, dayIdx, stopIdx } = photo.assigned;
-    if (!byTrip[tripId]) byTrip[tripId] = {};
-    if (!byTrip[tripId][dayIdx]) byTrip[tripId][dayIdx] = {};
-    if (!byTrip[tripId][dayIdx][stopIdx]) byTrip[tripId][dayIdx][stopIdx] = [];
-    byTrip[tripId][dayIdx][stopIdx].push(photo.filename); // store path, sign fresh on save
+async function saveToTrip(){
+  const btn=document.getElementById('saveBtn');btn.disabled=true;btn.textContent='⏳ Saving…';
+  const byTrip={};
+  photos.filter(p=>p.assigned).forEach(photo=>{
+    const{tripId,dayIdx,stopIdx}=photo.assigned;
+    if(!byTrip[tripId])byTrip[tripId]={};
+    if(!byTrip[tripId][dayIdx])byTrip[tripId][dayIdx]={};
+    if(!byTrip[tripId][dayIdx][stopIdx])byTrip[tripId][dayIdx][stopIdx]=[];
+    byTrip[tripId][dayIdx][stopIdx].push(photo.path);
   });
-
-  let saved = 0, errors = 0;
-  for (const tripId of Object.keys(byTrip)) {
-    const { data: current, error: loadErr } = await supa.from('trips').select('*').eq('id', tripId).maybeSingle();
-    if (loadErr || !current) { errors++; continue; }
-
-    const mergedDays = JSON.parse(JSON.stringify((current.data && current.data.days) || []));
-
-    // Collect all paths that need fresh signed URLs
-    const allPaths = [];
-    Object.keys(byTrip[tripId]).forEach(di => {
-      Object.keys(byTrip[tripId][di]).forEach(si => {
-        byTrip[tripId][di][si].forEach(path => { if (!allPaths.includes(path)) allPaths.push(path); });
-      });
-    });
-
-    // Batch sign all paths
-    toast('⏳ Signing ' + allPaths.length + ' URLs…');
-    const { data: freshSigned } = await supa.storage.from(BUCKET).createSignedUrls(allPaths, 31536000);
-    const signedMap = {};
-    (freshSigned || []).forEach(s => { if (s.signedUrl) signedMap[s.path] = s.signedUrl; });
-
-    // Apply to days: replace stop's userPhotos entirely with fresh signed URLs
-    mergedDays.forEach((day, di) => {
-      (day.stops || []).forEach((stop, si) => {
-        const paths = byTrip[tripId][di] && byTrip[tripId][di][si];
-        if (!paths) return;
-        stop.userPhotos = paths.map(path => signedMap[path]).filter(Boolean);
-      });
-    });
-
-    const payload = {
-      ...current,
-      data: { ...(current.data || {}), days: mergedDays, savedAt: new Date().toISOString() }
-    };
-    const { error } = await supa.from('trips').upsert(payload, { onConflict: 'id' });
-    if (error) { console.error('Save error for', tripId, error); errors++; }
-    else { saved++; console.log('Saved', tripId, '— stops updated'); }
+  let ok=0,err=0;
+  for(const id of Object.keys(byTrip)){
+    const{data:cur2,error:le}=await supa.from('trips').select('*').eq('id',id).maybeSingle();
+    if(le||!cur2){err++;continue;}
+    const allPaths=[];
+    Object.values(byTrip[id]).forEach(bd=>Object.values(bd).forEach(pp=>pp.forEach(p=>{if(!allPaths.includes(p))allPaths.push(p);})));
+    toast('⏳ Signing '+allPaths.length+' URLs…');
+    const{data:fs}=await supa.storage.from(BUCKET).createSignedUrls(allPaths,31536000);
+    const sm={};(fs||[]).forEach(s=>{if(s.signedUrl)sm[s.path]=s.signedUrl;});
+    const days=JSON.parse(JSON.stringify((cur2.data&&cur2.data.days)||[]));
+    days.forEach((day,di)=>{(day.stops||[]).forEach((stop,si)=>{
+      const pp=byTrip[id][di]&&byTrip[id][di][si];if(!pp)return;
+      stop.userPhotos=pp.map(p=>sm[p]).filter(Boolean);
+    });});
+    const{error}=await supa.from('trips').upsert({...cur2,data:{...(cur2.data||{}),days,savedAt:new Date().toISOString()}},{onConflict:'id'});
+    if(error){console.error(error);err++;}else ok++;
   }
-
-  btn.disabled = false;
-  if (errors) {
-    btn.textContent = '⚠️ Error — retry';
-    toast('⚠️ ' + errors + ' error(s). Check console.');
-  } else {
-    btn.textContent = '✅ Saved!';
-    btn.style.background = 'linear-gradient(135deg, #3ecf8e, #1a9e6a)';
-    toast('✅ Done! Reload Trip.html on all browsers.');
-  }
+  btn.disabled=false;
+  if(err){btn.textContent='⚠️ Retry';toast('⚠️ '+err+' error(s)');}
+  else{btn.textContent='✅ Saved!';btn.style.background='linear-gradient(135deg,#3ecf8e,#1a9e6a)';toast('✅ Done! Reload Trip.html.');}
 }
 
-function status(msg) {
-  document.getElementById('status').innerHTML = '<span class="spinner">⏳</span> ' + msg;
-}
+let _tt;
+function toast(m){const e=document.getElementById('toast');e.textContent=m;e.classList.add('show');clearTimeout(_tt);_tt=setTimeout(()=>e.classList.remove('show'),3000);}
 
-let _toastTimer;
-function toast(msg) {
-  const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.classList.add('show');
-  clearTimeout(_toastTimer);
-  _toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
-}
-
-init().catch(e => {
-  document.getElementById('status').textContent = '❌ Error: ' + e.message;
-});
+init().catch(e=>{st('❌ '+e.message);console.error(e);});
 </script>
 </body>
 </html>
