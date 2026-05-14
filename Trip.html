@@ -3181,8 +3181,10 @@ Only include real, well-known places in ${city}. Use accurate coordinates (4+ de
     if (!results || !results.length) throw new Error('AI returned no usable results — try rephrasing');
     renderSearchResults(results, dayIdx);
   } catch(e) {
+    const msg = e.message || 'Search unavailable';
+    const hint = !getApiKey() ? ' — Add your API key in ⚙ Settings → AI settings for reliable access.' : '';
     document.getElementById('searchResults').innerHTML =
-      '<p style="color:#c0392b;font-size:13px;text-align:center;padding:20px;">' + (e.message || 'Search unavailable') + '</p>';
+      '<p style="color:#c0392b;font-size:13px;text-align:center;padding:20px;">' + msg + hint + '</p>';
     showToast('AI search unavailable', true);
   }
   btn.textContent = 'Search with AI →'; btn.disabled = false;
