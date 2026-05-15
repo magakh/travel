@@ -6485,8 +6485,33 @@ async function _acquireWakeLock() {
   catch(e) { console.warn('Wake lock:', e.message); }
 }
 function _releaseWakeLock() { if (_wakeLock) { _wakeLock.release(); _wakeLock = null; } }
+
+// Request notification permission for background landmark alerts
+async function _requestNotificationPermission() {
+  if ('Notification' in window && Notification.permission === 'default') {
+    await Notification.requestPermission();
+  }
+}
+
+// Show a notification when a landmark is found while app is backgrounded
+function _notifyLandmark(name) {
+  if (document.visibilityState === 'visible') return; // only when backgrounded
+  if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification('📍 Landmark nearby', { body: name, icon: '/travel/icon.png', tag: 'landmark', renotify: true });
+  }
+  if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+}
+
 document.addEventListener('visibilitychange', function() {
-  if (document.visibilityState === 'visible' && _walkTourActive && !_wakeLock) _acquireWakeLock();
+  if (document.visibilityState === 'visible' && _walkTourActive) {
+    // Returning to app — re-acquire wake lock and restart bar ticker
+    if (!_wakeLock) _acquireWakeLock();
+    if (!_walkBarInterval) _startWalkBarTicker();
+    // Resume speech if it was interrupted
+    if (window.speechSynthesis && window.speechSynthesis.paused) {
+      window.speechSynthesis.resume();
+    }
+  }
 });
 
 function toggleWalkingGuide() {
@@ -6610,6 +6635,7 @@ function startLiveWalkingTour() {
     _walkSearching = false;
     _walkCountdown = 0;
     _acquireWakeLock();
+    _requestNotificationPermission();
     // Start first search immediately, then cycle via bar ticker
     _doAutoSearch();
     _startWalkBarTicker();
@@ -7381,8 +7407,9 @@ function showLandmarkAlert(lm, idx, dist, pageId) {
   if (!_walkHistory.find(h => h.name === lm.name)) {
     _walkHistory.unshift({ name: lm.name, tldr: lm.tldr || '', funFact: lm.funFact || '', image: lm.image || null, lat: lm.lat, lng: lm.lng, wikiUrl: lm.wikiUrl || '', dist: Math.round(dist || 0), ts: Date.now() });
   }
-  // Vibrate to alert user — pattern: two short pulses
+  // Vibrate and notify (works even when backgrounded on Android)
   if (navigator.vibrate) navigator.vibrate([120, 80, 120]);
+  _notifyLandmark(lm.name);
   var bar = document.getElementById('walkNextBar'); if (bar) bar.style.display = 'none';
   const old = document.getElementById('walkAlert');
   if (old) {
@@ -7475,8 +7502,11 @@ function showLandmarkAlert(lm, idx, dist, pageId) {
     + (lm.wikiUrl ? '<a href="'+lm.wikiUrl+'" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();window.open(\''+lm.wikiUrl+'\',\'_blank\');return false;" style="font-size:13px;font-weight:700;color:#1a73e8;text-decoration:none;">📖 Continue reading on Wikipedia →</a>' : '')
     + '<button onclick="speakTourLandmark('+idx+')" style="padding:8px 12px;background:#f5f5f5;border:none;border-radius:10px;font-size:16px;cursor:pointer;">🔊</button>'
     + '</div>'
-    + '<button onclick="_addWalkPassedBy('+idx+')" id="walkAddBtn_'+idx+'" style="width:100%;padding:12px;border-radius:12px;border:1.5px solid #1a7a3a;background:#e8f5e9;color:#1a7a3a;font-size:13px;font-weight:800;cursor:pointer;margin-bottom:8px;">📍 Passed by — Add to schedule</button>'
-    + '<button onclick="nextLandmark()" style="width:100%;padding:12px;border-radius:12px;border:none;background:#1a1a1a;color:#fff;font-size:14px;font-weight:800;cursor:pointer;">Next landmark ➡</button>'
+    + '<div style="display:flex;gap:8px;margin-bottom:8px;">'
+    + '<button onclick="openWalkHistory()" style="flex:1;padding:12px;border-radius:12px;border:1.5px solid #888;background:#f5f5f5;color:#333;font-size:13px;font-weight:800;cursor:pointer;">📋 Log</button>'
+    + '<button onclick="_addWalkPassedBy('+idx+')" id="walkAddBtn_'+idx+'" style="flex:2;padding:12px;border-radius:12px;border:1.5px solid #1a7a3a;background:#e8f5e9;color:#1a7a3a;font-size:13px;font-weight:800;cursor:pointer;">📍 Add to schedule</button>'
+    + '</div>'
+    + '<button onclick="dismissLandmarkAlert()" style="width:100%;padding:12px;border-radius:12px;border:none;background:#1a1a1a;color:#fff;font-size:14px;font-weight:800;cursor:pointer;">✕ Dismiss · next search in 5s</button>'
     + '</div>';
 
   document.body.appendChild(el);
