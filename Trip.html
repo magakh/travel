@@ -1292,7 +1292,6 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
       <div style="flex:1;display:flex;gap:0;background:#f0f0f0;border-radius:10px;padding:3px;">
         <button id="walkTabSeen" onclick="switchWalkTab('seen')" style="flex:1;border:none;border-radius:8px;padding:7px;font-size:12px;font-weight:700;cursor:pointer;background:#1a1a1a;color:#fff;">📋 Seen</button>
         <button id="walkTabNearby" onclick="switchWalkTab('nearby')" style="flex:1;border:none;border-radius:8px;padding:7px;font-size:12px;font-weight:700;cursor:pointer;background:transparent;color:#555;">📡 Nearby</button>
-        <button id="walkTabUpcoming" onclick="switchWalkTab('upcoming')" style="flex:1;border:none;border-radius:8px;padding:7px;font-size:12px;font-weight:700;cursor:pointer;background:transparent;color:#555;">🔭 Coming Up</button>
       </div>
       <button onclick="closeWalkHistory()" style="flex-shrink:0;width:30px;height:30px;border:none;background:#f0f0f0;border-radius:50%;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#666;">✕</button>
     </div>
@@ -6944,7 +6943,7 @@ way["building"~"parliament|government|cathedral|palace"](around:${r2},${lat},${l
       if (!_walkQueue.find(function(q) { return q.name === lmObj.name; })) {
         _walkQueue.push(lmObj);
         var panel = document.getElementById('walkHistoryPanel');
-        if (panel && panel.style.display !== 'none') renderWalkHistoryTab('upcoming');
+        if (panel && panel.style.display !== 'none') renderWalkHistoryTab('nearby');
       }
       return;
     }
@@ -7172,8 +7171,8 @@ function closeWalkHistory() {
 function switchWalkTab(tab) {
   _walkActiveTab = tab;
   var baseStyle = 'flex:1;border:none;border-radius:8px;padding:7px;font-size:12px;font-weight:700;cursor:pointer;';
-  ['seen','nearby','upcoming'].forEach(function(t) {
-    var ids = {seen:'walkTabSeen', nearby:'walkTabNearby', upcoming:'walkTabUpcoming'};
+  ['seen','nearby'].forEach(function(t) {
+    var ids = {seen:'walkTabSeen', nearby:'walkTabNearby'};
     var el = document.getElementById(ids[t]);
     if (el) el.style.cssText = baseStyle + (t === tab ? 'background:#1a1a1a;color:#fff;' : 'background:transparent;color:#555;');
   });
@@ -7217,95 +7216,90 @@ function renderWalkHistoryTab(tab) {
     var logBody = document.getElementById('walkHistoryBody');
     logBody.innerHTML = '';
     if (!_walkNearbyResults.length) {
-      logBody.innerHTML = '<div style="text-align:center;color:#aaa;padding:32px 0;font-size:14px;">No nearby Wikipedia articles found yet.<br><span style="font-size:12px;">They appear when the guide is running.</span></div>';
+      logBody.innerHTML = '<div style="text-align:center;color:#aaa;padding:32px 0;font-size:14px;">No nearby articles found yet.<br><span style="font-size:12px;">They appear when the guide is running.</span></div>';
       return;
     }
-    var hdr = document.createElement('div');
-    hdr.style.cssText = 'font-size:11px;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:0.5px;padding:8px 0 6px;';
-    hdr.textContent = _walkNearbyResults.length + ' Wikipedia articles within 300m — tap any to open';
-    logBody.appendChild(hdr);
-    _walkNearbyResults.forEach(function(item) {
-      var distStr = item.dist < 1000 ? Math.round(item.dist) + 'm' : (item.dist/1000).toFixed(1) + 'km';
-      var row = document.createElement('div');
-      row.style.cssText = 'display:flex;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid #f0f0f0;cursor:pointer;';
-      row.innerHTML = '<div style="width:8px;height:8px;border-radius:50%;background:#1565c0;flex-shrink:0;"></div>'
-        + '<div style="flex:1;font-size:13px;font-weight:700;color:#1a1a1a;">' + item.name + '</div>'
-        + '<div style="font-size:12px;color:#888;flex-shrink:0;">' + distStr + '</div>';
-      row.onclick = function() {
-        // Open card WITHOUT marking as seen (pageId = null) — stays in Nearby
-        var lmName = item.name, lmLat = item.lat, lmLng = item.lon || item.lng, lmDist = item.dist;
-        // Close log if no card showing; if card showing, log stays open
-        var cardShowing = !!document.getElementById('walkAlert');
-        if (!cardShowing) closeWalkHistory();
-        setTimeout(function() {
-          var lmObj = { name: lmName, lat: lmLat, lng: lmLng, image: null, extract: '', tldr: '', funFact: '', wikiUrl: 'https://en.wikipedia.org/wiki/' + encodeURIComponent(lmName) };
-          if (!_walkTourAlertOpen) showLandmarkAlert(lmObj, -1, lmDist, null); // null pageId = don't cache
-          else _walkQueue.push(lmObj);
-        }, cardShowing ? 0 : 350);
-      };
-      logBody.appendChild(row);
-    });
-  } else {
-    var logBody = document.getElementById('walkHistoryBody');
-    logBody.innerHTML = '';
 
-    // Section: landmarks from Nearby that pass direction filter → "In your path"
-    var comingUpNearby = _walkNearbyResults.filter(function(item) { return item.comingUp; });
-    if (comingUpNearby.length > 0) {
-      var nearHdr = document.createElement('div');
-      nearHdr.style.cssText = 'font-size:11px;font-weight:800;color:#1a7a3a;text-transform:uppercase;letter-spacing:0.5px;padding:6px 0 4px;';
-      nearHdr.textContent = '📍 In your path — ' + comingUpNearby.length + ' ahead';
-      logBody.appendChild(nearHdr);
-      comingUpNearby.forEach(function(item) {
+    // Helper: fetch full Wikipedia data and open card as manual (won't add to Seen)
+    function openNearbyCard(item) {
+      closeWalkHistory();
+      // Show a loading flash on the walk bar
+      _flashWalkBar('⏳ Loading ' + item.name + '…', 3000);
+      setTimeout(async function() {
+        try {
+          var extRes = await fetch('https://en.wikipedia.org/w/api.php?action=query&pageids=' + item.pageid + '&prop=extracts|pageimages&exintro=1&explaintext=1&pithumbsize=400&format=json&origin=*');
+          var extData = await extRes.json();
+          var page = (extData.query && extData.query.pages && extData.query.pages[item.pageid]) || {};
+          var rawExtract = (page.extract || '').replace(/\n+/g, ' ').trim();
+          var extract = rawExtract;
+          if (rawExtract.length > 600) {
+            var sents = rawExtract.match(/[^.!?]+[.!?]+\s*/g) || [];
+            var built = ''; var si = 0;
+            while (si < sents.length && (built + sents[si]).length < 800) { built += sents[si]; si++; }
+            extract = built.trim() || rawExtract.slice(0, 800);
+          }
+          var image = (page.thumbnail && page.thumbnail.source) || null;
+          var sents2 = extract.match(/[^.!?]+[.!?]+\s*/g) || [];
+          var funFact = '';
+          var factSent = sents2.find(function(s, i) {
+            return i > 0 && /\d{3,}|\b(first|oldest|largest|tallest|biggest|only|famous|unique|secret|hidden|rare|never|original|ancient|survived|destroyed|rebuilt|designed by|built in|opened in|stands|measures|weighing)\b/i.test(s);
+          });
+          if (factSent) funFact = factSent.trim();
+          var lmObj = {
+            name: item.name, lat: item.lat, lng: item.lon || item.lng,
+            image: image, extract: extract, tldr: extract, funFact: funFact,
+            wikiUrl: 'https://en.wikipedia.org/wiki/' + encodeURIComponent(item.name)
+          };
+          if (!_walkTourAlertOpen) showLandmarkAlert(lmObj, -1, item.dist, null, false, true); // manualOpen=true → not added to Seen
+          else _walkQueue.push(lmObj);
+        } catch(e) {
+          // Fallback: show with no rich data but still manualOpen
+          var lmObj = { name: item.name, lat: item.lat, lng: item.lon || item.lng, image: null, extract: '', tldr: '', funFact: '', wikiUrl: 'https://en.wikipedia.org/wiki/' + encodeURIComponent(item.name) };
+          if (!_walkTourAlertOpen) showLandmarkAlert(lmObj, -1, item.dist, null, false, true);
+        }
+      }, 50);
+    }
+
+    var inPath = _walkNearbyResults.filter(function(i) { return i.comingUp; });
+    var others = _walkNearbyResults.filter(function(i) { return !i.comingUp; });
+
+    // ── Section: In your path ──────────────────────────────────────
+    if (inPath.length) {
+      var pathHdr = document.createElement('div');
+      pathHdr.style.cssText = 'font-size:11px;font-weight:800;color:#1a7a3a;text-transform:uppercase;letter-spacing:0.5px;padding:10px 0 6px;';
+      pathHdr.textContent = '→ In your path — ' + inPath.length + ' ahead';
+      logBody.appendChild(pathHdr);
+      inPath.forEach(function(item) {
+        var distStr = Math.round(item.dist) + 'm';
         var row = document.createElement('div');
-        row.style.cssText = 'display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid #e8f5e9;cursor:pointer;';
-        row.innerHTML = '<div style="width:10px;height:10px;border-radius:50%;background:#1a7a3a;flex-shrink:0;"></div>'
+        row.style.cssText = 'display:flex;gap:10px;align-items:center;padding:11px 0;border-bottom:1px solid #e8f5e9;cursor:pointer;';
+        row.innerHTML = '<div style="width:10px;height:10px;border-radius:50%;background:#1a7a3a;flex-shrink:0;margin-top:2px;"></div>'
           + '<div style="flex:1;font-size:13px;font-weight:700;color:#1a1a1a;">' + item.name + '</div>'
-          + '<div style="font-size:12px;color:#1a7a3a;font-weight:700;flex-shrink:0;">' + Math.round(item.dist) + 'm</div>';
-        row.onclick = function() {
-          var lmObj = { name: item.name, lat: item.lat, lng: item.lng, image: null, extract: '', tldr: '', funFact: '', wikiUrl: 'https://en.wikipedia.org/wiki/' + encodeURIComponent(item.name) };
-          closeWalkHistory();
-          setTimeout(function() { if (!_walkTourAlertOpen) showLandmarkAlert(lmObj, -1, item.dist, item.pageid); }, 350);
-        };
+          + '<div style="font-size:12px;color:#1a7a3a;font-weight:700;flex-shrink:0;">' + distStr + '</div>'
+          + '<div style="color:#ccc;font-size:16px;flex-shrink:0;">›</div>';
+        row.onclick = function() { openNearbyCard(item); };
         logBody.appendChild(row);
       });
     }
 
-    var upcoming = [];
-
-    // 1. Queued items (already found, waiting to be read)
-    _walkQueue.forEach(function(lm) {
-      var dist = (_currentGpsLat !== null) ? _haversineMetres(_currentGpsLat, _currentGpsLng, lm.lat, lm.lng) : null;
-      upcoming.push({ lm: lm, dist: dist, queued: true });
-    });
-
-    // 2. Tour landmarks not yet visited
-    if (_tourLandmarks && _tourLandmarks.length) {
-      _tourLandmarks.forEach(function(lm, i) {
-        if (_walkTourVisited.has(i)) return;
-        var dist = (_currentGpsLat !== null) ? _haversineMetres(_currentGpsLat, _currentGpsLng, lm.lat, lm.lng) : null;
-        upcoming.push({ lm: lm, idx: i, dist: dist, queued: false });
+    // ── Section: Also nearby ──────────────────────────────────────
+    if (others.length) {
+      var alsoHdr = document.createElement('div');
+      alsoHdr.style.cssText = 'font-size:11px;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:0.5px;padding:12px 0 6px;';
+      alsoHdr.textContent = (inPath.length ? 'Also nearby' : 'Nearby') + ' — tap to explore';
+      logBody.appendChild(alsoHdr);
+      others.forEach(function(item) {
+        var distStr = item.dist < 1000 ? Math.round(item.dist) + 'm' : (item.dist/1000).toFixed(1) + 'km';
+        var row = document.createElement('div');
+        row.style.cssText = 'display:flex;gap:10px;align-items:center;padding:11px 0;border-bottom:1px solid #f0f0f0;cursor:pointer;';
+        row.innerHTML = '<div style="width:8px;height:8px;border-radius:50%;background:#1565c0;flex-shrink:0;margin-top:2px;"></div>'
+          + '<div style="flex:1;font-size:13px;font-weight:700;color:#1a1a1a;">' + item.name + '</div>'
+          + '<div style="font-size:12px;color:#888;flex-shrink:0;">' + distStr + '</div>'
+          + '<div style="color:#ccc;font-size:16px;flex-shrink:0;">›</div>';
+        row.onclick = function() { openNearbyCard(item); };
+        logBody.appendChild(row);
       });
-      upcoming.sort(function(a, b) { return (a.dist || 99999) - (b.dist || 99999); });
     }
-
-    if (!upcoming.length && _walkNearbyResults.length === 0) { logBody.innerHTML = '<div style="text-align:center;color:#aaa;padding:32px 0;font-size:14px;">No upcoming landmarks.<br><span style="font-size:12px;">They appear automatically as you walk.</span></div>'; return; }
-    if (!upcoming.length) return;
-    var upEl = document.createElement('div');
-    logBody.appendChild(upEl);
-    upEl.innerHTML = upcoming.map(function(item) {
-      var lm = item.lm;
-      var distStr = item.dist !== null ? (item.dist < 1000 ? Math.round(item.dist) + ' m' : (item.dist/1000).toFixed(1) + ' km') : '?';
-      var queueBadge = item.queued ? '<span style="font-size:10px;background:#1a7a3a;color:#fff;border-radius:4px;padding:1px 5px;font-weight:700;margin-left:4px;">NEXT</span>' : '';
-      return '<div style="display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-bottom:1px solid #f0f0f0;cursor:pointer;" onclick="closeWalkHistory();showLandmarkAlert(' + JSON.stringify(lm).replace(/</g,'\\u003c') + ',' + (item.idx !== undefined ? item.idx : -1) + ',' + (item.dist||0) + ')">'
-        + (lm.image ? '<img src="' + lm.image + '" style="width:52px;height:52px;border-radius:8px;object-fit:cover;flex-shrink:0;" onerror="this.style.display=\'none\'">' : '<div style="width:52px;height:52px;border-radius:8px;background:#e8f5e9;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:20px;">' + (item.queued ? '🔔' : '🔭') + '</div>')
-        + '<div style="flex:1;min-width:0;">'
-        +   '<div style="font-size:14px;font-weight:800;color:#1a1a1a;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + lm.name + queueBadge + '</div>'
-        +   '<div style="font-size:12px;color:#888;margin-bottom:2px;">📍 ' + distStr + ' away</div>'
-        +   '<div style="font-size:12px;color:#555;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">' + (lm.tldr || lm.extract || '') + '</div>'
-        + '</div>'
-        + '</div>';
-    }).join('');
   }
 }
 
@@ -7540,11 +7534,11 @@ async function getUserStreet(lat, lng) {
   } catch(e) { return ''; }
 }
 
-function showLandmarkAlert(lm, idx, dist, pageId, silent) {
+function showLandmarkAlert(lm, idx, dist, pageId, silent, manualOpen) {
   _walkTourAlertOpen = true;
   _activeLandmark = lm;
-  // Add to session history (avoid duplicates by name)
-  if (!_walkHistory.find(h => h.name === lm.name)) {
+  // Only add to Seen history when card opens automatically (GPS proximity), not manual taps from Nearby
+  if (!manualOpen && !_walkHistory.find(h => h.name === lm.name)) {
     _walkHistory.unshift({ name: lm.name, tldr: lm.tldr || '', extract: lm.extract || lm.tldr || '', funFact: lm.funFact || '', image: lm.image || null, lat: lm.lat, lng: lm.lng, wikiUrl: lm.wikiUrl || '', dist: Math.round(dist || 0), ts: Date.now() });
   }
   // Hide debug overlay so it doesn't intercept card button taps
@@ -7796,7 +7790,7 @@ function dismissLandmarkAlert() {
       var dist = (_currentGpsLat !== null) ? _haversineMetres(_currentGpsLat, _currentGpsLng, next.lat, next.lng) : 0;
       showLandmarkAlert(next, -1, dist, next.pageId);
       if (document.getElementById('walkHistoryPanel') && document.getElementById('walkHistoryPanel').style.display !== 'none') {
-        renderWalkHistoryTab('upcoming');
+        renderWalkHistoryTab('nearby');
       }
     } else {
       var bar = document.getElementById('walkNextBar');
