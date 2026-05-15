@@ -1287,12 +1287,14 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
 <div id="gpsDebug" style="display:none;position:fixed;bottom:calc(var(--bottom-h,60px) + 110px);left:50%;transform:translateX(-50%);z-index:29000;background:rgba(0,0,0,0.88);color:#4eff91;font-family:monospace;font-size:11px;font-weight:700;border-radius:8px;padding:6px 12px;line-height:1.8;max-width:calc(100vw - 24px);overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.4);pointer-events:none;text-align:center;"></div>
 <div id="walkHistoryOverlay" style="display:none;position:fixed;inset:0;z-index:35000;background:rgba(0,0,0,0.55);" onclick="if(event.target===this)closeWalkHistory()"></div>
 <div id="walkHistoryPanel" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:35001;background:#fff;border-radius:20px 20px 0 0;max-height:78vh;flex-direction:column;transform:translateY(100%);transition:transform 0.3s ease;box-shadow:0 -4px 24px rgba(0,0,0,0.2);">
-  <div style="padding:10px 16px 0;flex-shrink:0;">
-    <div style="width:36px;height:4px;background:#ddd;border-radius:2px;margin:0 auto 12px;"></div>
-    <div style="display:flex;gap:0;background:#f0f0f0;border-radius:10px;padding:3px;margin-bottom:12px;">
-      <button id="walkTabSeen" onclick="switchWalkTab('seen')" style="flex:1;border:none;border-radius:8px;padding:7px;font-size:12px;font-weight:700;cursor:pointer;background:#1a1a1a;color:#fff;">📋 Seen</button>
-      <button id="walkTabNearby" onclick="switchWalkTab('nearby')" style="flex:1;border:none;border-radius:8px;padding:7px;font-size:12px;font-weight:700;cursor:pointer;background:transparent;color:#555;">📡 Nearby</button>
-      <button id="walkTabUpcoming" onclick="switchWalkTab('upcoming')" style="flex:1;border:none;border-radius:8px;padding:7px;font-size:12px;font-weight:700;cursor:pointer;background:transparent;color:#555;">🔭 Up Next</button>
+  <div style="padding:8px 16px 0;flex-shrink:0;">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+      <div style="flex:1;display:flex;gap:0;background:#f0f0f0;border-radius:10px;padding:3px;">
+        <button id="walkTabSeen" onclick="switchWalkTab('seen')" style="flex:1;border:none;border-radius:8px;padding:7px;font-size:12px;font-weight:700;cursor:pointer;background:#1a1a1a;color:#fff;">📋 Seen</button>
+        <button id="walkTabNearby" onclick="switchWalkTab('nearby')" style="flex:1;border:none;border-radius:8px;padding:7px;font-size:12px;font-weight:700;cursor:pointer;background:transparent;color:#555;">📡 Nearby</button>
+        <button id="walkTabUpcoming" onclick="switchWalkTab('upcoming')" style="flex:1;border:none;border-radius:8px;padding:7px;font-size:12px;font-weight:700;cursor:pointer;background:transparent;color:#555;">🔭 Coming Up</button>
+      </div>
+      <button onclick="closeWalkHistory()" style="flex-shrink:0;width:30px;height:30px;border:none;background:#f0f0f0;border-radius:50%;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#666;">✕</button>
     </div>
   </div>
   <div id="walkHistoryBody" style="overflow-y:auto;flex:1;padding:0 16px 24px;"></div>
@@ -6794,17 +6796,22 @@ async function liveWikiSearch(lat, lng, radius, silent) {
       return true;
     });
 
-    // Store ALL wiki results (not just filtered) so user can see and tap any in Coming Up
+    // Store ALL wiki results within 250m (not just filtered) — Nearby tab
+    // Coming Up = those that pass the visibility direction filter
     _walkNearbyResults = allResults
       .filter(function(p) { return !_walkLiveCache.has(p.pageid); })
       .map(function(p) {
         var d = _haversineMetres(lat, lng, p.lat, p.lon);
-        return { name: p.title, lat: p.lat, lng: p.lon, dist: d, pageid: p.pageid };
+        if (d > 250) return null; // Nearby = within 250m only
+        var rp = (hasBearing && d > 30) ? getLandmarkRelativePos(lat, lng, p.lat, p.lon) : null;
+        var comingUp = rp ? (rp.metersAhead > 0 && rp.metersAhead <= 120 && rp.metersCross <= 35) : (d <= 50);
+        return { name: p.title, lat: p.lat, lng: p.lon, dist: d, pageid: p.pageid, comingUp: comingUp };
       })
+      .filter(Boolean)
       .sort(function(a, b) { return a.dist - b.dist; });
-    // Refresh Coming Up panel if open
+    // Refresh log panel if open
     var _panel = document.getElementById('walkHistoryPanel');
-    if (_panel && _panel.style.display !== 'none') renderWalkHistoryTab('upcoming');
+    if (_panel && _panel.style.display !== 'none') renderWalkHistoryTab(_walkActiveTab);
 
     // Sort: closest-to-path first (or closest overall when no bearing)
     nearby.sort(function(a, b) {
@@ -7117,49 +7124,45 @@ function openWalkHistory() {
   const overlay = document.getElementById('walkHistoryOverlay');
   if (!panel) return;
 
-  // If a card is showing, make the overlay lighter so card is visible underneath
+  // No overlay — panel stays open without dimming
+  if (overlay) overlay.style.display = 'none';
+
   const cardShowing = !!document.getElementById('walkAlert');
-  if (overlay) {
-    overlay.style.background = cardShowing ? 'rgba(0,0,0,0.25)' : 'rgba(0,0,0,0.55)';
-    // Don't let overlay close the panel if card is showing underneath
-    overlay.onclick = cardShowing ? null : function(e) { if (e.target === overlay) closeWalkHistory(); };
-  }
-
+  panel.style.maxHeight = cardShowing ? '52vh' : '75vh';
   panel.style.display = 'flex';
-  // Use shorter panel height when card is active so card header is still visible
-  panel.style.maxHeight = cardShowing ? '55vh' : '78vh';
-
-  requestAnimationFrame(() => {
-    panel.style.transform = 'translateY(0)';
-    setTimeout(() => { if (overlay) overlay.style.display = 'block'; }, 150);
-  });
+  requestAnimationFrame(() => { panel.style.transform = 'translateY(0)'; });
   renderWalkHistoryTab(_walkActiveTab);
-  // Speech is NOT touched — narration continues while browsing the log
 
-  // Swipe-down from header only
-  const header = panel.firstElementChild;
-  let _swipeStartY = 0, _swipeLocked = false;
-  header.ontouchstart = function(e) { _swipeStartY = e.touches[0].clientY; _swipeLocked = false; };
-  header.ontouchmove = function(e) {
-    const dy = e.touches[0].clientY - _swipeStartY;
-    if (!_swipeLocked && dy > 8) _swipeLocked = true;
-    if (_swipeLocked && dy > 0) panel.style.transform = 'translateY(' + dy + 'px)';
-  };
-  header.ontouchend = function(e) {
-    const dy = e.changedTouches[0].clientY - _swipeStartY;
-    if (dy > 80) closeWalkHistory();
-    else panel.style.transform = 'translateY(0)';
-    _swipeLocked = false;
-  };
+  // Start live update ticker while panel is open
+  _startLogLiveTicker();
+
+  // No swipe-to-close — explicit ✕ button only
   panel.ontouchstart = null; panel.ontouchmove = null; panel.ontouchend = null;
+  const header = panel.firstElementChild;
+  if (header) { header.ontouchstart = null; header.ontouchmove = null; header.ontouchend = null; }
+}
+
+let _logLiveInterval = null;
+function _startLogLiveTicker() {
+  if (_logLiveInterval) return;
+  _logLiveInterval = setInterval(function() {
+    var panel = document.getElementById('walkHistoryPanel');
+    if (!panel || panel.style.display === 'none') { clearInterval(_logLiveInterval); _logLiveInterval = null; return; }
+    // Refresh currently visible tab
+    renderWalkHistoryTab(_walkActiveTab);
+  }, 3000);
+}
+function _stopLogLiveTicker() {
+  if (_logLiveInterval) { clearInterval(_logLiveInterval); _logLiveInterval = null; }
 }
 
 function closeWalkHistory() {
   const panel = document.getElementById('walkHistoryPanel');
   const overlay = document.getElementById('walkHistoryOverlay');
+  _stopLogLiveTicker();
   if (panel) {
     panel.style.transform = 'translateY(100%)';
-    setTimeout(() => { panel.style.display = 'none'; panel.style.maxHeight = '78vh'; }, 320);
+    setTimeout(() => { panel.style.display = 'none'; panel.style.maxHeight = '75vh'; }, 320);
   }
   if (overlay) overlay.style.display = 'none';
 }
@@ -7210,24 +7213,44 @@ function renderWalkHistoryTab(tab) {
         + '<div style="flex:1;font-size:13px;font-weight:700;color:#1a1a1a;">' + item.name + '</div>'
         + '<div style="font-size:12px;color:#888;flex-shrink:0;">' + distStr + '</div>';
       row.onclick = function() {
-        closeWalkHistory();
-        var lmName = item.name, lmLat = item.lat, lmLng = item.lon || item.lng, lmDist = item.dist, lmPid = item.pageid;
-        // Wait for panel close animation (300ms) then show card on top
+        // Open card WITHOUT marking as seen (pageId = null) — stays in Nearby
+        var lmName = item.name, lmLat = item.lat, lmLng = item.lon || item.lng, lmDist = item.dist;
+        // Close log if no card showing; if card showing, log stays open
+        var cardShowing = !!document.getElementById('walkAlert');
+        if (!cardShowing) closeWalkHistory();
         setTimeout(function() {
-          // Don't cancel current speech — let it continue
           var lmObj = { name: lmName, lat: lmLat, lng: lmLng, image: null, extract: '', tldr: '', funFact: '', wikiUrl: 'https://en.wikipedia.org/wiki/' + encodeURIComponent(lmName) };
-          if (!_walkTourAlertOpen) showLandmarkAlert(lmObj, -1, lmDist, lmPid);
-          else {
-            // Card already showing — queue this one
-            _walkQueue.push(lmObj);
-          }
-        }, 350);
+          if (!_walkTourAlertOpen) showLandmarkAlert(lmObj, -1, lmDist, null); // null pageId = don't cache
+          else _walkQueue.push(lmObj);
+        }, cardShowing ? 0 : 350);
       };
       logBody.appendChild(row);
     });
   } else {
     var logBody = document.getElementById('walkHistoryBody');
     logBody.innerHTML = '';
+
+    // Section: landmarks from Nearby that pass direction filter → "In your path"
+    var comingUpNearby = _walkNearbyResults.filter(function(item) { return item.comingUp; });
+    if (comingUpNearby.length > 0) {
+      var nearHdr = document.createElement('div');
+      nearHdr.style.cssText = 'font-size:11px;font-weight:800;color:#1a7a3a;text-transform:uppercase;letter-spacing:0.5px;padding:6px 0 4px;';
+      nearHdr.textContent = '📍 In your path — ' + comingUpNearby.length + ' ahead';
+      logBody.appendChild(nearHdr);
+      comingUpNearby.forEach(function(item) {
+        var row = document.createElement('div');
+        row.style.cssText = 'display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid #e8f5e9;cursor:pointer;';
+        row.innerHTML = '<div style="width:10px;height:10px;border-radius:50%;background:#1a7a3a;flex-shrink:0;"></div>'
+          + '<div style="flex:1;font-size:13px;font-weight:700;color:#1a1a1a;">' + item.name + '</div>'
+          + '<div style="font-size:12px;color:#1a7a3a;font-weight:700;flex-shrink:0;">' + Math.round(item.dist) + 'm</div>';
+        row.onclick = function() {
+          var lmObj = { name: item.name, lat: item.lat, lng: item.lng, image: null, extract: '', tldr: '', funFact: '', wikiUrl: 'https://en.wikipedia.org/wiki/' + encodeURIComponent(item.name) };
+          closeWalkHistory();
+          setTimeout(function() { if (!_walkTourAlertOpen) showLandmarkAlert(lmObj, -1, item.dist, item.pageid); }, 350);
+        };
+        logBody.appendChild(row);
+      });
+    }
 
     var upcoming = [];
 
