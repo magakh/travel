@@ -7637,9 +7637,11 @@ function showLandmarkAlert(lm, idx, dist, pageId, silent, manualOpen) {
   // Hide debug overlay so it doesn't intercept card button taps
   var dbgEl = document.getElementById('gpsDebug');
   if (dbgEl) dbgEl.style.pointerEvents = 'none';
-  // Vibrate and notify (works even when backgrounded on Android)
-  if (navigator.vibrate) navigator.vibrate([120, 80, 120]);
-  _notifyLandmark(lm.name);
+  // Vibrate and notify only for auto-triggered cards, not silent reopens
+  if (!silent) {
+    if (navigator.vibrate) navigator.vibrate([120, 80, 120]);
+    _notifyLandmark(lm.name);
+  }
   var bar = document.getElementById('walkNextBar'); if (bar) bar.style.display = 'none';
   const old = document.getElementById('walkAlert');
   if (old) {
@@ -7733,8 +7735,11 @@ function showLandmarkAlert(lm, idx, dist, pageId, silent, manualOpen) {
     + '<button onclick="speakTourLandmark('+idx+')" style="padding:8px 12px;background:#f5f5f5;border:none;border-radius:10px;font-size:16px;cursor:pointer;">🔊</button>'
     + '</div>'
     + '<div style="display:flex;gap:8px;margin-bottom:8px;">'
+    + '<a href="https://www.google.com/maps/dir/?api=1&destination=' + lm.lat + ',' + lm.lng + '&destination_name=' + encodeURIComponent(lm.name) + '" target="_blank" onclick="event.stopPropagation()" style="flex:1;padding:12px;border-radius:12px;border:1.5px solid #1a56c4;background:#e8f0fe;color:#1a56c4;font-size:13px;font-weight:800;cursor:pointer;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:5px;">🗺️ Directions</a>'
     + '<button onclick="openWalkHistory()" style="flex:1;padding:12px;border-radius:12px;border:1.5px solid #888;background:#f5f5f5;color:#333;font-size:13px;font-weight:800;cursor:pointer;">📋 Log</button>'
-    + '<button onclick="_addWalkPassedBy('+idx+')" id="walkAddBtn_'+idx+'" style="flex:2;padding:12px;border-radius:12px;border:1.5px solid #1a7a3a;background:#e8f5e9;color:#1a7a3a;font-size:13px;font-weight:800;cursor:pointer;">📍 Add to schedule</button>'
+    + '</div>'
+    + '<div style="display:flex;gap:8px;margin-bottom:8px;">'
+    + '<button onclick="_addWalkPassedBy('+idx+')" id="walkAddBtn_'+idx+'" style="flex:1;padding:12px;border-radius:12px;border:1.5px solid #1a7a3a;background:#e8f5e9;color:#1a7a3a;font-size:13px;font-weight:800;cursor:pointer;">📍 Add to schedule</button>'
     + '</div>'
     + '<button onclick="dismissLandmarkAlert()" style="width:100%;padding:12px;border-radius:12px;border:none;background:#1a1a1a;color:#fff;font-size:14px;font-weight:800;cursor:pointer;">✕ Dismiss · next search in 5s</button>'
     + '</div>';
@@ -8002,9 +8007,11 @@ function _showNearbyPeek(lm, dist) {
         : '')
     // Wikipedia link + speak button
     + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">'
-    + (lm.wikiUrl ? '<a href="' + lm.wikiUrl + '" target="_blank" onclick="event.stopPropagation()" style="font-size:13px;font-weight:700;color:#1a73e8;text-decoration:none;">📖 Continue reading on Wikipedia →</a>' : '<span></span>')
+    + (lm.wikiUrl ? '<a href="' + lm.wikiUrl + '" target="_blank" onclick="event.stopPropagation()" style="font-size:13px;font-weight:700;color:#1a73e8;text-decoration:none;">📖 Wikipedia →</a>' : '<span></span>')
     + '<button onclick="_speakNearbyPeek(' + JSON.stringify(lm.tldr || lm.extract || lm.name).replace(/</g,'\\u003c') + ')" style="padding:8px 12px;background:#f5f5f5;border:none;border-radius:10px;font-size:16px;cursor:pointer;" title="Read aloud (pauses main narration)">🔊</button>'
     + '</div>'
+    // Directions button
+    + '<a href="https://www.google.com/maps/dir/?api=1&destination=' + lm.lat + ',' + lm.lng + '&destination_name=' + encodeURIComponent(lm.name) + '" target="_blank" onclick="event.stopPropagation()" style="display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:12px;border-radius:12px;border:1.5px solid #1a56c4;background:#e8f0fe;color:#1a56c4;font-size:13px;font-weight:800;text-decoration:none;margin-bottom:8px;box-sizing:border-box;">🗺️ Google Directions</a>'
     // Close button
     + '<button onclick="_dismissNearbyPeek()" style="width:100%;padding:12px;border-radius:12px;border:none;background:#1a1a1a;color:#fff;font-size:14px;font-weight:800;cursor:pointer;">✕ Close · narration still running</button>'
     + '</div>';
