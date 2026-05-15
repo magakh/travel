@@ -6465,11 +6465,14 @@ async function drawTourRoute(tour, fromStop, toStop) {
 // ── LIVE WALKING TOUR ─────────────────────────────────────────────
 let _walkTourActive = false;
 let _walkTourWatchId = null;
-let _walkSearchInterval = null;
+let _walkSearchInterval = null; // 5s search interval
+let _walkBarInterval = null;    // 1s bar countdown ticker
+let _walkCountdown = 0;         // seconds until next search
+let _walkSearching = false;     // true while API call in progress
 let _walkTourVisited = new Set();
 let _walkTourAlertOpen = false;
-let _walkHistory = []; // { name, tldr, funFact, image, lat, lng, dist, ts }
-let _walkQueue = [];   // landmarks queued while a card is showing — auto-plays next
+let _walkHistory = [];
+let _walkQueue = [];
 let _wakeLock = null;
 const WALK_TRIGGER_METRES = 80;
 
@@ -6492,22 +6495,67 @@ function toggleWalkingGuide() {
   }
 }
 
-// Flash a temporary message inside the walk bar — restores after ms
+// Update the walk bar to reflect current search state
+function _updateWalkBar() {
+  var bar = document.getElementById('walkNextBar');
+  var span = bar && bar.querySelector('span');
+  if (!span || _walkTourAlertOpen) return;
+  if (_walkSearching) {
+    span.innerHTML = '🔍 Searching…';
+  } else if (_walkCountdown > 0) {
+    span.innerHTML = '📍 Nothing nearby &nbsp;·&nbsp; ' + _walkCountdown + 's';
+  } else {
+    span.innerHTML = '🚶 Next →';
+  }
+}
+
+// Kept for compatibility — no longer used for timeout messages
 let _flashWalkTimer = null;
 function _flashWalkBar(msg, ms) {
-  const bar = document.getElementById('walkNextBar');
-  const next = bar && bar.querySelector('span');
-  if (!next) { if (_walkTourActive) return; showToast(msg); return; }
-  next.innerHTML = msg;
+  var bar = document.getElementById('walkNextBar');
+  var span = bar && bar.querySelector('span');
+  if (!span) return;
+  if (_walkSearching || _walkCountdown > 0) return; // bar is in auto-mode, don't override
+  span.innerHTML = msg;
   clearTimeout(_flashWalkTimer);
-  if (ms) _flashWalkTimer = setTimeout(function() { _restoreWalkBar(); }, ms);
+  if (ms) _flashWalkTimer = setTimeout(_updateWalkBar, ms);
 }
 
 function _restoreWalkBar() {
   clearTimeout(_flashWalkTimer);
-  const bar = document.getElementById('walkNextBar');
-  const next = bar && bar.querySelector('span');
-  if (next) next.innerHTML = '🚶 Next →';
+  _updateWalkBar();
+}
+
+// Start the 1-second bar countdown ticker
+function _startWalkBarTicker() {
+  if (_walkBarInterval) clearInterval(_walkBarInterval);
+  _walkBarInterval = setInterval(function() {
+    if (!_walkTourActive) { clearInterval(_walkBarInterval); _walkBarInterval = null; return; }
+    if (_walkTourAlertOpen) return;
+    if (_walkCountdown > 0) {
+      _walkCountdown--;
+      _updateWalkBar();
+      if (_walkCountdown === 0) {
+        // Time to search
+        _doAutoSearch();
+      }
+    }
+  }, 1000);
+}
+
+// Run one auto-search cycle
+async function _doAutoSearch() {
+  if (!_walkTourActive || _walkTourAlertOpen || _walkSearching) return;
+  if (_currentGpsLat === null) { _walkCountdown = 5; _updateWalkBar(); return; }
+  _walkSearching = true;
+  _walkCountdown = 0;
+  _updateWalkBar();
+  await liveWikiSearch(_currentGpsLat, _currentGpsLng, 150, true);
+  _walkSearching = false;
+  if (_walkTourActive && !_walkTourAlertOpen) {
+    _walkCountdown = 5; // countdown to next search
+    _updateWalkBar();
+  }
 }
 
 function setWalkBtnState(active) {
@@ -6545,14 +6593,12 @@ function startLiveWalkingTour() {
     _walkTourVisited = new Set();
     _walkTourAlertOpen = false;
     _walkQueue = [];
+    _walkSearching = false;
+    _walkCountdown = 0;
     _acquireWakeLock();
-
-    // Search every 5 seconds regardless of GPS movement — catches standing-still cases
-    _walkSearchInterval = setInterval(function() {
-      if (_currentGpsLat !== null && !_walkTourAlertOpen) {
-        liveWikiSearch(_currentGpsLat, _currentGpsLng, 150, true); // silent — no bar spam
-      }
-    }, 5000);
+    // Start first search immediately, then cycle via bar ticker
+    _doAutoSearch();
+    _startWalkBarTicker();
 
     // Search immediately on start, then every 5 seconds — no waiting for GPS updates or movement
     _walkLastSearchTime = 0;
@@ -7007,8 +7053,10 @@ function renderWalkHistoryTab(tab) {
 
 function stopLiveWalkingTour() {
   _walkTourActive = false;
-  clearInterval(_walkSearchInterval);
-  _walkSearchInterval = null;
+  _walkSearching = false;
+  _walkCountdown = 0;
+  clearInterval(_walkSearchInterval); _walkSearchInterval = null;
+  clearInterval(_walkBarInterval);    _walkBarInterval = null;
   _releaseWakeLock();
   if (_walkTourWatchId !== null) { navigator.geolocation.clearWatch(_walkTourWatchId); _walkTourWatchId = null; }
   const el = document.getElementById('walkAlert');
@@ -7450,7 +7498,7 @@ function dismissLandmarkAlert() {
 
   // Auto-show next queued landmark, or restore the Next bar
   setTimeout(function() {
-    _walkLastSearchTime = 0; // reset so next interval triggers a fresh search immediately
+    _walkLastSearchTime = 0;
     if (_walkTourActive && _walkQueue.length > 0) {
       var next = _walkQueue.shift();
       var dist = (_currentGpsLat !== null) ? _haversineMetres(_currentGpsLat, _currentGpsLng, next.lat, next.lng) : 0;
@@ -7569,40 +7617,9 @@ async function nextLandmark() {
     _flashWalkBar('🔍 Searching…');
   }
 
-  // Live GPS search — do NOT clear the session cache so we never repeat a landmark
-  if (_currentGpsLat !== null) {
-    _flashWalkBar('🔍 Searching…');
-    _walkLastSearchLat = null; _walkLastSearchTime = 0; // reset throttle
-    await liveWikiSearch(_currentGpsLat, _currentGpsLng, 150);
-    _restoreWalkBar(); // restore as soon as search finishes (found or not)
-  } else {
-    showToast('📍 Getting your location…');
-    try {
-      await new Promise(function(resolve, reject) {
-        navigator.geolocation.getCurrentPosition(
-          function(pos) {
-            _currentGpsLat = pos.coords.latitude;
-            _currentGpsLng = pos.coords.longitude;
-            resolve();
-          },
-          reject,
-          { enableHighAccuracy: true, timeout: 8000 }
-        );
-      });
-      _flashWalkBar('🔍 Searching…');
-      _walkLastSearchLat = null;
-      await liveWikiSearch(_currentGpsLat, _currentGpsLng, 150);
-      _restoreWalkBar();
-    } catch(e) {
-      showToast('📍 Could not get location — check GPS permissions', true);
-    }
-  }
-
-  // If search found nothing and no card is open, restore the Next bar
-  setTimeout(function() {
-    var bar = document.getElementById('walkNextBar');
-    if (bar && _walkTourActive && !_walkTourAlertOpen) bar.style.display = 'flex';
-  }, 500);
+  // Tap Next = search immediately, reset countdown
+  _walkCountdown = 0;
+  _doAutoSearch();
 }
 
 const _reminderTimers = [];
