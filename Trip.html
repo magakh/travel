@@ -6626,7 +6626,6 @@ function startLiveWalkingTour() {
     _walkLastSearchLat = null;
     _walkLastSearchLng = null;
     setWalkBtnState(true);
-    showToast('Walking guide active — landmarks will pop up as you walk');
     // Immediate first search from this position
     if (_currentGpsLat !== null) liveWikiSearch(_currentGpsLat, _currentGpsLng, 300, true);
     _walkTourWatchId = navigator.geolocation.watchPosition(
