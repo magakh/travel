@@ -1290,8 +1290,9 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
   <div style="padding:10px 16px 0;flex-shrink:0;">
     <div style="width:36px;height:4px;background:#ddd;border-radius:2px;margin:0 auto 12px;"></div>
     <div style="display:flex;gap:0;background:#f0f0f0;border-radius:10px;padding:3px;margin-bottom:12px;">
-      <button id="walkTabSeen" onclick="switchWalkTab('seen')" style="flex:1;border:none;border-radius:8px;padding:7px;font-size:13px;font-weight:700;cursor:pointer;background:#1a1a1a;color:#fff;">📋 Seen</button>
-      <button id="walkTabUpcoming" onclick="switchWalkTab('upcoming')" style="flex:1;border:none;border-radius:8px;padding:7px;font-size:13px;font-weight:700;cursor:pointer;background:transparent;color:#555;">🔭 Coming up</button>
+      <button id="walkTabSeen" onclick="switchWalkTab('seen')" style="flex:1;border:none;border-radius:8px;padding:7px;font-size:12px;font-weight:700;cursor:pointer;background:#1a1a1a;color:#fff;">📋 Seen</button>
+      <button id="walkTabNearby" onclick="switchWalkTab('nearby')" style="flex:1;border:none;border-radius:8px;padding:7px;font-size:12px;font-weight:700;cursor:pointer;background:transparent;color:#555;">📡 Nearby</button>
+      <button id="walkTabUpcoming" onclick="switchWalkTab('upcoming')" style="flex:1;border:none;border-radius:8px;padding:7px;font-size:12px;font-weight:700;cursor:pointer;background:transparent;color:#555;">🔭 Up Next</button>
     </div>
   </div>
   <div id="walkHistoryBody" style="overflow-y:auto;flex:1;padding:0 16px 24px;"></div>
@@ -7146,8 +7147,12 @@ function closeWalkHistory() {
 
 function switchWalkTab(tab) {
   _walkActiveTab = tab;
-  document.getElementById('walkTabSeen').style.cssText     = tab === 'seen'     ? 'flex:1;border:none;border-radius:8px;padding:7px;font-size:13px;font-weight:700;cursor:pointer;background:#1a1a1a;color:#fff;' : 'flex:1;border:none;border-radius:8px;padding:7px;font-size:13px;font-weight:700;cursor:pointer;background:transparent;color:#555;';
-  document.getElementById('walkTabUpcoming').style.cssText = tab === 'upcoming' ? 'flex:1;border:none;border-radius:8px;padding:7px;font-size:13px;font-weight:700;cursor:pointer;background:#1a1a1a;color:#fff;' : 'flex:1;border:none;border-radius:8px;padding:7px;font-size:13px;font-weight:700;cursor:pointer;background:transparent;color:#555;';
+  var baseStyle = 'flex:1;border:none;border-radius:8px;padding:7px;font-size:12px;font-weight:700;cursor:pointer;';
+  ['seen','nearby','upcoming'].forEach(function(t) {
+    var ids = {seen:'walkTabSeen', nearby:'walkTabNearby', upcoming:'walkTabUpcoming'};
+    var el = document.getElementById(ids[t]);
+    if (el) el.style.cssText = baseStyle + (t === tab ? 'background:#1a1a1a;color:#fff;' : 'background:transparent;color:#555;');
+  });
   renderWalkHistoryTab(tab);
 }
 
@@ -7167,33 +7172,35 @@ function renderWalkHistoryTab(tab) {
         + '</div>'
         + '</div>';
     }).join('');
+  } else if (tab === 'nearby') {
+    var logBody = document.getElementById('walkHistoryBody');
+    logBody.innerHTML = '';
+    if (!_walkNearbyResults.length) {
+      logBody.innerHTML = '<div style="text-align:center;color:#aaa;padding:32px 0;font-size:14px;">No nearby Wikipedia articles found yet.<br><span style="font-size:12px;">They appear when the guide is running.</span></div>';
+      return;
+    }
+    var hdr = document.createElement('div');
+    hdr.style.cssText = 'font-size:11px;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:0.5px;padding:8px 0 6px;';
+    hdr.textContent = _walkNearbyResults.length + ' Wikipedia articles within 300m — tap any to open';
+    logBody.appendChild(hdr);
+    _walkNearbyResults.forEach(function(item) {
+      var distStr = item.dist < 1000 ? Math.round(item.dist) + 'm' : (item.dist/1000).toFixed(1) + 'km';
+      var row = document.createElement('div');
+      row.style.cssText = 'display:flex;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid #f0f0f0;cursor:pointer;';
+      row.innerHTML = '<div style="width:8px;height:8px;border-radius:50%;background:#1565c0;flex-shrink:0;"></div>'
+        + '<div style="flex:1;font-size:13px;font-weight:700;color:#1a1a1a;">' + item.name + '</div>'
+        + '<div style="font-size:12px;color:#888;flex-shrink:0;">' + distStr + '</div>';
+      row.onclick = function() {
+        closeWalkHistory();
+        var lmObj = { name: item.name, lat: item.lat, lng: item.lon || item.lng, image: null, extract: '', tldr: '', funFact: '', wikiUrl: 'https://en.wikipedia.org/wiki/' + encodeURIComponent(item.name) };
+        showLandmarkAlert(lmObj, -1, item.dist, item.pageid);
+      };
+      logBody.appendChild(row);
+    });
   } else {
     var logBody = document.getElementById('walkHistoryBody');
     logBody.innerHTML = '';
 
-    // Section 1: All Wikipedia articles found nearby (not yet seen)
-    if (_walkNearbyResults.length > 0) {
-      var nearbyHdr = document.createElement('div');
-      nearbyHdr.style.cssText = 'font-size:11px;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:0.5px;padding:8px 0 4px;';
-      nearbyHdr.textContent = '📡 Nearby (' + _walkNearbyResults.length + ') — tap any to open';
-      logBody.appendChild(nearbyHdr);
-      _walkNearbyResults.forEach(function(item) {
-        var distStr = item.dist < 1000 ? Math.round(item.dist) + 'm' : (item.dist/1000).toFixed(1) + 'km';
-        var row = document.createElement('div');
-        row.style.cssText = 'display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid #f0f0f0;cursor:pointer;';
-        row.innerHTML = '<div style="width:8px;height:8px;border-radius:50%;background:#1565c0;flex-shrink:0;"></div>'
-          + '<div style="flex:1;font-size:13px;font-weight:700;color:#1a1a1a;">' + item.name + '</div>'
-          + '<div style="font-size:11px;color:#888;flex-shrink:0;">' + distStr + '</div>';
-        row.onclick = function() {
-          closeWalkHistory();
-          var lmObj = { name: item.name, lat: item.lat, lng: item.lon || item.lng, image: null, extract: '', tldr: '', funFact: '', wikiUrl: 'https://en.wikipedia.org/wiki/' + encodeURIComponent(item.name), pageId: item.pageid };
-          showLandmarkAlert(lmObj, -1, item.dist, item.pageid);
-        };
-        logBody.appendChild(row);
-      });
-    }
-
-    // Section 2: Queued + tour landmarks
     var upcoming = [];
 
     // 1. Queued items (already found, waiting to be read)
