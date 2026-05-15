@@ -6786,12 +6786,12 @@ async function liveWikiSearch(lat, lng, radius, silent) {
       if (!hasBearing) return true;
       if (d <= 40) return true; // right next to it — always show
       var rp = getLandmarkRelativePos(lat, lng, p.lat, p.lon);
-      // Behind-you filter
       const behindCutoff = highConf ? -20 : -40;
       if (rp.metersAhead < behindCutoff) return false;
-      // Visibility rule: only show if on your street (< 20m cross-track)
-      // A building 200m away on a parallel block is NOT visible through other buildings
+      // Visibility: on your street AND within one city block (~80m)
+      // Beyond 80m there's likely an intersection blocking the view
       if (rp.metersCross > 20) return false;
+      if (rp.metersAhead > 80) return false;
       return true;
     });
 
