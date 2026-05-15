@@ -6469,7 +6469,18 @@ let _walkTourVisited = new Set();
 let _walkTourAlertOpen = false;
 let _walkHistory = []; // { name, tldr, funFact, image, lat, lng, dist, ts }
 let _walkQueue = [];   // landmarks queued while a card is showing — auto-plays next
+let _wakeLock = null;
 const WALK_TRIGGER_METRES = 80;
+
+async function _acquireWakeLock() {
+  if (!('wakeLock' in navigator)) return;
+  try { _wakeLock = await navigator.wakeLock.request('screen'); _wakeLock.addEventListener('release', () => { _wakeLock = null; }); }
+  catch(e) { console.warn('Wake lock:', e.message); }
+}
+function _releaseWakeLock() { if (_wakeLock) { _wakeLock.release(); _wakeLock = null; } }
+document.addEventListener('visibilitychange', function() {
+  if (document.visibilityState === 'visible' && _walkTourActive && !_wakeLock) _acquireWakeLock();
+});
 
 function toggleWalkingGuide() {
   if (_walkTourActive) {
@@ -6528,6 +6539,7 @@ function startLiveWalkingTour() {
     _walkTourVisited = new Set();
     _walkTourAlertOpen = false;
     _walkQueue = [];
+    _acquireWakeLock();
     _walkLastSearchLat = null;
     _walkLastSearchLng = null;
     setWalkBtnState(true);
@@ -6988,6 +7000,7 @@ function renderWalkHistoryTab(tab) {
 
 function stopLiveWalkingTour() {
   _walkTourActive = false;
+  _releaseWakeLock();
   if (_walkTourWatchId !== null) { navigator.geolocation.clearWatch(_walkTourWatchId); _walkTourWatchId = null; }
   const el = document.getElementById('walkAlert');
   if (el) el.remove();
@@ -7209,6 +7222,8 @@ function showLandmarkAlert(lm, idx, dist) {
   if (!_walkHistory.find(h => h.name === lm.name)) {
     _walkHistory.unshift({ name: lm.name, tldr: lm.tldr || '', funFact: lm.funFact || '', image: lm.image || null, lat: lm.lat, lng: lm.lng, wikiUrl: lm.wikiUrl || '', dist: Math.round(distMetres || 0), ts: Date.now() });
   }
+  // Vibrate to alert user — pattern: two short pulses
+  if (navigator.vibrate) navigator.vibrate([120, 80, 120]);
   var bar = document.getElementById('walkNextBar'); if (bar) bar.style.display = 'none';
   const old = document.getElementById('walkAlert');
   if (old) {
