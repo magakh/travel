@@ -6604,7 +6604,7 @@ async function _doAutoSearch() {
   } finally {
     _walkSearching = false;
     if (_walkTourActive && !_walkTourAlertOpen) {
-      _walkCountdown = 5;
+      _walkCountdown = 3;
       _updateWalkBar();
     }
   }
@@ -6658,10 +6658,8 @@ function startLiveWalkingTour() {
     if (_walkSearchInterval) clearInterval(_walkSearchInterval);
     _walkSearchInterval = setInterval(function() {
       if (!_walkTourActive) { clearInterval(_walkSearchInterval); return; }
-      if (_currentGpsLat !== null && !_walkTourAlertOpen) {
-        liveWikiSearch(_currentGpsLat, _currentGpsLng);
-      }
-    }, 5000);
+      _doAutoSearch(); // handles card-open check and 300m radius internally
+    }, 3000);
 
     // Search every 5 seconds automatically — no tapping needed
     _walkLastSearchLat = null;
@@ -6783,16 +6781,15 @@ async function liveWikiSearch(lat, lng, radius, silent) {
       if (_walkLiveCache.has(p.pageid)) return false;
       var d = _haversineMetres(lat, lng, p.lat, p.lon);
       if (d > TRIGGER) return false;
-      if (!hasBearing) return d <= 80; // no direction — proximity only
-      if (d <= 30) return true; // physically at it — always show
+      if (!hasBearing) return d <= 100; // no direction — proximity only
+      if (d <= 50) return true; // within 50m — always show, direction doesn't matter
       var rp = getLandmarkRelativePos(lat, lng, p.lat, p.lon);
       const behindCutoff = highConf ? -20 : -40;
       if (rp.metersAhead < behindCutoff) return false;
-      // Cross-track: 30m = one full street width + GPS jitter margin
-      // Prevents parallel-block items (50-100m away) while allowing same-street buildings
-      if (rp.metersCross > 30) return false;
-      // Ahead: 100m = visible distance on a straight city street
-      if (rp.metersAhead > 100) return false;
+      // Cross-track: 35m = street width + corner building tolerance + GPS jitter
+      if (rp.metersCross > 35) return false;
+      // Ahead: 120m = visible on a straight downtown block
+      if (rp.metersAhead > 120) return false;
       return true;
     });
 
