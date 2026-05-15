@@ -1284,7 +1284,7 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
 </div>
 
 <!-- GPS debug overlay — shown when walking guide is active, sits above the walk bar -->
-<div id="gpsDebug" style="display:none;position:fixed;bottom:calc(var(--bottom-h,60px) + 110px);left:50%;transform:translateX(-50%);z-index:29000;background:rgba(0,0,0,0.88);color:#4eff91;font-family:monospace;font-size:11px;font-weight:700;border-radius:8px;padding:6px 12px;line-height:1.8;max-width:calc(100vw - 24px);overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.4);pointer-events:none;text-align:center;"></div>
+<div id="gpsDebug" style="display:none;position:fixed;bottom:calc(var(--bottom-h,60px) + 110px);left:50%;transform:translateX(-50%);z-index:29000;background:rgba(0,0,0,0.82);color:#fff;font-family:-apple-system,sans-serif;font-size:13px;font-weight:700;border-radius:20px;padding:8px 16px;max-width:calc(100vw - 32px);box-shadow:0 2px 12px rgba(0,0,0,0.4);pointer-events:none;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
 <div id="walkHistoryOverlay" style="display:none;position:fixed;inset:0;z-index:36000;background:rgba(0,0,0,0.45);pointer-events:none;"></div>
 <div id="walkHistoryPanel" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:36001;background:#fff;border-radius:20px 20px 0 0;max-height:78vh;flex-direction:column;transform:translateY(100%);transition:transform 0.3s ease;box-shadow:0 -4px 24px rgba(0,0,0,0.2);">
   <div style="padding:8px 16px 0;flex-shrink:0;">
@@ -6680,34 +6680,31 @@ function startLiveWalkingTour() {
           _gpsHeadingTs = Date.now();
         }
         _updateBearingDebug();
-        // GPS debug overlay — show human-readable location
+        // GPS overlay — show current address prominently
         (function() {
           var dbg = document.getElementById('gpsDebug');
           if (!dbg || !_walkTourActive) return;
-          var acc = pos2.coords.accuracy ? Math.round(pos2.coords.accuracy) + 'm' : '?';
-          var brg = _gpsHeading !== null ? Math.round(_gpsHeading) + '° (GPS)' : getWalkingBearing() !== null ? '~' + Math.round(getWalkingBearing()) + '° (calc)' : '–';
-          // Update accuracy and bearing immediately
-          var accLine = dbg.querySelector('.dbg-acc');
-          if (!accLine) {
-            dbg.style.display = 'block';
-            dbg.innerHTML = '<div class="dbg-addr" style="color:#fff;font-size:12px;margin-bottom:1px;">📍 <span class="dbg-loc">Locating…</span></div><span class="dbg-acc">± ' + acc + '&nbsp;&nbsp;🧭 ' + brg + '</span>';
-          } else {
-            accLine.innerHTML = '± ' + acc + '&nbsp;&nbsp;🧭 ' + brg;
-          }
-          // Reverse geocode for readable address (throttled)
+          var acc = pos2.coords.accuracy ? Math.round(pos2.coords.accuracy) : null;
+          var accStr = acc ? ' · ±' + acc + 'm' : '';
+          dbg.style.display = 'block';
+          // Update accuracy inline; address updates async below
+          var loc = dbg._loc || '📍 Locating…';
+          dbg.textContent = loc + accStr;
+          // Reverse geocode (throttled every 8s)
           if (!dbg._lastGeocode || Date.now() - dbg._lastGeocode > 8000) {
             dbg._lastGeocode = Date.now();
             fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat=' + lat + '&lon=' + lng + '&zoom=18', {headers:{'Accept-Language':'en'}})
               .then(function(r) { return r.json(); })
               .then(function(d) {
                 var a = d.address || {};
-                var road = a.road || a.pedestrian || a.path || a.footway || '';
+                var road = a.road || a.pedestrian || a.path || a.footway || a.cycleway || '';
+                var number = a.house_number ? a.house_number + ' ' : '';
                 var suburb = a.suburb || a.neighbourhood || a.quarter || '';
-                var city = a.city || a.town || a.village || '';
-                // Store and display location name
-                _debugLocation = [road, suburb, city].filter(Boolean).join(' · ') || 'Unknown location';
-                var dbgLoc = dbg.querySelector('.dbg-loc');
-                if (dbgLoc) dbgLoc.textContent = _debugLocation;
+                var display = road ? ('📍 ' + number + road) : (suburb ? '📍 ' + suburb : '📍 Locating…');
+                _debugLocation = display;
+                dbg._loc = display;
+                var acc2 = pos2.coords.accuracy ? ' · ±' + Math.round(pos2.coords.accuracy) + 'm' : '';
+                dbg.textContent = display + acc2;
               }).catch(function() {});
           }
         })();
@@ -6766,17 +6763,13 @@ async function liveWikiSearch(lat, lng, radius, silent) {
 
     var allResults = (data.query && data.query.geosearch) || [];
 
-    // Update debug overlay with Wikipedia result count
+    // Update debug overlay — keep showing address/accuracy, no wiki noise
     (function() {
       var dbg = document.getElementById('gpsDebug');
       if (!dbg) return;
       var addrEl = dbg.querySelector('.dbg-addr');
-      var addr = addrEl ? addrEl.innerHTML : '📍 …';
       var accEl = dbg.querySelector('.dbg-acc');
-      var accStr = accEl ? accEl.innerHTML : '';
-      dbg.innerHTML = addr + '<br><span class="dbg-acc">' + accStr + '</span>'
-        + '<br>🌐 ' + allResults.length + ' wiki hits · ✅ ' + _walkLiveCache.size + ' already seen'
-        ;
+      if (addrEl && accEl) return; // already rendered correctly, no update needed
     })();
 
     var nearby = allResults.filter(function(p) {
