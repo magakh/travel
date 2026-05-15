@@ -7553,7 +7553,7 @@ function showLandmarkAlert(lm, idx, dist, pageId) {
       const addrText = addr ? 'Located at ' + addr + (sideText ? ', ' + sideText : '') + '. ' : (sideText ? sideText + '. ' : '');
       // Read the full Wikipedia extract — not just tldr — so speech never cuts off mid-article
       const summaryText = lm.tldr || lm.extract || '';
-      const factsText = lm.funFact ? ' Here are some things you might not know. ' + lm.funFact : '';
+      const factsText = lm.funFact ? ' Fun fact: ' + lm.funFact : '';
       const fullText = lm.name + '. ' + addrText + summaryText + factsText;
       const utt = new SpeechSynthesisUtterance(fullText.slice(0, 1800));
       utt.lang = 'en-GB'; utt.rate = 0.95;
