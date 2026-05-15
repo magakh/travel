@@ -7533,12 +7533,15 @@ function showLandmarkAlert(lm, idx, dist, pageId) {
       const fullText = lm.name + '. ' + addrText + summaryText + factsText;
       const utt = new SpeechSynthesisUtterance(fullText.slice(0, 1800));
       utt.lang = 'en-GB'; utt.rate = 0.95;
-      // Auto-dismiss when speech finishes — no need to wait for 20m distance
+      // Dismiss when speech finishes naturally
       utt.onend = function() { dismissLandmarkAlert(); };
-      utt.onerror = function() { setTimeout(dismissLandmarkAlert, 800); };
+      // On error: DON'T dismiss — keep card visible, let user read
+      utt.onerror = function(e) { console.warn('TTS error:', e.error); };
       window.speechSynthesis.speak(utt);
     }
   });
+  // Fallback: auto-dismiss after 90s in case speech never ends or onerror fires
+  el._timer = setTimeout(function() { if (document.getElementById('walkAlert')) dismissLandmarkAlert(); }, 90000);
 
   const t = setTimeout(function() { dismissLandmarkAlert(); }, 90000);
   el._timer = t;
