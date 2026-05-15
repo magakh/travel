@@ -6607,9 +6607,9 @@ async function liveWikiSearch(lat, lng, radius, silent) {
   if (!_walkTourActive || _walkTourAlertOpen) return;
   radius = radius || 80;
 
-  // Throttle: search at most every 5 seconds (regardless of movement — user may be standing still)
+  // Throttle: search at most every 5 seconds regardless of radius
   const now = Date.now();
-  if (radius <= 100 && (now - _walkLastSearchTime) < 5000) return;
+  if ((now - _walkLastSearchTime) < 5000) return;
   _walkLastSearchTime = now;
   _walkLastSearchLat = lat;
   _walkLastSearchLng = lng;
@@ -6636,7 +6636,10 @@ async function liveWikiSearch(lat, lng, radius, silent) {
     var highConf = filterBearingInfo.confidence === 'high';
 
     var allResults = (data.query && data.query.geosearch) || [];
-    // Filter
+
+    // Debug: always show raw count so user knows if Wikipedia is responding
+    if (!silent) _flashWalkBar('🌐 Wikipedia: ' + allResults.length + ' results', 1500);
+
     var nearby = allResults.filter(function(p) {
       if (_walkLiveCache.has(p.pageid)) return false;
       var d = _haversineMetres(lat, lng, p.lat, p.lon);
@@ -6644,11 +6647,11 @@ async function liveWikiSearch(lat, lng, radius, silent) {
       if (!hasBearing) return true;
       if (d <= 40) return true; // right next to it — always show
       var rp = getLandmarkRelativePos(lat, lng, p.lat, p.lon);
+      // Behind-you filter
       const behindCutoff = highConf ? -20 : -40;
       if (rp.metersAhead < behindCutoff) return false;
-      // Cross-track: if you can't see it from where you stand, skip it.
-      // ~15m = roughly one street width. Even 20m puts it deep into a side street.
-      const crossLimit = highConf ? 15 : 25;
+      // Cross-track: generous for city walking — landmarks are in plazas, across streets
+      const crossLimit = highConf ? 60 : 100;
       if (rp.metersCross > crossLimit) return false;
       return true;
     });
@@ -6662,7 +6665,8 @@ async function liveWikiSearch(lat, lng, radius, silent) {
 
     if (!nearby.length || _walkTourAlertOpen) {
       if (_walkTourAlertOpen) return;
-      if (radius > 100) { if (!silent) _flashWalkBar('📍 Nothing found within ' + radius + 'm', 1500); return; }
+      if (!silent) _flashWalkBar('🔍 Wiki:' + allResults.length + ' raw, 0 passed filter', 2000);
+      if (radius > 100) { return; } // silent already set above
 
       // Wikipedia found nothing — try OpenStreetMap Overpass for better local coverage
       try {
