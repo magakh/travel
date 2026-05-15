@@ -816,7 +816,7 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
   cursor: pointer;
   z-index: 500;
   box-shadow: 0 4px 16px rgba(0,0,0,0.3);
-  display: flex;
+  display: none;
   align-items: center;
   gap: 6px;
 }
@@ -4428,7 +4428,7 @@ function showView(v) {
   if (v !== currentView) document.getElementById('mainArea').scrollTop = 0;
   if (v === 'settings') setTimeout(() => { loadSettingsUI(); loadHotelUI(); }, 50);
   const mapBtn = document.getElementById('mapToggleBtn');
-  if (mapBtn) mapBtn.style.display = v === 'list' ? 'flex' : 'none';
+  if (mapBtn) mapBtn.style.display = (v === 'list') ? 'flex' : 'none';
   currentView = v;
   updateBottomNav();
   updateTabHighlight();
