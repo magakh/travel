@@ -7382,23 +7382,29 @@ async function nextLandmark() {
 
   // Use magic tour landmarks only if NOT in live walking mode AND landmark is within 200m
   if (_tourLandmarks && _tourLandmarks.length && !_walkTourActive) {
-    var startIdx = _nextLandmarkIdx % _tourLandmarks.length;
-    var lm = _tourLandmarks[startIdx];
-    _nextLandmarkIdx = (startIdx + 1) % _tourLandmarks.length;
-    var dist = (_currentGpsLat !== null) ? _haversineMetres(_currentGpsLat, _currentGpsLng, lm.lat, lm.lng) : -1;
-    if (dist < 0 || dist <= 200) {
-      showLandmarkAlert(lm, startIdx, dist);
-      return;
+    // Find next unvisited landmark (skip any already shown this session)
+    let found = false;
+    for (let attempts = 0; attempts < _tourLandmarks.length; attempts++) {
+      var startIdx = _nextLandmarkIdx % _tourLandmarks.length;
+      _nextLandmarkIdx = (startIdx + 1) % _tourLandmarks.length;
+      if (_walkTourVisited.has(startIdx)) continue; // already shown — skip
+      var lm = _tourLandmarks[startIdx];
+      var dist = (_currentGpsLat !== null) ? _haversineMetres(_currentGpsLat, _currentGpsLng, lm.lat, lm.lng) : -1;
+      if (dist < 0 || dist <= 200) {
+        _walkTourVisited.add(startIdx);
+        showLandmarkAlert(lm, startIdx, dist);
+        found = true;
+        break;
+      }
     }
-    // Landmark > 200m away — fall through to live search
-    showToast('🔍 Landmark too far — searching nearby instead…');
+    if (found) return;
+    showToast('🔍 Searching nearby for new landmarks…');
   }
 
-  // No magic tour — live GPS search within 150m
+  // Live GPS search — do NOT clear the session cache so we never repeat a landmark
   if (_currentGpsLat !== null) {
-    showToast('🔍 Looking for landmarks nearby…');
-    _walkLastSearchLat = null;
-    _walkLiveCache.clear();
+    showToast('🔍 Looking for new landmarks nearby…');
+    _walkLastSearchLat = null; // reset throttle so search runs immediately
     await liveWikiSearch(_currentGpsLat, _currentGpsLng, 150);
   } else {
     showToast('📍 Getting your location…');
@@ -7414,9 +7420,8 @@ async function nextLandmark() {
           { enableHighAccuracy: true, timeout: 8000 }
         );
       });
-      showToast('🔍 Looking for landmarks nearby…');
+      showToast('🔍 Looking for new landmarks nearby…');
       _walkLastSearchLat = null;
-      _walkLiveCache.clear();
       await liveWikiSearch(_currentGpsLat, _currentGpsLng, 150);
     } catch(e) {
       showToast('📍 Could not get location — check GPS permissions', true);
