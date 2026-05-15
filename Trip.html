@@ -6474,6 +6474,7 @@ let _walkTourVisited = new Set();
 let _walkTourAlertOpen = false;
 let _walkHistory = [];
 let _walkQueue = [];
+let _walkNearbyResults = []; // all articles found nearby this cycle
 let _wakeLock = null;
 let _debugLocation = 'Locating…'; // current reverse-geocoded address for debug overlay
 const WALK_TRIGGER_METRES = 80;
@@ -6754,6 +6755,9 @@ async function liveWikiSearch(lat, lng, radius, silent) {
       if (rp.metersCross > crossLimit) return false;
       return true;
     });
+
+    // Store all filtered results for Coming Up tab display
+    _walkNearbyResults = nearby.map(function(p) { return { name: p.title, lat: p.lat, lng: p.lon, dist: _haversineMetres(lat, lng, p.lat, p.lon) }; });
 
     // Sort: closest-to-path first (or closest overall when no bearing)
     nearby.sort(function(a, b) {
@@ -7081,7 +7085,26 @@ function renderWalkHistoryTab(tab) {
         + '</div>';
     }).join('');
   } else {
-    // Coming up: queued nearby items first, then tour landmarks not yet visited
+    var logBody = document.getElementById('walkHistoryBody');
+    logBody.innerHTML = '';
+
+    // Section 1: Currently nearby from last Wikipedia search
+    if (_walkNearbyResults.length > 0) {
+      var nearbyHdr = document.createElement('div');
+      nearbyHdr.className = 'day-lbl';
+      nearbyHdr.textContent = '📡 Nearby now (' + _walkNearbyResults.length + ')';
+      logBody.appendChild(nearbyHdr);
+      _walkNearbyResults.forEach(function(item) {
+        var distStr = item.dist < 1000 ? Math.round(item.dist) + 'm' : (item.dist/1000).toFixed(1) + 'km';
+        var row = document.createElement('div');
+        row.className = 'stop-row';
+        row.innerHTML = '<div style="width:26px;height:26px;border-radius:50%;background:#1565c0;color:#fff;font-size:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">📍</div>'
+          + '<div class="sinfo"><div class="sname">' + item.name + '</div><div class="scount">' + distStr + ' away</div></div>';
+        logBody.appendChild(row);
+      });
+    }
+
+    // Section 2: Queued + tour landmarks
     var upcoming = [];
 
     // 1. Queued items (already found, waiting to be read)
@@ -7100,8 +7123,11 @@ function renderWalkHistoryTab(tab) {
       upcoming.sort(function(a, b) { return (a.dist || 99999) - (b.dist || 99999); });
     }
 
-    if (!upcoming.length) { body.innerHTML = '<div style="text-align:center;color:#aaa;padding:32px 0;font-size:14px;">No upcoming landmarks yet.<br><span style="font-size:12px;">They appear automatically as you walk.</span></div>'; return; }
-    body.innerHTML = upcoming.map(function(item) {
+    if (!upcoming.length && _walkNearbyResults.length === 0) { logBody.innerHTML = '<div style="text-align:center;color:#aaa;padding:32px 0;font-size:14px;">No upcoming landmarks.<br><span style="font-size:12px;">They appear automatically as you walk.</span></div>'; return; }
+    if (!upcoming.length) return;
+    var upEl = document.createElement('div');
+    logBody.appendChild(upEl);
+    upEl.innerHTML = upcoming.map(function(item) {
       var lm = item.lm;
       var distStr = item.dist !== null ? (item.dist < 1000 ? Math.round(item.dist) + ' m' : (item.dist/1000).toFixed(1) + ' km') : '?';
       var queueBadge = item.queued ? '<span style="font-size:10px;background:#1a7a3a;color:#fff;border-radius:4px;padding:1px 5px;font-weight:700;margin-left:4px;">NEXT</span>' : '';
@@ -7121,6 +7147,7 @@ function stopLiveWalkingTour() {
   _walkTourActive = false;
   _walkSearching = false;
   _walkCountdown = 0;
+  _walkNearbyResults = [];
   clearInterval(_walkSearchInterval); _walkSearchInterval = null;
   clearInterval(_walkBarInterval);    _walkBarInterval = null;
   _releaseWakeLock();
