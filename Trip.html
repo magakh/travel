@@ -4548,13 +4548,14 @@ function renderStopList() {
          ondragover="dragOver(event,${i})"
          ondrop="dragDrop(event,${i})"
          ondragend="dragEnd()"
-         id="srow${i}"
-         onclick="selectStop(${i})">
+         id="srow${i}">
       <div class="stop-check ${completed.includes(currentDay+'-'+i) ? 'done' : ''}"
            onclick="event.stopPropagation(); toggleDone(${i})"></div>
-      <div class="stop-meta">
-        ${_stopTimeRowHtml(s, i, currentDay, endTime)}
-        <div class="stop-name-label">${s.name}${s.passedBy ? ' <span class="res-badge" style="background:#f3e5f5;border-color:#9c27b0;color:#6a1b9a;">📷 Passed by</span>' : ''}${s.checkIn ? ' <span class="res-badge" style="background:#fef3e2;border-color:#e67e22;color:#b35400;">📍 Check-in</span>' : ''}${s.reservation ? ' <span class="res-badge ' + (s.reservation.confirmed?'confirmed':'') + '">' + (s.reservation.confirmed?'✓ Booked':'⏳ Pending') + '</span>' : ''}</div>
+      <div class="stop-meta" onclick="selectStop(${i})">
+        <div onclick="event.stopPropagation();editStopTime(${i})" style="cursor:pointer;" title="Tap to change time">
+          ${_stopTimeRowHtml(s, i, currentDay, endTime)}
+        </div>
+        <div class="stop-name-label" style="cursor:pointer;">${s.name}${s.passedBy ? ' <span class="res-badge" style="background:#f3e5f5;border-color:#9c27b0;color:#6a1b9a;">📷 Passed by</span>' : ''}${s.checkIn ? ' <span class="res-badge" style="background:#fef3e2;border-color:#e67e22;color:#b35400;">📍 Check-in</span>' : ''}${s.reservation ? ' <span class="res-badge ' + (s.reservation.confirmed?'confirmed':'') + '">' + (s.reservation.confirmed?'✓ Booked':'⏳ Pending') + '</span>' : ''}</div>
         ${getConflict(i) ? '<div class="conflict-banner">⚠️ Time conflict with previous stop</div>' : ''}
         <div class="stop-type-label">${s.type}${(s.free && !s.passedBy && !s.checkIn && !(s.reservation)) ? ' · <span style="color:#2e7d32;font-weight:700;font-size:11px;">Free</span>' : ''}</div>
         <div class="stop-tags">
