@@ -10315,7 +10315,7 @@ CORE MANDATE — avoid generic travel fluff:
 
 INSTRUCTIONS:
 1. Write a specific, factual blog title that reflects the places (not just "X Trip")
-2. Write a blog post (~700-950 words):
+2. Write a blog post (~600-800 words):
    - Each stop gets its own paragraph with genuine historical/factual depth
    - Weave stops into a readable flow — not a dry list, but not sentimental either
    - Lead each location section with its most interesting historical fact or story
@@ -10344,10 +10344,39 @@ blogHtml must be valid HTML fragments (no <html>/<body> tags). Photo placeholder
       if (btn) { btn.disabled = false; btn.textContent = '✨ Generate my trip story'; }
       return;
     }
-    const raw = await callAnthropic({ prompt, maxTokens: 4000, model: 'claude-sonnet-4-6' });
-    // Strip any accidental markdown fences
-    const clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/,'').trim();
-    const parsed = JSON.parse(clean);
+    const raw = await callAnthropic({ prompt, maxTokens: 8000, model: 'claude-sonnet-4-6' });
+    // Strip markdown fences
+    let clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
+
+    // If JSON is truncated (token limit hit mid-string), attempt repair
+    if (!clean.endsWith('}')) {
+      // Close any open string, then close the JSON object
+      const lastQuote = clean.lastIndexOf('"');
+      const lastComma = clean.lastIndexOf(',');
+      // Find last complete key-value pair boundary
+      let cutAt = Math.max(lastComma, 0);
+      // Try to find last complete field — look for last ," or }: 
+      const lastField = clean.lastIndexOf('","');
+      if (lastField > cutAt) cutAt = lastField + 1;
+      clean = clean.substring(0, cutAt).replace(/,\s*$/, '') + '\n}';
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(clean);
+    } catch(jsonErr) {
+      // Last resort: extract fields individually with regex
+      const extract = (key) => {
+        const m = clean.match(new RegExp('"' + key + '"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)'));
+        return m ? m[1].replace(/\\n/g, '\n').replace(/\\"/g, '"') : '';
+      };
+      parsed = {
+        title: extract('title') || 'Our Trip Story',
+        blogHtml: extract('blogHtml') || '<p>Story was too long — try selecting fewer days or shortening the itinerary notes.</p>',
+        fbPost: extract('fbPost') || '',
+        igCaption: extract('igCaption') || '',
+      };
+    }
     _storyState = {
       title: parsed.title || 'Our Trip Story',
       blogHtml: parsed.blogHtml || '<p>Story generation failed. Please try again.</p>',
