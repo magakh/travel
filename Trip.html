@@ -6550,7 +6550,7 @@ function startLiveWalkingTour() {
     // Search every 5 seconds regardless of GPS movement — catches standing-still cases
     _walkSearchInterval = setInterval(function() {
       if (_currentGpsLat !== null && !_walkTourAlertOpen) {
-        liveWikiSearch(_currentGpsLat, _currentGpsLng, 150);
+        liveWikiSearch(_currentGpsLat, _currentGpsLng, 150, true); // silent — no bar spam
       }
     }, 5000);
 
@@ -6565,34 +6565,30 @@ function startLiveWalkingTour() {
     }, 5000);
 
     // Search every 5 seconds automatically — no tapping needed
-    
     _walkLastSearchLat = null;
     _walkLastSearchLng = null;
     setWalkBtnState(true);
     showToast('Walking guide active — landmarks will pop up as you walk');
     // Immediate first search from this position
-    liveWikiSearch(_currentGpsLat, _currentGpsLng);
+    if (_currentGpsLat !== null) liveWikiSearch(_currentGpsLat, _currentGpsLng, 150, true);
     _walkTourWatchId = navigator.geolocation.watchPosition(
       function(pos2) {
         var lat = pos2.coords.latitude, lng = pos2.coords.longitude;
         _prevGpsLat = _currentGpsLat; _prevGpsLng = _currentGpsLng;
         _currentGpsLat = lat; _currentGpsLng = lng;
         _pushGpsHistory(lat, lng);
-        // Capture device GPS heading if available (accurate on mobile)
         if (pos2.coords.heading !== null && !isNaN(pos2.coords.heading) && pos2.coords.speed > 0.3) {
           _gpsHeading = pos2.coords.heading;
           _gpsHeadingTs = Date.now();
         }
-        // Update direction badge on LIVE button
         _updateBearingDebug();
-        // Keep user's current street name fresh for street-match filtering
         const _now = Date.now();
         if (_now - _userStreetTs > 20000) {
           _userStreetTs = _now;
           getUserStreet(lat, lng).then(function(s) { _userCurrentStreet = s ? s.split(' ·')[0].trim() : ''; });
         }
         if (_tourLandmarks && _tourLandmarks.length) checkNearbyLandmarks(lat, lng);
-        liveWikiSearch(lat, lng);
+        liveWikiSearch(lat, lng, 150, true); // silent — interval handles user feedback
       },
       function(err) { console.warn('GPS:', err); },
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
@@ -6607,7 +6603,7 @@ var _walkLiveCache = new Set();
 var _userCurrentStreet = '';
 var _userStreetTs = 0;
 
-async function liveWikiSearch(lat, lng, radius) {
+async function liveWikiSearch(lat, lng, radius, silent) {
   if (!_walkTourActive || _walkTourAlertOpen) return;
   radius = radius || 80;
 
@@ -6666,7 +6662,7 @@ async function liveWikiSearch(lat, lng, radius) {
 
     if (!nearby.length || _walkTourAlertOpen) {
       if (_walkTourAlertOpen) return;
-      if (radius > 100) { _flashWalkBar('📍 Nothing found nearby', 1500); return; }
+      if (radius > 100) { if (!silent) _flashWalkBar('📍 Nothing found within ' + radius + 'm', 1500); return; }
 
       // Wikipedia found nothing — try OpenStreetMap Overpass for better local coverage
       try {
@@ -6716,7 +6712,7 @@ way["building"~"parliament|government|cathedral|palace"](around:${r2},${lat},${l
         }
       } catch(e) {}
 
-      _flashWalkBar('📍 Nothing within 80m', 1500);
+      if (!silent) _flashWalkBar('📍 Nothing within ' + radius + 'm', 1500);
       return;
     }
 
