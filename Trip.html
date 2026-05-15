@@ -7125,7 +7125,6 @@ function openWalkHistory() {
 
   // Show overlay after panel starts sliding up (tapping outside will close log)
   if (overlay) overlay.style.display = 'none'; // hide first in case it was stuck
-  const cardShowing = !!document.getElementById('walkAlert');
   panel.style.maxHeight = '75vh';
   panel.style.display = 'flex';
   requestAnimationFrame(() => {
@@ -7149,9 +7148,9 @@ function _startLogLiveTicker() {
   _logLiveInterval = setInterval(function() {
     var panel = document.getElementById('walkHistoryPanel');
     if (!panel || panel.style.display === 'none') { clearInterval(_logLiveInterval); _logLiveInterval = null; return; }
-    // Refresh currently visible tab
-    renderWalkHistoryTab(_walkActiveTab);
-  }, 3000);
+    // Only refresh Nearby tab — Seen is static, no need to re-render and risk scroll jump
+    if (_walkActiveTab === 'nearby') renderWalkHistoryTab('nearby');
+  }, 6000);
 }
 function _stopLogLiveTicker() {
   if (_logLiveInterval) { clearInterval(_logLiveInterval); _logLiveInterval = null; }
@@ -7214,6 +7213,7 @@ function renderWalkHistoryTab(tab) {
     }).join('');
   } else if (tab === 'nearby') {
     var logBody = document.getElementById('walkHistoryBody');
+    var savedScroll = logBody.scrollTop; // save before wiping
     logBody.innerHTML = '';
     if (!_walkNearbyResults.length) {
       logBody.innerHTML = '<div style="text-align:center;color:#aaa;padding:32px 0;font-size:14px;">No nearby articles found yet.<br><span style="font-size:12px;">They appear when the guide is running.</span></div>';
@@ -7301,6 +7301,8 @@ function renderWalkHistoryTab(tab) {
         logBody.appendChild(row);
       });
     }
+    // Restore scroll so live re-renders don't jump the user's position
+    logBody.scrollTop = savedScroll;
   }
 }
 
