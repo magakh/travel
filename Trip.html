@@ -6791,9 +6791,9 @@ way["building"~"parliament|government|cathedral|palace"](around:${r2},${lat},${l
       showToast('📍 Added to Day ' + (currentDay+1) + ' · passed by at ' + snapTimeStr);
     }
 
-    // AI enrichment — builds proper summary + distinct facts, updates card silently
+    // AI enrichment — appends continuation + facts, never replaces the initial tldr
     callAnthropic({
-      prompt: 'Return ONLY valid JSON, no markdown fences:\n{"summary":"A flowing 4-5 sentence narrative for a tourist walking past right now. Historical context, what makes it iconic, one key story or atmosphere detail. Write as a tour guide speaking, not an encyclopaedia. Do NOT include the facts below.","facts":"Exactly 2-3 surprising facts NOT already in the summary — unexpected numbers, hidden stories, strange history, famous connections. Each is one punchy sentence. Separate with the pipe character | only."}\n\nAbout: "' + hit.title + '"\nWikipedia extract: ' + extract.slice(0, 700),
+      prompt: 'Return ONLY valid JSON, no markdown fences:\n{"continuation":"2-3 sentences that CONTINUE the story below — add historical depth, atmosphere, or a key moment. Do NOT repeat anything already said. Pick up exactly where the text leaves off.","facts":"Exactly 2-3 surprising facts NOT already covered above — unexpected numbers, hidden stories, strange history, famous connections. Each is one punchy sentence. Separate with the pipe character | only."}\n\nOpening text already shown to visitor:\n' + (lm.tldr || '').slice(0, 300) + '\n\nFull Wikipedia extract for context:\n' + extract.slice(0, 500),
       maxTokens: 400
     }).then(function(aiText) {
       if (!aiText || !aiText.trim()) return;
@@ -6804,7 +6804,14 @@ way["building"~"parliament|government|cathedral|palace"](around:${r2},${lat},${l
         var tldrEl = document.getElementById('walkAlertTldr');
         var factWrap = document.getElementById('walkAlertFactWrap');
         var factEl = document.getElementById('walkAlertFact');
-        if (parsed.summary && tldrEl) { tldrEl.textContent = parsed.summary; lmObj.tldr = parsed.summary; }
+        // APPEND continuation after the existing tldr — never replace it
+        if (parsed.continuation && tldrEl) {
+          var cont = document.createElement('span');
+          cont.textContent = ' ' + parsed.continuation;
+          cont.style.cssText = 'color:#555;';
+          tldrEl.appendChild(cont);
+          lmObj.tldr = (lmObj.tldr || '') + ' ' + parsed.continuation;
+        }
         if (parsed.facts && factEl) {
           var factLines = parsed.facts.split('|').map(function(f){return f.trim();}).filter(Boolean);
           factEl.innerHTML = factLines.map(function(f){
@@ -6813,7 +6820,7 @@ way["building"~"parliament|government|cathedral|palace"](around:${r2},${lat},${l
           lmObj.funFact = factLines.join(' ');
           if (factWrap) factWrap.style.display = '';
         }
-        // Do NOT re-speak — full extract already playing uninterrupted
+        // Do NOT re-speak — speech already running uninterrupted
       } catch(e) {}
     }).catch(function() {});
 
