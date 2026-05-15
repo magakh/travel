@@ -1278,7 +1278,7 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
 </div>
 
 <!-- Persistent Next landmark bar (shown when walking guide is active) -->
-<div id="walkNextBar" style="display:none;position:fixed;bottom:calc(var(--bottom-h, 60px) + 12px);left:50%;transform:translateX(-50%);z-index:9999;background:#1a1a1a;color:#fff;border-radius:30px;padding:8px 16px;font-size:13px;font-weight:800;box-shadow:0 3px 16px rgba(0,0,0,0.35);white-space:nowrap;align-items:center;gap:0;">
+<div id="walkNextBar" style="display:none;position:fixed;bottom:calc(var(--bottom-h, 60px) + 60px);left:50%;transform:translateX(-50%);z-index:9999;background:#1a1a1a;color:#fff;border-radius:30px;padding:8px 16px;font-size:13px;font-weight:800;box-shadow:0 3px 16px rgba(0,0,0,0.35);white-space:nowrap;align-items:center;gap:0;">
   <button onclick="openWalkHistory()" style="background:none;border:none;color:#aaa;font-size:13px;padding:4px 10px 4px 4px;cursor:pointer;border-right:1px solid #333;margin-right:10px;white-space:nowrap;">📋 Log</button>
   <span onclick="nextLandmark()" style="cursor:pointer;padding:4px 4px 4px 0;">🚶 Next →</span>
 </div>
@@ -6479,6 +6479,19 @@ function toggleWalkingGuide() {
   }
 }
 
+// Flash a temporary message inside the walk bar without covering it with a toast
+let _flashWalkTimer = null;
+function _flashWalkBar(msg, ms) {
+  const bar = document.getElementById('walkNextBar');
+  if (!bar || bar.style.display === 'none') { showToast(msg); return; }
+  const next = bar.querySelector('span');
+  if (!next) return;
+  const orig = next.innerHTML;
+  next.innerHTML = msg;
+  clearTimeout(_flashWalkTimer);
+  _flashWalkTimer = setTimeout(function() { next.innerHTML = orig; }, ms || 2500);
+}
+
 function setWalkBtnState(active) {
   // Animate the ⚡ activity menu button
   var lightning = document.getElementById('activityMenuBtn');
@@ -6611,7 +6624,7 @@ async function liveWikiSearch(lat, lng, radius) {
 
     if (!nearby.length || _walkTourAlertOpen) {
       if (_walkTourAlertOpen) return;
-      if (radius > 100) { showToast('📍 No landmarks found nearby'); return; }
+      if (radius > 100) { _flashWalkBar('📍 Nothing found nearby', 3000); return; }
 
       // Wikipedia found nothing — try OpenStreetMap Overpass for better local coverage
       try {
@@ -6662,7 +6675,7 @@ way["building"~"parliament|government|cathedral|palace"](around:${r2},${lat},${l
         }
       } catch(e) {}
 
-      showToast('📍 Nothing within 40 m');
+      _flashWalkBar('📍 Nothing within 80m', 2500);
       return;
     }
 
@@ -7489,12 +7502,12 @@ async function nextLandmark() {
       }
     }
     if (found) return;
-    showToast('🔍 Searching nearby for new landmarks…');
+    _flashWalkBar('🔍 Searching further…', 2000);
   }
 
   // Live GPS search — do NOT clear the session cache so we never repeat a landmark
   if (_currentGpsLat !== null) {
-    showToast('🔍 Looking for new landmarks nearby…');
+    _flashWalkBar('🔍 Looking nearby…', 2000);
     _walkLastSearchLat = null; // reset throttle so search runs immediately
     await liveWikiSearch(_currentGpsLat, _currentGpsLng, 150);
   } else {
