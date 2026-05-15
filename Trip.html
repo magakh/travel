@@ -7220,12 +7220,18 @@ function renderWalkHistoryTab(tab) {
       return;
     }
 
-    // Helper: fetch full Wikipedia data and force-open card (manual — won't add to Seen)
+    // Helper: fetch full Wikipedia data and open card or peek overlay
     function openNearbyCard(item) {
+      var cardWasOpen = !!document.getElementById('walkAlert'); // is something already reading?
       closeWalkHistory();
-      // Force-clear any stuck state — manual selection always replaces any open card
-      _walkTourAlertOpen = false;
-      _walkQueue = [];
+
+      if (!cardWasOpen) {
+        // Nothing open — clear state and show card with auto-read
+        _walkTourAlertOpen = false;
+        _walkQueue = [];
+      }
+      // else: card is reading — don't touch speech/flag/queue; will show silent peek on top
+
       _flashWalkBar('⏳ Loading ' + item.name + '…', 3000);
       setTimeout(async function() {
         try {
@@ -7252,11 +7258,15 @@ function renderWalkHistoryTab(tab) {
             image: image, extract: extract, tldr: extract, funFact: funFact,
             wikiUrl: 'https://en.wikipedia.org/wiki/' + encodeURIComponent(item.name)
           };
-          // Always show — flag was already cleared above
-          showLandmarkAlert(lmObj, -1, item.dist, null, false, true); // manualOpen=true → not added to Seen
+          if (cardWasOpen) {
+            _showNearbyPeek(lmObj, item.dist); // silent overlay over the reading card
+          } else {
+            showLandmarkAlert(lmObj, -1, item.dist, null, false, true); // auto-read, manualOpen
+          }
         } catch(e) {
           var lmObj = { name: item.name, lat: item.lat, lng: item.lon || item.lng, image: null, extract: '', tldr: '', funFact: '', wikiUrl: 'https://en.wikipedia.org/wiki/' + encodeURIComponent(item.name) };
-          showLandmarkAlert(lmObj, -1, item.dist, null, false, true);
+          if (cardWasOpen) _showNearbyPeek(lmObj, item.dist);
+          else showLandmarkAlert(lmObj, -1, item.dist, null, false, true);
         }
       }, 50);
     }
@@ -7857,6 +7867,88 @@ function dismissLandmarkAlert() {
       _walkLastSearchTime = 0; // force immediate search on next 5s tick
     }
   }, 400);
+}
+
+// ── Nearby peek overlay ─────────────────────────────────────────────────────
+// Shows a silent info card layered above an already-reading card.
+// Dismissing it removes only the peek — the underlying card & narration continue.
+function _showNearbyPeek(lm, dist) {
+  // Remove any existing peek first
+  var old = document.getElementById('walkPeek');
+  if (old) old.remove();
+  var oldOv = document.getElementById('walkPeekOverlay');
+  if (oldOv) oldOv.remove();
+
+  // Dim overlay between the two cards
+  var ov = document.createElement('div');
+  ov.id = 'walkPeekOverlay';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:35100;background:rgba(0,0,0,0.35);';
+  ov.onclick = function() { _dismissNearbyPeek(); };
+  document.body.appendChild(ov);
+
+  var distLabel = dist >= 0 ? (dist < 1000 ? Math.round(dist) + 'm' : (dist/1000).toFixed(1) + 'km') : '';
+  var imgSrc = lm.image || null;
+  var photoHtml = imgSrc
+    ? '<div style="flex:1;border-radius:10px;overflow:hidden;background:#f0f0f0;max-height:140px;"><img src="' + imgSrc + '" style="width:100%;max-height:140px;object-fit:contain;display:block;" onerror="this.parentElement.style.display=\'none\'"></div>'
+    : '';
+
+  var el = document.createElement('div');
+  el.id = 'walkPeek';
+  el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:35101;background:#fff;border-radius:20px 20px 0 0;box-shadow:0 -6px 32px rgba(0,0,0,0.35);max-height:78vh;overflow-y:auto;transform:translateY(100%);transition:transform 0.3s ease;';
+
+  el.innerHTML = '<div style="padding:14px 16px 32px;">'
+    // Browse-mode banner
+    + '<div style="background:#e8f0fe;border-radius:10px;padding:8px 14px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;">'
+    +   '<span style="font-size:12px;font-weight:800;color:#1a56c4;">📡 Browsing nearby · narration continues</span>'
+    +   '<button onclick="_dismissNearbyPeek()" style="border:none;background:rgba(0,0,0,0.08);border-radius:16px;padding:4px 10px;font-size:12px;font-weight:800;cursor:pointer;color:#333;">✕ Close</button>'
+    + '</div>'
+    // Photo row
+    + (photoHtml ? '<div style="display:flex;gap:8px;margin-bottom:12px;">' + photoHtml + '</div>' : '')
+    // Name + distance
+    + '<div style="font-size:10px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Nearby landmark' + (distLabel ? ' · ' + distLabel + ' away' : '') + '</div>'
+    + '<div style="font-size:19px;font-weight:900;line-height:1.2;margin-bottom:10px;">' + lm.name + '</div>'
+    // Description
+    + '<p style="font-size:14px;color:#333;line-height:1.6;margin:0 0 12px;">' + (lm.tldr || lm.extract || '') + '</p>'
+    // Fun fact
+    + (lm.funFact ? '<div style="background:#fffbeb;border-left:3px solid #f59e0b;border-radius:0 10px 10px 0;padding:10px 12px;margin-bottom:14px;">'
+        + '<span style="font-size:10px;font-weight:800;color:#b45309;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">⭐ Fun fact</span>'
+        + '<span style="font-size:13px;color:#444;line-height:1.5;">' + lm.funFact + '</span>'
+        + '</div>' : '')
+    // Full extract expand
+    + (lm.extract && lm.extract.length > 100
+        ? '<details style="margin-bottom:12px;"><summary style="font-size:12px;font-weight:700;color:#1a73e8;cursor:pointer;list-style:none;">📖 Full Wikipedia extract <span style="color:#999;font-weight:400;">(tap to expand)</span></summary>'
+          + '<p style="font-size:13px;color:#555;line-height:1.6;margin-top:8px;padding:10px;background:#f8f9fa;border-radius:8px;">' + lm.extract + '</p>'
+          + '</details>'
+        : '')
+    // Wikipedia link + speak button
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">'
+    + (lm.wikiUrl ? '<a href="' + lm.wikiUrl + '" target="_blank" onclick="event.stopPropagation()" style="font-size:13px;font-weight:700;color:#1a73e8;text-decoration:none;">📖 Continue reading on Wikipedia →</a>' : '<span></span>')
+    + '<button onclick="_speakNearbyPeek(' + JSON.stringify(lm.tldr || lm.extract || lm.name).replace(/</g,'\\u003c') + ')" style="padding:8px 12px;background:#f5f5f5;border:none;border-radius:10px;font-size:16px;cursor:pointer;" title="Read aloud (pauses main narration)">🔊</button>'
+    + '</div>'
+    // Close button
+    + '<button onclick="_dismissNearbyPeek()" style="width:100%;padding:12px;border-radius:12px;border:none;background:#1a1a1a;color:#fff;font-size:14px;font-weight:800;cursor:pointer;">✕ Close · narration still running</button>'
+    + '</div>';
+
+  document.body.appendChild(el);
+  requestAnimationFrame(function() { el.style.transform = 'translateY(0)'; });
+}
+
+function _dismissNearbyPeek() {
+  var el = document.getElementById('walkPeek');
+  var ov = document.getElementById('walkPeekOverlay');
+  if (el) { el.style.transform = 'translateY(100%)'; setTimeout(function() { if (el.parentNode) el.remove(); }, 320); }
+  if (ov) { ov.remove(); }
+  // Do NOT touch speech, _walkTourAlertOpen, or the underlying walkAlert card
+}
+
+function _speakNearbyPeek(text) {
+  // Read the peek card aloud — this DOES pause the main narration (browser limitation)
+  // User can re-trigger main card's 🔊 after closing peek
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  var utt = new SpeechSynthesisUtterance(text);
+  utt.rate = 0.92; utt.pitch = 1;
+  window.speechSynthesis.speak(utt);
 }
 
 
