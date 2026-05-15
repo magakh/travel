@@ -1278,13 +1278,16 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
 </div>
 
 <!-- Persistent Next landmark bar (shown when walking guide is active) -->
-<div id="walkNextBar" style="display:none;position:fixed;bottom:calc(var(--bottom-h, 60px) + 60px);left:50%;transform:translateX(-50%);z-index:9999;background:#1a1a1a;color:#fff;border-radius:30px;padding:8px 16px;font-size:13px;font-weight:800;box-shadow:0 3px 16px rgba(0,0,0,0.35);white-space:nowrap;align-items:center;gap:0;">
+<div id="walkNextBar" style="display:none;position:fixed;bottom:calc(var(--bottom-h, 60px) + 60px);left:50%;transform:translateX(-50%);z-index:9999;background:#1a1a1a;color:#fff;border-radius:30px;padding:8px 14px;font-size:13px;font-weight:800;box-shadow:0 3px 16px rgba(0,0,0,0.35);align-items:center;gap:0;max-width:calc(100vw - 24px);">
   <button onclick="openWalkHistory()" style="background:none;border:none;color:#aaa;font-size:13px;padding:4px 10px 4px 4px;cursor:pointer;border-right:1px solid #333;margin-right:10px;white-space:nowrap;">📋 Log</button>
   <span onclick="nextLandmark()" style="cursor:pointer;padding:4px 4px 4px 0;">🚶 Next →</span>
 </div>
 
 <!-- GPS debug overlay — shown when walking guide is active, sits above the walk bar -->
-<div id="gpsDebug" style="display:none;position:fixed;bottom:calc(var(--bottom-h,60px) + 115px);left:50%;transform:translateX(-50%);z-index:29000;background:rgba(0,0,0,0.88);color:#4eff91;font-family:monospace;font-size:12px;font-weight:700;border-radius:10px;padding:7px 14px;line-height:1.8;white-space:nowrap;box-shadow:0 2px 12px rgba(0,0,0,0.4);cursor:pointer;" onclick="_clearWalkCache()" title="Tap to clear landmark cache"></div>
+<!-- Current location label -->
+<div id="walkLocationLabel" style="display:none;position:fixed;bottom:calc(var(--bottom-h,60px) + 148px);left:50%;transform:translateX(-50%);z-index:29000;background:rgba(0,0,0,0.8);color:#fff;font-size:13px;font-weight:700;border-radius:8px;padding:5px 14px;max-width:calc(100vw - 24px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:none;text-align:center;"></div>
+
+<div id="gpsDebug" style="display:none;position:fixed;bottom:calc(var(--bottom-h,60px) + 110px);left:50%;transform:translateX(-50%);z-index:29000;background:rgba(0,0,0,0.82);color:#4eff91;font-family:monospace;font-size:11px;font-weight:700;border-radius:8px;padding:4px 10px;line-height:1.6;white-space:nowrap;box-shadow:0 2px 12px rgba(0,0,0,0.4);cursor:pointer;" onclick="_clearWalkCache()" title="Tap to reset"></div>
 <div id="walkHistoryOverlay" style="display:none;position:fixed;inset:0;z-index:29999;background:rgba(0,0,0,0.55);" onclick="if(event.target===this)closeWalkHistory()"></div>
 <div id="walkHistoryPanel" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:30000;background:#fff;border-radius:20px 20px 0 0;max-height:78vh;flex-direction:column;transform:translateY(100%);transition:transform 0.3s ease;box-shadow:0 -4px 24px rgba(0,0,0,0.2);">
   <div style="padding:10px 16px 0;flex-shrink:0;">
@@ -6504,7 +6507,7 @@ function _updateWalkBar() {
   if (_walkSearching) {
     span.innerHTML = '<span style="animation:walkLivePulse 0.8s ease-in-out infinite;display:inline-block;">🔍</span> Searching…';
   } else if (_walkCountdown > 0) {
-    span.innerHTML = '📍 Nothing nearby &nbsp;·&nbsp; next in ' + _walkCountdown + 's &nbsp;<span style="color:#888;font-size:11px;">(tap to search now)</span>';
+    span.innerHTML = '📍 Nothing · ' + _walkCountdown + 's';
   } else {
     span.innerHTML = '🚶 Tap to search';
   }
@@ -6666,6 +6669,8 @@ function startLiveWalkingTour() {
                 var city = a.city || a.town || a.village || '';
                 var addrEl = dbg.querySelector('.dbg-addr');
                 if (addrEl) addrEl.innerHTML = '📍 ' + [road, suburb, city].filter(Boolean).join(', ');
+                var locLabel = document.getElementById('walkLocationLabel');
+                if (locLabel) { locLabel.style.display = 'block'; locLabel.textContent = [road, suburb, city].filter(Boolean).join(' · ') || 'Locating…'; }
               }).catch(function() {});
           }
         })();
@@ -7109,6 +7114,7 @@ function stopLiveWalkingTour() {
   clearInterval(_walkBarInterval);    _walkBarInterval = null;
   _releaseWakeLock();
   var dbg = document.getElementById('gpsDebug'); if (dbg) dbg.style.display = 'none';
+  var locLabel = document.getElementById('walkLocationLabel'); if (locLabel) locLabel.style.display = 'none';
   if (_walkTourWatchId !== null) { navigator.geolocation.clearWatch(_walkTourWatchId); _walkTourWatchId = null; }
   const el = document.getElementById('walkAlert');
   if (el) el.remove();
