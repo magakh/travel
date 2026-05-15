@@ -6635,17 +6635,34 @@ function startLiveWalkingTour() {
           _gpsHeadingTs = Date.now();
         }
         _updateBearingDebug();
-        // GPS debug overlay
+        // GPS debug overlay — show human-readable location
         (function() {
           var dbg = document.getElementById('gpsDebug');
           if (!dbg || !_walkTourActive) return;
           var acc = pos2.coords.accuracy ? Math.round(pos2.coords.accuracy) + 'm' : '?';
-          var spd = pos2.coords.speed ? (pos2.coords.speed * 3.6).toFixed(1) + ' km/h' : '';
-          var brg = _gpsHeading !== null ? Math.round(_gpsHeading) + '° (GPS)' : getWalkingBearing() !== null ? '~' + Math.round(getWalkingBearing()) + '° (calc)' : 'no bearing';
-          dbg.style.display = 'block';
-          dbg.innerHTML = '📍 ' + lat.toFixed(5) + '<br>' + lng.toFixed(5)
-            + '<br>± ' + acc + (spd ? '  ' + spd : '')
-            + '<br>🧭 ' + brg;
+          var brg = _gpsHeading !== null ? Math.round(_gpsHeading) + '° (GPS)' : getWalkingBearing() !== null ? '~' + Math.round(getWalkingBearing()) + '° (calc)' : '–';
+          // Update accuracy and bearing immediately
+          var accLine = dbg.querySelector('.dbg-acc');
+          if (!accLine) {
+            dbg.style.display = 'block';
+            dbg.innerHTML = '<span class="dbg-addr">📍 Locating…</span><br><span class="dbg-acc">± ' + acc + '&nbsp;&nbsp;🧭 ' + brg + '</span>';
+          } else {
+            accLine.innerHTML = '± ' + acc + '&nbsp;&nbsp;🧭 ' + brg;
+          }
+          // Reverse geocode for readable address (throttled)
+          if (!dbg._lastGeocode || Date.now() - dbg._lastGeocode > 8000) {
+            dbg._lastGeocode = Date.now();
+            fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat=' + lat + '&lon=' + lng + '&zoom=18', {headers:{'Accept-Language':'en'}})
+              .then(function(r) { return r.json(); })
+              .then(function(d) {
+                var a = d.address || {};
+                var road = a.road || a.pedestrian || a.path || a.footway || '';
+                var suburb = a.suburb || a.neighbourhood || a.quarter || '';
+                var city = a.city || a.town || a.village || '';
+                var addrEl = dbg.querySelector('.dbg-addr');
+                if (addrEl) addrEl.innerHTML = '📍 ' + [road, suburb, city].filter(Boolean).join(', ');
+              }).catch(function() {});
+          }
         })();
         const _now = Date.now();
         if (_now - _userStreetTs > 20000) {
