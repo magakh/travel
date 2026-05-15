@@ -6793,8 +6793,17 @@ async function liveWikiSearch(lat, lng, radius, silent) {
       return true;
     });
 
-    // Store all filtered results for Coming Up tab display
-    _walkNearbyResults = nearby.map(function(p) { return { name: p.title, lat: p.lat, lng: p.lon, dist: _haversineMetres(lat, lng, p.lat, p.lon) }; });
+    // Store ALL wiki results (not just filtered) so user can see and tap any in Coming Up
+    _walkNearbyResults = allResults
+      .filter(function(p) { return !_walkLiveCache.has(p.pageid); })
+      .map(function(p) {
+        var d = _haversineMetres(lat, lng, p.lat, p.lon);
+        return { name: p.title, lat: p.lat, lng: p.lon, dist: d, pageid: p.pageid };
+      })
+      .sort(function(a, b) { return a.dist - b.dist; });
+    // Refresh Coming Up panel if open
+    var _panel = document.getElementById('walkHistoryPanel');
+    if (_panel && _panel.style.display !== 'none') renderWalkHistoryTab('upcoming');
 
     // Sort: closest-to-path first (or closest overall when no bearing)
     nearby.sort(function(a, b) {
@@ -7162,18 +7171,24 @@ function renderWalkHistoryTab(tab) {
     var logBody = document.getElementById('walkHistoryBody');
     logBody.innerHTML = '';
 
-    // Section 1: Currently nearby from last Wikipedia search
+    // Section 1: All Wikipedia articles found nearby (not yet seen)
     if (_walkNearbyResults.length > 0) {
       var nearbyHdr = document.createElement('div');
-      nearbyHdr.className = 'day-lbl';
-      nearbyHdr.textContent = '📡 Nearby now (' + _walkNearbyResults.length + ')';
+      nearbyHdr.style.cssText = 'font-size:11px;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:0.5px;padding:8px 0 4px;';
+      nearbyHdr.textContent = '📡 Nearby (' + _walkNearbyResults.length + ') — tap any to open';
       logBody.appendChild(nearbyHdr);
       _walkNearbyResults.forEach(function(item) {
         var distStr = item.dist < 1000 ? Math.round(item.dist) + 'm' : (item.dist/1000).toFixed(1) + 'km';
         var row = document.createElement('div');
-        row.className = 'stop-row';
-        row.innerHTML = '<div style="width:26px;height:26px;border-radius:50%;background:#1565c0;color:#fff;font-size:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">📍</div>'
-          + '<div class="sinfo"><div class="sname">' + item.name + '</div><div class="scount">' + distStr + ' away</div></div>';
+        row.style.cssText = 'display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid #f0f0f0;cursor:pointer;';
+        row.innerHTML = '<div style="width:8px;height:8px;border-radius:50%;background:#1565c0;flex-shrink:0;"></div>'
+          + '<div style="flex:1;font-size:13px;font-weight:700;color:#1a1a1a;">' + item.name + '</div>'
+          + '<div style="font-size:11px;color:#888;flex-shrink:0;">' + distStr + '</div>';
+        row.onclick = function() {
+          closeWalkHistory();
+          var lmObj = { name: item.name, lat: item.lat, lng: item.lon || item.lng, image: null, extract: '', tldr: '', funFact: '', wikiUrl: 'https://en.wikipedia.org/wiki/' + encodeURIComponent(item.name), pageId: item.pageid };
+          showLandmarkAlert(lmObj, -1, item.dist, item.pageid);
+        };
         logBody.appendChild(row);
       });
     }
