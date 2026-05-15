@@ -6784,7 +6784,7 @@ async function liveWikiSearch(lat, lng, radius, silent) {
       var d = _haversineMetres(lat, lng, p.lat, p.lon);
       if (d > TRIGGER) return false;
       if (!hasBearing) return d <= 50; // no direction — only show if very close
-      if (d <= 40) return true; // right next to it — always show
+      if (d <= 25) return true; // physically at it — always show regardless of direction
       var rp = getLandmarkRelativePos(lat, lng, p.lat, p.lon);
       const behindCutoff = highConf ? -20 : -40;
       if (rp.metersAhead < behindCutoff) return false;
