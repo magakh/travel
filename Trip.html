@@ -7116,36 +7116,51 @@ function openWalkHistory() {
   const panel = document.getElementById('walkHistoryPanel');
   const overlay = document.getElementById('walkHistoryOverlay');
   if (!panel) return;
+
+  // If a card is showing, make the overlay lighter so card is visible underneath
+  const cardShowing = !!document.getElementById('walkAlert');
+  if (overlay) {
+    overlay.style.background = cardShowing ? 'rgba(0,0,0,0.25)' : 'rgba(0,0,0,0.55)';
+    // Don't let overlay close the panel if card is showing underneath
+    overlay.onclick = cardShowing ? null : function(e) { if (e.target === overlay) closeWalkHistory(); };
+  }
+
   panel.style.display = 'flex';
+  // Use shorter panel height when card is active so card header is still visible
+  panel.style.maxHeight = cardShowing ? '55vh' : '78vh';
+
   requestAnimationFrame(() => {
     panel.style.transform = 'translateY(0)';
     setTimeout(() => { if (overlay) overlay.style.display = 'block'; }, 150);
   });
   renderWalkHistoryTab(_walkActiveTab);
+  // Speech is NOT touched — narration continues while browsing the log
 
-  // Swipe-down to close — only from the header drag handle area, not the scrollable body
-  const header = panel.firstElementChild; // the header div (handle + tabs)
+  // Swipe-down from header only
+  const header = panel.firstElementChild;
   let _swipeStartY = 0, _swipeLocked = false;
   header.ontouchstart = function(e) { _swipeStartY = e.touches[0].clientY; _swipeLocked = false; };
   header.ontouchmove = function(e) {
     const dy = e.touches[0].clientY - _swipeStartY;
-    if (!_swipeLocked && dy > 8) { _swipeLocked = true; }
+    if (!_swipeLocked && dy > 8) _swipeLocked = true;
     if (_swipeLocked && dy > 0) panel.style.transform = 'translateY(' + dy + 'px)';
   };
   header.ontouchend = function(e) {
     const dy = e.changedTouches[0].clientY - _swipeStartY;
-    if (dy > 80) { closeWalkHistory(); }
-    else { panel.style.transform = 'translateY(0)'; }
+    if (dy > 80) closeWalkHistory();
+    else panel.style.transform = 'translateY(0)';
     _swipeLocked = false;
   };
-  // Also clear old full-panel handlers if any
   panel.ontouchstart = null; panel.ontouchmove = null; panel.ontouchend = null;
 }
 
 function closeWalkHistory() {
   const panel = document.getElementById('walkHistoryPanel');
   const overlay = document.getElementById('walkHistoryOverlay');
-  if (panel) { panel.style.transform = 'translateY(100%)'; setTimeout(() => { panel.style.display = 'none'; }, 320); }
+  if (panel) {
+    panel.style.transform = 'translateY(100%)';
+    setTimeout(() => { panel.style.display = 'none'; panel.style.maxHeight = '78vh'; }, 320);
+  }
   if (overlay) overlay.style.display = 'none';
 }
 
