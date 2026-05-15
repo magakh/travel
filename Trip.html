@@ -6547,6 +6547,13 @@ function startLiveWalkingTour() {
     _walkQueue = [];
     _acquireWakeLock();
 
+    // Search every 5 seconds regardless of GPS movement — catches standing-still cases
+    _walkSearchInterval = setInterval(function() {
+      if (_currentGpsLat !== null && !_walkTourAlertOpen) {
+        liveWikiSearch(_currentGpsLat, _currentGpsLng, 80);
+      }
+    }, 5000);
+
     // Search immediately on start, then every 5 seconds — no waiting for GPS updates or movement
     _walkLastSearchTime = 0;
     if (_walkSearchInterval) clearInterval(_walkSearchInterval);
@@ -7461,6 +7468,7 @@ function dismissLandmarkAlert() {
 
   // Auto-show next queued landmark, or restore the Next bar
   setTimeout(function() {
+    _walkLastSearchTime = 0; // reset so next interval triggers a fresh search immediately
     if (_walkTourActive && _walkQueue.length > 0) {
       var next = _walkQueue.shift();
       var dist = (_currentGpsLat !== null) ? _haversineMetres(_currentGpsLat, _currentGpsLng, next.lat, next.lng) : 0;
