@@ -6501,11 +6501,11 @@ function _updateWalkBar() {
   var span = bar && bar.querySelector('span');
   if (!span || _walkTourAlertOpen) return;
   if (_walkSearching) {
-    span.innerHTML = '🔍 Searching…';
+    span.innerHTML = '<span style="animation:walkLivePulse 0.8s ease-in-out infinite;display:inline-block;">🔍</span> Searching…';
   } else if (_walkCountdown > 0) {
-    span.innerHTML = '📍 Nothing nearby &nbsp;·&nbsp; ' + _walkCountdown + 's';
+    span.innerHTML = '📍 Nothing nearby &nbsp;·&nbsp; next in ' + _walkCountdown + 's &nbsp;<span style="color:#888;font-size:11px;">(tap to search now)</span>';
   } else {
-    span.innerHTML = '🚶 Next →';
+    span.innerHTML = '🚶 Tap to search';
   }
 }
 
@@ -6545,16 +6545,22 @@ function _startWalkBarTicker() {
 
 // Run one auto-search cycle
 async function _doAutoSearch() {
-  if (!_walkTourActive || _walkTourAlertOpen || _walkSearching) return;
-  if (_currentGpsLat === null) { _walkCountdown = 5; _updateWalkBar(); return; }
+  if (!_walkTourActive || _walkTourAlertOpen) return;
+  if (_walkSearching) { _walkCountdown = 0; return; } // already in progress
+  if (_currentGpsLat === null) { _walkCountdown = 3; _updateWalkBar(); return; }
   _walkSearching = true;
   _walkCountdown = 0;
   _updateWalkBar();
-  await liveWikiSearch(_currentGpsLat, _currentGpsLng, 150, true);
-  _walkSearching = false;
-  if (_walkTourActive && !_walkTourAlertOpen) {
-    _walkCountdown = 5; // countdown to next search
-    _updateWalkBar();
+  try {
+    await liveWikiSearch(_currentGpsLat, _currentGpsLng, 150, true);
+  } catch(e) {
+    console.warn('liveWikiSearch error:', e);
+  } finally {
+    _walkSearching = false;
+    if (_walkTourActive && !_walkTourAlertOpen) {
+      _walkCountdown = 5;
+      _updateWalkBar();
+    }
   }
 }
 
