@@ -6719,8 +6719,15 @@ function startLiveWalkingTour() {
       function(err) { console.warn('GPS:', err); },
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
     );
-  }, function() { showToast('Location permission denied — enable in browser settings', true); },
-  { enableHighAccuracy: true, timeout: 8000 });
+  }, function(err) {
+    var isDesktop = !('ontouchstart' in window);
+    var msg = err && err.code === 1
+      ? (isDesktop
+          ? '🔒 Location blocked — click the 🔒 icon in your address bar → Location → Allow, then refresh'
+          : '🔒 Location blocked — tap the 🔒 in your browser address bar → allow location')
+      : '📡 Location unavailable — check that browser location is enabled for this site';
+    showToast(msg, true);
+  }, { enableHighAccuracy: true, timeout: 8000 });
 }
 
 var _walkLastSearchLat = null, _walkLastSearchLng = null;
@@ -8409,7 +8416,15 @@ async function checkInHere() {
       const pos = await new Promise((res, rej) =>
         navigator.geolocation.getCurrentPosition(res, rej, { timeout: 8000, maximumAge: 10000 }));
       lat = pos.coords.latitude; lng = pos.coords.longitude;
-    } catch(e) { showToast('Could not get location — enable GPS', true); return; }
+    } catch(e) {
+      var isDesktop = !('ontouchstart' in window);
+      var msg = e && e.code === 1
+        ? (isDesktop
+            ? '🔒 Location blocked — click the 🔒 icon in your address bar → Location → Allow, then retry'
+            : '🔒 Location blocked — tap the 🔒 in your browser address bar → allow location')
+        : '📡 Could not get location — ensure browser location is allowed for this site';
+      showToast(msg, true); return;
+    }
   }
   let placeName = '', placeType = 'Location', address = '';
   try {
