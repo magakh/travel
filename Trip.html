@@ -943,6 +943,10 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
 .prebook-alert p { font-size: 13px; line-height: 1.5; color: #333; }
 .prebook-alert a { color: var(--red); font-weight: 700; }
 
+@keyframes walkLivePulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(0.95); }
+}
 .history-text { font-size: 14px; line-height: 1.75; color: #333; }
 .history-text strong { color: var(--text); font-weight: 700; }
 .history-para { margin-top: 10px; }
@@ -1251,7 +1255,7 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
     </div>
     <div style="display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;flex-shrink:1;align-self:flex-start;padding-top:2px;">
       <button class="prebook-pill" id="saveBtn" onclick="_autoPushInFlight=false;_forceSave();" title="Save to cloud" style="border-color:#88d8a0;color:#88d8a0;pointer-events:auto !important;">💾</button>
-      <button id="walkGuideBtn" onclick="toggleWalkingGuide()" title="Live walking guide" style="display:none;border-color:#1a7a3a;color:#1a7a3a;font-size:16px;padding:4px 8px;" class="prebook-pill">🚶</button>
+      <button id="walkGuideBtn" onclick="toggleWalkingGuide()" title="Live walking guide" style="border-color:#1a7a3a;color:#1a7a3a;font-size:15px;padding:4px 8px;" class="prebook-pill">🚶</button>
       <div style="position:relative;flex-shrink:0;">
         <button onclick="_toggleActivityMenu()" id="activityMenuBtn" class="prebook-pill" style="border-color:#888;color:#ccc;font-size:15px;padding:4px 10px;gap:4px;display:flex;align-items:center;">⚡ ▾</button>
       </div>
@@ -6460,22 +6464,24 @@ function toggleWalkingGuide() {
 }
 
 function setWalkBtnState(active) {
-  // Header button (always visible)
   var hdr = document.getElementById('walkGuideBtn');
   if (hdr) {
     if (active) {
-      hdr.innerHTML = '⏹';
-      hdr.style.borderColor = '#c0392b';
-      hdr.style.color = '#c0392b';
+      hdr.innerHTML = '🚶 <span style="font-size:10px;font-weight:800;letter-spacing:0.5px;background:#1a7a3a;color:#fff;border-radius:4px;padding:1px 5px;animation:walkLivePulse 1.2s ease-in-out infinite;">LIVE</span>';
+      hdr.style.borderColor = '#1a7a3a';
+      hdr.style.color = '#1a7a3a';
+      hdr.style.background = 'rgba(26,122,58,0.12)';
+      hdr.title = 'Walking guide ON — tap to stop';
     } else {
       hdr.innerHTML = '🚶';
       hdr.style.borderColor = '#1a7a3a';
       hdr.style.color = '#1a7a3a';
+      hdr.style.background = '';
+      hdr.title = 'Start walking guide';
     }
   }
   var bar = document.getElementById("walkNextBar");
   if (bar) bar.style.display = active ? "flex" : "none";
-  // In-panel button
   ['startWalkBtn','startWalkBtnTop'].forEach(function(id) {
     var btn = document.getElementById(id);
     if (!btn) return;
