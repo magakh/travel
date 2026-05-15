@@ -5723,7 +5723,7 @@ function _showIdentifyCard(lm) {
     + '<p id="identifyTldr" style="font-size:14px;color:#333;line-height:1.6;margin:0 0 10px;">'+lm.tldr+'</p>'
     // Fun fact
     + '<div id="identifyFactWrap" style="'+(lm.funFact?'':'display:none;')+'background:#fffbeb;border-left:3px solid #f59e0b;border-radius:0 10px 10px 0;padding:9px 12px;margin-bottom:8px;">'
-        + '<span style="font-size:10px;font-weight:800;color:#b45309;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:3px;">⭐ Fun fact</span>'
+        + '<span style="font-size:10px;font-weight:800;color:#b45309;text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:3px;">💡 Did you know?</span>'
         + '<span id="identifyFact" style="font-size:13px;color:#444;line-height:1.5;">'+(lm.funFact||'')+'</span></div>'
     // Suggestion
     + '<div id="identifySuggestWrap" style="'+(lm.suggestion?'':'display:none;')+'background:#e8f5e9;border-left:3px solid #1a7a3a;border-radius:0 10px 10px 0;padding:9px 12px;margin-bottom:12px;">'
@@ -6791,10 +6791,10 @@ way["building"~"parliament|government|cathedral|palace"](around:${r2},${lat},${l
       showToast('📍 Added to Day ' + (currentDay+1) + ' · passed by at ' + snapTimeStr);
     }
 
-    // AI enrichment in background — updates card text + re-speaks with full content
+    // AI enrichment — builds proper summary + distinct facts, updates card silently
     callAnthropic({
-      prompt: 'Return ONLY valid JSON, no markdown:\n{"tldr":"2-3 vivid specific sentences a tourist walking past right now would love","funFact":"one unexpected little-known fact — one sentence"}\n\nAbout: "' + hit.title + '"\nContext: ' + extract.slice(0, 600),
-      maxTokens: 250
+      prompt: 'Return ONLY valid JSON, no markdown fences:\n{"summary":"A flowing 4-5 sentence narrative for a tourist walking past right now. Historical context, what makes it iconic, one key story or atmosphere detail. Write as a tour guide speaking, not an encyclopaedia. Do NOT include the facts below.","facts":"Exactly 2-3 surprising facts NOT already in the summary — unexpected numbers, hidden stories, strange history, famous connections. Each is one punchy sentence. Separate with the pipe character | only."}\n\nAbout: "' + hit.title + '"\nWikipedia extract: ' + extract.slice(0, 700),
+      maxTokens: 400
     }).then(function(aiText) {
       if (!aiText || !aiText.trim()) return;
       if (!_activeLandmark || _activeLandmark.name !== hit.title) return;
@@ -6804,13 +6804,16 @@ way["building"~"parliament|government|cathedral|palace"](around:${r2},${lat},${l
         var tldrEl = document.getElementById('walkAlertTldr');
         var factWrap = document.getElementById('walkAlertFactWrap');
         var factEl = document.getElementById('walkAlertFact');
-        if (parsed.tldr && tldrEl) { tldrEl.textContent = parsed.tldr; lmObj.tldr = parsed.tldr; }
-        if (parsed.funFact && factEl) {
-          factEl.textContent = parsed.funFact;
-          lmObj.funFact = parsed.funFact;
+        if (parsed.summary && tldrEl) { tldrEl.textContent = parsed.summary; lmObj.tldr = parsed.summary; }
+        if (parsed.facts && factEl) {
+          var factLines = parsed.facts.split('|').map(function(f){return f.trim();}).filter(Boolean);
+          factEl.innerHTML = factLines.map(function(f){
+            return '<div style="display:flex;gap:6px;margin-bottom:5px;"><span style="flex-shrink:0;color:#b45309;">⭐</span><span style="font-size:13px;color:#444;line-height:1.5;">' + f + '</span></div>';
+          }).join('');
+          lmObj.funFact = factLines.join(' ');
           if (factWrap) factWrap.style.display = '';
         }
-        // Do NOT cancel or re-speak — the full extract is already being read uninterrupted
+        // Do NOT re-speak — full extract already playing uninterrupted
       } catch(e) {}
     }).catch(function() {});
 
@@ -7368,7 +7371,9 @@ function showLandmarkAlert(lm, idx, dist) {
       const sideText = side ? 'on your ' + side.toLowerCase() : '';
       const addrText = addr ? 'Located at ' + addr + (sideText ? ', ' + sideText : '') + '. ' : (sideText ? sideText + '. ' : '');
       // Read the full Wikipedia extract — not just tldr — so speech never cuts off mid-article
-      const fullText = lm.name + '. ' + addrText + (lm.extract || lm.tldr || '') + (lm.funFact ? ' Interesting fact: ' + lm.funFact : '');
+      const summaryText = lm.tldr || lm.extract || '';
+      const factsText = lm.funFact ? ' Here are some things you might not know. ' + lm.funFact : '';
+      const fullText = lm.name + '. ' + addrText + summaryText + factsText;
       const utt = new SpeechSynthesisUtterance(fullText.slice(0, 1800));
       utt.lang = 'en-GB'; utt.rate = 0.95;
       // Auto-dismiss when speech finishes — no need to wait for 20m distance
