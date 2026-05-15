@@ -6470,6 +6470,7 @@ let _walkTourAlertOpen = false;
 let _walkHistory = []; // { name, tldr, funFact, image, lat, lng, dist, ts }
 let _walkQueue = [];   // landmarks queued while a card is showing — auto-plays next
 let _wakeLock = null;
+let _walkSearchInterval = null; // fires liveWikiSearch every 5s automatically
 const WALK_TRIGGER_METRES = 80;
 
 async function _acquireWakeLock() {
@@ -6545,6 +6546,13 @@ function startLiveWalkingTour() {
     _walkTourAlertOpen = false;
     _walkQueue = [];
     _acquireWakeLock();
+
+    // Search every 5 seconds automatically — no tapping needed
+    clearInterval(_walkSearchInterval);
+    _walkSearchInterval = setInterval(function() {
+      if (!_walkTourActive || _walkTourAlertOpen || _currentGpsLat === null) return;
+      liveWikiSearch(_currentGpsLat, _currentGpsLng);
+    }, 5000);
     _walkLastSearchLat = null;
     _walkLastSearchLng = null;
     setWalkBtnState(true);
@@ -7004,6 +7012,8 @@ function renderWalkHistoryTab(tab) {
 
 function stopLiveWalkingTour() {
   _walkTourActive = false;
+  clearInterval(_walkSearchInterval);
+  _walkSearchInterval = null;
   _releaseWakeLock();
   if (_walkTourWatchId !== null) { navigator.geolocation.clearWatch(_walkTourWatchId); _walkTourWatchId = null; }
   const el = document.getElementById('walkAlert');
@@ -7449,13 +7459,13 @@ function dismissLandmarkAlert() {
       var next = _walkQueue.shift();
       var dist = (_currentGpsLat !== null) ? _haversineMetres(_currentGpsLat, _currentGpsLng, next.lat, next.lng) : 0;
       showLandmarkAlert(next, -1, dist);
-      // Refresh Coming Up panel if open
       if (document.getElementById('walkHistoryPanel') && document.getElementById('walkHistoryPanel').style.display !== 'none') {
         renderWalkHistoryTab('upcoming');
       }
     } else {
       var bar = document.getElementById('walkNextBar');
       if (bar && _walkTourActive && !_walkTourAlertOpen) bar.style.display = 'flex';
+      _walkLastSearchTime = 0; // force immediate search on next 5s tick
     }
   }, 400);
 }
