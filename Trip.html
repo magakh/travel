@@ -6479,6 +6479,24 @@ let _wakeLock = null;
 let _debugLocation = 'Locating…'; // current reverse-geocoded address for debug overlay
 const WALK_TRIGGER_METRES = 80;
 
+// Keep speech alive when app is backgrounded — Chrome pauses speechSynthesis, we resume every 5s
+let _speechKeepAliveInterval = null;
+function _startSpeechKeepAlive() {
+  _stopSpeechKeepAlive();
+  _speechKeepAliveInterval = setInterval(function() {
+    if (!window.speechSynthesis) return;
+    if (window.speechSynthesis.speaking && window.speechSynthesis.paused) {
+      window.speechSynthesis.resume();
+    }
+    if (!window.speechSynthesis.speaking) {
+      _stopSpeechKeepAlive(); // speech done
+    }
+  }, 3000);
+}
+function _stopSpeechKeepAlive() {
+  if (_speechKeepAliveInterval) { clearInterval(_speechKeepAliveInterval); _speechKeepAliveInterval = null; }
+}
+
 async function _acquireWakeLock() {
   if (!('wakeLock' in navigator)) return;
   try { _wakeLock = await navigator.wakeLock.request('screen'); _wakeLock.addEventListener('release', () => { _wakeLock = null; }); }
@@ -6504,13 +6522,8 @@ function _notifyLandmark(name) {
 
 document.addEventListener('visibilitychange', function() {
   if (document.visibilityState === 'visible' && _walkTourActive) {
-    // Returning to app — re-acquire wake lock and restart bar ticker
     if (!_wakeLock) _acquireWakeLock();
     if (!_walkBarInterval) _startWalkBarTicker();
-    // Resume speech if it was interrupted
-    if (window.speechSynthesis && window.speechSynthesis.paused) {
-      window.speechSynthesis.resume();
-    }
   }
 });
 
@@ -7588,9 +7601,9 @@ function showLandmarkAlert(lm, idx, dist, pageId) {
       const utt = new SpeechSynthesisUtterance(fullText.slice(0, 1800));
       utt.lang = 'en-GB'; utt.rate = 0.95;
       // Dismiss when speech finishes naturally
-      utt.onend = function() { dismissLandmarkAlert(); };
-      // On error: DON'T dismiss — keep card visible, let user read
-      utt.onerror = function(e) { console.warn('TTS error:', e.error); };
+      utt.onstart = function() { _startSpeechKeepAlive(); };
+      utt.onend = function() { _stopSpeechKeepAlive(); dismissLandmarkAlert(); };
+      utt.onerror = function(e) { _stopSpeechKeepAlive(); console.warn('TTS error:', e.error); };
       window.speechSynthesis.speak(utt);
     }
   });
