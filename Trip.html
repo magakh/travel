@@ -1284,7 +1284,7 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
 </div>
 
 <!-- GPS debug overlay — shown when walking guide is active, sits above the walk bar -->
-<div id="gpsDebug" style="display:none;position:fixed;bottom:calc(var(--bottom-h,60px) + 115px);left:50%;transform:translateX(-50%);z-index:29000;background:rgba(0,0,0,0.82);color:#4eff91;font-family:monospace;font-size:12px;font-weight:700;border-radius:10px;padding:7px 14px;line-height:1.7;pointer-events:none;white-space:nowrap;box-shadow:0 2px 12px rgba(0,0,0,0.4);"></div>
+<div id="gpsDebug" style="display:none;position:fixed;bottom:calc(var(--bottom-h,60px) + 115px);left:50%;transform:translateX(-50%);z-index:29000;background:rgba(0,0,0,0.88);color:#4eff91;font-family:monospace;font-size:12px;font-weight:700;border-radius:10px;padding:7px 14px;line-height:1.8;white-space:nowrap;box-shadow:0 2px 12px rgba(0,0,0,0.4);cursor:pointer;" onclick="_clearWalkCache()" title="Tap to clear landmark cache"></div>
 <div id="walkHistoryOverlay" style="display:none;position:fixed;inset:0;z-index:29999;background:rgba(0,0,0,0.55);" onclick="if(event.target===this)closeWalkHistory()"></div>
 <div id="walkHistoryPanel" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:30000;background:#fff;border-radius:20px 20px 0 0;max-height:78vh;flex-direction:column;transform:translateY(100%);transition:transform 0.3s ease;box-shadow:0 -4px 24px rgba(0,0,0,0.2);">
   <div style="padding:10px 16px 0;flex-shrink:0;">
@@ -6719,8 +6719,18 @@ async function liveWikiSearch(lat, lng, radius, silent) {
 
     var allResults = (data.query && data.query.geosearch) || [];
 
-    // Always briefly show Wikipedia count in bar so user can see if API is responding
-    if (allResults.length > 0) _flashWalkBar('🌐 ' + allResults.length + ' Wikipedia hits', 1200);
+    // Update debug overlay with Wikipedia result count
+    (function() {
+      var dbg = document.getElementById('gpsDebug');
+      if (!dbg) return;
+      var addrEl = dbg.querySelector('.dbg-addr');
+      var addr = addrEl ? addrEl.innerHTML : '📍 …';
+      var accEl = dbg.querySelector('.dbg-acc');
+      var accStr = accEl ? accEl.innerHTML : '';
+      dbg.innerHTML = addr + '<br><span class="dbg-acc">' + accStr + '</span>'
+        + '<br>🌐 ' + allResults.length + ' wiki hits · 🗃 ' + _walkLiveCache.size + ' cached'
+        + '<br><span style="color:#ff0;font-size:10px;">Tap to clear cache</span>';
+    })();
 
     var nearby = allResults.filter(function(p) {
       if (_walkLiveCache.has(p.pageid)) return false;
@@ -7220,6 +7230,13 @@ function getWalkingBearing() {
 }
 
 // Show compass direction on the LIVE badge so user can verify
+function _clearWalkCache() {
+  _walkLiveCache.clear();
+  showToast('🗑 Cache cleared — will retry all landmarks');
+  _walkCountdown = 0;
+  _doAutoSearch();
+}
+
 function _updateBearingDebug() {
   if (!_walkTourActive) return;
   const { bearing, confidence } = getWalkingBearingInfo();
