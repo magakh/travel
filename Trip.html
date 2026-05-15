@@ -6750,9 +6750,9 @@ async function liveWikiSearch(lat, lng, radius, silent) {
       // Behind-you filter
       const behindCutoff = highConf ? -20 : -40;
       if (rp.metersAhead < behindCutoff) return false;
-      // Cross-track: generous for city walking — landmarks are in plazas, across streets
-      const crossLimit = 200; // generous — GPS inside buildings is unreliable
-      if (rp.metersCross > crossLimit) return false;
+      // Visibility rule: only show if on your street (< 20m cross-track)
+      // A building 200m away on a parallel block is NOT visible through other buildings
+      if (rp.metersCross > 20) return false;
       return true;
     });
 
