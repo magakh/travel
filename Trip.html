@@ -1284,7 +1284,7 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
 </div>
 
 <!-- GPS debug overlay — shown when walking guide is active, sits above the walk bar -->
-<div id="gpsDebug" style="display:none;position:fixed;bottom:calc(var(--bottom-h,60px) + 110px);left:50%;transform:translateX(-50%);z-index:29000;background:rgba(0,0,0,0.88);color:#4eff91;font-family:monospace;font-size:11px;font-weight:700;border-radius:8px;padding:6px 12px;line-height:1.8;max-width:calc(100vw - 24px);overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.4);cursor:pointer;text-align:center;" onclick="_clearWalkCache()" title="Tap to reset"></div>
+<div id="gpsDebug" style="display:none;position:fixed;bottom:calc(var(--bottom-h,60px) + 110px);left:50%;transform:translateX(-50%);z-index:29000;background:rgba(0,0,0,0.88);color:#4eff91;font-family:monospace;font-size:11px;font-weight:700;border-radius:8px;padding:6px 12px;line-height:1.8;max-width:calc(100vw - 24px);overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.4);pointer-events:none;text-align:center;"></div>
 <div id="walkHistoryOverlay" style="display:none;position:fixed;inset:0;z-index:35000;background:rgba(0,0,0,0.55);" onclick="if(event.target===this)closeWalkHistory()"></div>
 <div id="walkHistoryPanel" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:35001;background:#fff;border-radius:20px 20px 0 0;max-height:78vh;flex-direction:column;transform:translateY(100%);transition:transform 0.3s ease;box-shadow:0 -4px 24px rgba(0,0,0,0.2);">
   <div style="padding:10px 16px 0;flex-shrink:0;">
@@ -6774,7 +6774,7 @@ async function liveWikiSearch(lat, lng, radius, silent) {
       var accStr = accEl ? accEl.innerHTML : '';
       dbg.innerHTML = addr + '<br><span class="dbg-acc">' + accStr + '</span>'
         + '<br>🌐 ' + allResults.length + ' wiki hits · ✅ ' + _walkLiveCache.size + ' already seen'
-        + '<br><span style="color:#ff0;font-size:10px;">Tap to reset & search again</span>';
+        ;
     })();
 
     var nearby = allResults.filter(function(p) {
@@ -7158,7 +7158,7 @@ function renderWalkHistoryTab(tab) {
   if (tab === 'seen') {
     if (!_walkHistory.length) { body.innerHTML = '<div style="text-align:center;color:#aaa;padding:32px 0;font-size:14px;">No landmarks seen yet this session.</div>'; return; }
     body.innerHTML = _walkHistory.map(function(h) {
-      return '<div style="display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-bottom:1px solid #f0f0f0;cursor:pointer;" onclick="closeWalkHistory();showLandmarkAlert(' + JSON.stringify(h).replace(/</g,'\\u003c') + ',-1,' + h.dist + ')">'
+      return '<div style="display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-bottom:1px solid #f0f0f0;cursor:pointer;" onclick="closeWalkHistory();_reopenHistoryCard(' + JSON.stringify(h).replace(/</g,'\\u003c') + ')">'
         + (h.image ? '<img src="' + h.image + '" style="width:52px;height:52px;border-radius:8px;object-fit:cover;flex-shrink:0;" onerror="this.style.display=\'none\'">' : '<div style="width:52px;height:52px;border-radius:8px;background:#f0f0f0;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:20px;">📍</div>')
         + '<div style="flex:1;min-width:0;">'
         +   '<div style="font-size:14px;font-weight:800;color:#1a1a1a;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + h.name + '</div>'
@@ -7463,12 +7463,12 @@ async function getUserStreet(lat, lng) {
   } catch(e) { return ''; }
 }
 
-function showLandmarkAlert(lm, idx, dist, pageId) {
+function showLandmarkAlert(lm, idx, dist, pageId, silent) {
   _walkTourAlertOpen = true;
   _activeLandmark = lm;
   // Add to session history (avoid duplicates by name)
   if (!_walkHistory.find(h => h.name === lm.name)) {
-    _walkHistory.unshift({ name: lm.name, tldr: lm.tldr || '', funFact: lm.funFact || '', image: lm.image || null, lat: lm.lat, lng: lm.lng, wikiUrl: lm.wikiUrl || '', dist: Math.round(dist || 0), ts: Date.now() });
+    _walkHistory.unshift({ name: lm.name, tldr: lm.tldr || '', extract: lm.extract || lm.tldr || '', funFact: lm.funFact || '', image: lm.image || null, lat: lm.lat, lng: lm.lng, wikiUrl: lm.wikiUrl || '', dist: Math.round(dist || 0), ts: Date.now() });
   }
   // Hide debug overlay so it doesn't intercept card button taps
   var dbgEl = document.getElementById('gpsDebug');
@@ -7657,7 +7657,7 @@ function showLandmarkAlert(lm, idx, dist, pageId) {
       utt.onstart = function() { _startSpeechKeepAlive(); };
       utt.onend = function() { _stopSpeechKeepAlive(); dismissLandmarkAlert(); };
       utt.onerror = function(e) { _stopSpeechKeepAlive(); console.warn('TTS error:', e.error); };
-      window.speechSynthesis.speak(utt);
+      if (!silent) window.speechSynthesis.speak(utt);
     }
   });
   // Fallback: auto-dismiss after 90s in case speech never ends or onerror fires
@@ -7685,6 +7685,14 @@ function showLandmarkAlert(lm, idx, dist, pageId) {
   }, 2000);
 
   if (idx >= 0) highlightTourMarker(idx);
+}
+
+// Reopen a previously seen card — no speech, just the card
+function _reopenHistoryCard(h) {
+  var lm = { name: h.name, lat: h.lat, lng: h.lng, image: h.image || null,
+              tldr: h.tldr || '', extract: h.extract || h.tldr || '',
+              funFact: h.funFact || '', wikiUrl: h.wikiUrl || '' };
+  showLandmarkAlert(lm, -1, h.dist, null, true); // true = silent (no speech)
 }
 
 function dismissLandmarkAlert() {
