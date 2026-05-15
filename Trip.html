@@ -1523,6 +1523,7 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
           <button onclick="exportFile()" style="flex:1;padding:8px 12px;border-radius:8px;border:1px solid #444;background:#1e1e1e;color:#ccc;font-size:12px;font-weight:700;cursor:pointer;">📤 Export</button>
           <button onclick="document.getElementById('import-input').click()" style="flex:1;padding:8px 12px;border-radius:8px;border:1px solid #444;background:#1e1e1e;color:#ccc;font-size:12px;font-weight:700;cursor:pointer;">📥 Import</button>
         </div>
+        <button onclick="_fixAllPhotoUrls()" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid #1a56c4;background:#e8f0fe;color:#1a56c4;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:8px;">🔗 Fix photo URLs (run once to fix 'Failed to load')</button>
         <button onclick="_cleanBrokenPhotosNow()" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid #c0392b;background:#fef0f0;color:#c0392b;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:8px;">🗑 Remove all broken photos</button>
 
       <!-- ── DANGER ZONE ── -->
@@ -2059,6 +2060,8 @@ function applyRemoteData(row) {
       if (dd.title) days[i].title = dd.title;
       if (dd.note) days[i].note = dd.note;
     });
+    // Convert any stored signed/legacy URLs to stable public URLs (pure string transform, no API call)
+    _normalizeAllPhotoUrls(days);
   }
 
   // Remove phantom days beyond numDays that have no stops (e.g. "Jul 10" from a mis-saved setting)
@@ -2256,16 +2259,13 @@ async function _uploadPhotoToStorage(base64DataUrl, stopKey) {
     contentType: 'image/jpeg', upsert: false
   });
 
-  // If file already exists, that's fine — just get the signed URL for it
+  // 409 = file already exists — that's fine, just use the public URL
   if (error && !error.message.includes('already exists') && error.statusCode !== '409' && error.statusCode !== 409) {
     throw error;
   }
 
-  // Use a long-lived signed URL (1 year) — works cross-device without making bucket public
-  const { data: signed, error: signErr } = await supa.storage
-    .from(PHOTO_BUCKET).createSignedUrl(filename, 31536000);
-  if (signErr) throw signErr;
-  return signed.signedUrl;
+  // Bucket is public — return a permanent public URL (never expires, works on all devices)
+  return APP_CONFIG.supabaseUrl + '/storage/v1/object/public/' + PHOTO_BUCKET + '/' + filename;
 }
 
 async function _migratePhotosToStorage(daysData) {
@@ -2298,20 +2298,8 @@ async function _migratePhotosToStorage(daysData) {
           } catch(e) { console.warn('photo upload fail:', e.message); /* skip broken upload — don't save blank */ }
 
         } else if (p.includes(APP_CONFIG.supabaseUrl + '/storage')) {
-          // Refresh the signed URL (handles expired tokens)
-          try {
-            const match = p.match(/\/trip-photos\/([^?#]+)/);
-            if (match) {
-              const filename = decodeURIComponent(match[1]);
-              const { data: signed, error: se } = await supa.storage.from(PHOTO_BUCKET).createSignedUrl(filename, 31536000);
-              if (se || !signed) {
-                broken++; console.warn('Storage file gone:', filename);
-                newPhotos.push(p); // keep stale URL — _onPhotoError will show broken UI
-              } else {
-                newPhotos.push(signed.signedUrl); verified++;
-              }
-            } else { newPhotos.push(p); }
-          } catch(e) { newPhotos.push(p); }
+          // Already a storage URL — convert to public URL (permanent, works on all devices)
+          newPhotos.push(_toPublicPhotoUrl(p)); verified++;
 
         } else {
           newPhotos.push(p); // external URL — keep as-is
@@ -4915,6 +4903,32 @@ function openPhotoGallery(stopIdx, dayIdx, startIdx) {
   ov.onclick = (e) => { if (e.target === ov) ov.remove(); };
   document.body.appendChild(ov);
   render();
+}
+
+// Convert all stored signed/legacy photo URLs to permanent public URLs, then push to Supabase.
+// Run once to fix "Failed to load" on any device. Safe to run multiple times.
+async function _fixAllPhotoUrls() {
+  showToast('🔗 Converting photo URLs to public format…');
+  let fixed = 0, total = 0;
+  days.forEach(function(day) {
+    (day.stops || []).forEach(function(s) {
+      if (!s.userPhotos) return;
+      s.userPhotos = s.userPhotos.map(function(p) {
+        if (!p || p.startsWith('data:') || !p.includes(PHOTO_BUCKET)) return p;
+        total++;
+        const pub = _toPublicPhotoUrl(p);
+        if (pub !== p) fixed++;
+        return pub;
+      }).filter(Boolean);
+    });
+  });
+  if (fixed === 0 && total > 0) {
+    showToast('✅ All ' + total + ' photos already use public URLs — no fix needed');
+    return;
+  }
+  saveToStorage();
+  await schedulePush();
+  showToast('✅ Fixed ' + fixed + ' of ' + total + ' photo URLs → pushed to Supabase. Refresh to confirm.');
 }
 
 async function _cleanBrokenPhotosNow() {
