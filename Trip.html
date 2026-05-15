@@ -7424,6 +7424,9 @@ function showLandmarkAlert(lm, idx, dist, pageId) {
   if (!_walkHistory.find(h => h.name === lm.name)) {
     _walkHistory.unshift({ name: lm.name, tldr: lm.tldr || '', funFact: lm.funFact || '', image: lm.image || null, lat: lm.lat, lng: lm.lng, wikiUrl: lm.wikiUrl || '', dist: Math.round(dist || 0), ts: Date.now() });
   }
+  // Hide debug overlay so it doesn't intercept card button taps
+  var dbgEl = document.getElementById('gpsDebug');
+  if (dbgEl) dbgEl.style.pointerEvents = 'none';
   // Vibrate and notify (works even when backgrounded on Android)
   if (navigator.vibrate) navigator.vibrate([120, 80, 120]);
   _notifyLandmark(lm.name);
@@ -7646,7 +7649,12 @@ function dismissLandmarkAlert() {
   clearTimeout(el._timer);
   if (el._approachInterval) clearInterval(el._approachInterval);
   el.style.transform = 'translateY(100%)';
-  setTimeout(function() { if (el.parentNode) el.remove(); }, 380);
+  setTimeout(function() {
+    if (el.parentNode) el.remove();
+    // Restore debug overlay interactivity
+    var dbgEl = document.getElementById('gpsDebug');
+    if (dbgEl) dbgEl.style.pointerEvents = 'auto';
+  }, 380);
 
   // Auto-show next queued landmark, or restore the Next bar
   setTimeout(function() {
