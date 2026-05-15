@@ -7764,56 +7764,64 @@ function showLandmarkAlert(lm, idx, dist, pageId, silent, manualOpen) {
 // Reopen a previously seen card — no speech, just the card
 function _reopenHistoryCard(h) {
   closeWalkHistory();
-  // Force-clear any stuck flag and queued items — manual selection always wins
+  // Force-clear any stuck flag/queue — manual selection always wins
   _walkTourAlertOpen = false;
   _walkQueue = [];
-  // Re-fetch full Wikipedia data so card is as rich as auto-show
-  _flashWalkBar('⏳ Loading ' + h.name + '…', 3000);
+
+  // Show card IMMEDIATELY with stored data — no waiting
+  var lm = { name: h.name, lat: h.lat, lng: h.lng, image: h.image || null,
+             tldr: h.tldr || h.extract || '', extract: h.extract || h.tldr || '',
+             funFact: h.funFact || '', wikiUrl: h.wikiUrl || '' };
+  showLandmarkAlert(lm, -1, h.dist, null, true, false); // silent, not manualOpen (already in Seen)
+
+  // Then silently fetch fresh data and update the open card if still showing
   (async function() {
     try {
       var pageId = h.wikiUrl ? h.wikiUrl.split('/wiki/')[1] : null;
-      var apiUrl = pageId
-        ? 'https://en.wikipedia.org/w/api.php?action=query&titles=' + encodeURIComponent(decodeURIComponent(pageId)) + '&prop=extracts|pageimages&exintro=1&explaintext=1&pithumbsize=400&format=json&origin=*'
-        : null;
-      var lm = { name: h.name, lat: h.lat, lng: h.lng, image: h.image || null,
-                 tldr: h.tldr || '', extract: h.extract || h.tldr || '',
-                 funFact: h.funFact || '', wikiUrl: h.wikiUrl || '' };
-      if (apiUrl) {
-        var res = await fetch(apiUrl);
-        var data = await res.json();
-        var pages = data.query && data.query.pages;
-        var page = pages && pages[Object.keys(pages)[0]];
-        if (page && page.extract) {
-          var rawExtract = page.extract.replace(/\n+/g, ' ').trim();
-          var extract = rawExtract;
-          if (rawExtract.length > 600) {
-            var sents = rawExtract.match(/[^.!?]+[.!?]+\s*/g) || [];
-            var built = ''; var si = 0;
-            while (si < sents.length && (built + sents[si]).length < 800) { built += sents[si]; si++; }
-            extract = built.trim() || rawExtract.slice(0, 800);
-          }
-          var image = (page.thumbnail && page.thumbnail.source) || h.image || null;
-          var sents2 = extract.match(/[^.!?]+[.!?]+\s*/g) || [];
-          var funFact = h.funFact || '';
-          if (!funFact) {
-            var factSent = sents2.find(function(s, i) {
-              return i > 0 && /\d{3,}|\b(first|oldest|largest|tallest|biggest|only|famous|unique|secret|hidden|rare|never|original|ancient|survived|destroyed|rebuilt|designed by|built in|opened in|stands|measures|weighing)\b/i.test(s);
-            });
-            if (factSent) funFact = factSent.trim();
-          }
-          lm.image = image; lm.extract = extract; lm.tldr = extract; lm.funFact = funFact;
-          // Update stored history entry with fresh data
-          var stored = _walkHistory.find(function(x) { return x.name === h.name; });
-          if (stored) { stored.extract = extract; stored.tldr = extract; stored.funFact = funFact; stored.image = image; }
+      if (!pageId) return;
+      var res = await fetch('https://en.wikipedia.org/w/api.php?action=query&titles=' + encodeURIComponent(decodeURIComponent(pageId)) + '&prop=extracts|pageimages&exintro=1&explaintext=1&pithumbsize=400&format=json&origin=*');
+      var data = await res.json();
+      var pages = data.query && data.query.pages;
+      var page = pages && pages[Object.keys(pages)[0]];
+      if (!page || !page.extract) return;
+
+      var rawExtract = page.extract.replace(/\n+/g, ' ').trim();
+      var extract = rawExtract;
+      if (rawExtract.length > 600) {
+        var sents = rawExtract.match(/[^.!?]+[.!?]+\s*/g) || [];
+        var built = ''; var si = 0;
+        while (si < sents.length && (built + sents[si]).length < 800) { built += sents[si]; si++; }
+        extract = built.trim() || rawExtract.slice(0, 800);
+      }
+      var image = (page.thumbnail && page.thumbnail.source) || h.image || null;
+      var sents2 = extract.match(/[^.!?]+[.!?]+\s*/g) || [];
+      var funFact = h.funFact || '';
+      if (!funFact) {
+        var factSent = sents2.find(function(s, i) {
+          return i > 0 && /\d{3,}|\b(first|oldest|largest|tallest|biggest|only|famous|unique|secret|hidden|rare|never|original|ancient|survived|destroyed|rebuilt|designed by|built in|opened in|stands|measures|weighing)\b/i.test(s);
+        });
+        if (factSent) funFact = factSent.trim();
+      }
+
+      // Update stored history entry
+      var stored = _walkHistory.find(function(x) { return x.name === h.name; });
+      if (stored) { stored.extract = extract; stored.tldr = extract; stored.funFact = funFact; stored.image = image; }
+
+      // Patch the live card DOM if it's still the same one (user hasn't dismissed it)
+      var card = document.getElementById('walkAlert');
+      if (!card) return;
+      var tldrEl = card.querySelector('#walkAlertTldr');
+      if (tldrEl && extract) tldrEl.textContent = extract;
+      var factWrap = card.querySelector('#walkAlertFactWrap');
+      var factEl = card.querySelector('#walkAlertFact');
+      if (factEl && funFact) { factEl.textContent = funFact; if (factWrap) factWrap.style.display = ''; }
+      if (image && !h.image) {
+        var imgEl = card.querySelector('img[style*="object-fit:cover"]');
+        if (!imgEl) {
+          // No image was shown yet — can't easily inject one without re-render
         }
       }
-      showLandmarkAlert(lm, -1, h.dist, null, true, false); // silent=true, manualOpen=false (already in Seen)
-    } catch(e) {
-      var lm = { name: h.name, lat: h.lat, lng: h.lng, image: h.image || null,
-                 tldr: h.tldr || '', extract: h.extract || h.tldr || '',
-                 funFact: h.funFact || '', wikiUrl: h.wikiUrl || '' };
-      showLandmarkAlert(lm, -1, h.dist, null, true, false);
-    }
+    } catch(e) { /* fresh data failed — stored data already showing, that's fine */ }
   })();
 }
 
