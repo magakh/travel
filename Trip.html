@@ -7095,6 +7095,19 @@ function openWalkHistory() {
   overlay.style.display = 'block';
   requestAnimationFrame(() => panel.style.transform = 'translateY(0)');
   renderWalkHistoryTab(_walkActiveTab);
+
+  // Swipe down to close
+  let _touchStartY = 0;
+  panel.ontouchstart = function(e) { _touchStartY = e.touches[0].clientY; };
+  panel.ontouchmove = function(e) {
+    const dy = e.touches[0].clientY - _touchStartY;
+    if (dy > 0) panel.style.transform = 'translateY(' + dy + 'px)';
+  };
+  panel.ontouchend = function(e) {
+    const dy = e.changedTouches[0].clientY - _touchStartY;
+    if (dy > 80) { closeWalkHistory(); }
+    else { panel.style.transform = 'translateY(0)'; }
+  };
 }
 
 function closeWalkHistory() {
