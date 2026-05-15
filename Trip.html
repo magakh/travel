@@ -6465,12 +6465,12 @@ async function drawTourRoute(tour, fromStop, toStop) {
 // ── LIVE WALKING TOUR ─────────────────────────────────────────────
 let _walkTourActive = false;
 let _walkTourWatchId = null;
+let _walkSearchInterval = null;
 let _walkTourVisited = new Set();
 let _walkTourAlertOpen = false;
 let _walkHistory = []; // { name, tldr, funFact, image, lat, lng, dist, ts }
 let _walkQueue = [];   // landmarks queued while a card is showing — auto-plays next
 let _wakeLock = null;
-let _walkSearchInterval = null; // fires liveWikiSearch every 5s automatically
 const WALK_TRIGGER_METRES = 80;
 
 async function _acquireWakeLock() {
@@ -6547,12 +6547,18 @@ function startLiveWalkingTour() {
     _walkQueue = [];
     _acquireWakeLock();
 
-    // Search every 5 seconds automatically — no tapping needed
-    clearInterval(_walkSearchInterval);
+    // Search immediately on start, then every 5 seconds — no waiting for GPS updates or movement
+    _walkLastSearchTime = 0;
+    if (_walkSearchInterval) clearInterval(_walkSearchInterval);
     _walkSearchInterval = setInterval(function() {
-      if (!_walkTourActive || _walkTourAlertOpen || _currentGpsLat === null) return;
-      liveWikiSearch(_currentGpsLat, _currentGpsLng);
+      if (!_walkTourActive) { clearInterval(_walkSearchInterval); return; }
+      if (_currentGpsLat !== null && !_walkTourAlertOpen) {
+        liveWikiSearch(_currentGpsLat, _currentGpsLng);
+      }
     }, 5000);
+
+    // Search every 5 seconds automatically — no tapping needed
+    
     _walkLastSearchLat = null;
     _walkLastSearchLng = null;
     setWalkBtnState(true);
