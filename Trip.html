@@ -7072,7 +7072,7 @@ function _expandWalkMap() {
     window._walkExpandedMap = expMap;
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 19}).addTo(expMap);
 
-    // Copy all markers from the mini map layers
+    // Copy all markers from the mini map
     _walkAlertMap.eachLayer(function(layer) {
       try {
         if (layer instanceof L.Marker) {
@@ -7082,6 +7082,23 @@ function _expandWalkMap() {
         }
       } catch(e) {}
     });
+
+    // Live user marker on expanded map — updates with GPS
+    let _expUserMarker = null, _expPolyline = null;
+    if (_currentGpsLat !== null) {
+      const meIcon = L.divIcon({html:'<div style="width:16px;height:16px;background:#1a73e8;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 6px rgba(26,115,232,0.25);"></div>',className:'',iconSize:[16,16],iconAnchor:[8,8]});
+      _expUserMarker = L.marker([_currentGpsLat, _currentGpsLng], {icon: meIcon, zIndexOffset: 1000}).addTo(expMap);
+    }
+
+    // Update expanded map user position every 2s
+    const _expInterval = setInterval(function() {
+      if (!window._walkExpandedMap || !document.getElementById('walkMapExpanded')) {
+        clearInterval(_expInterval); return;
+      }
+      if (_currentGpsLat === null || !_expUserMarker) return;
+      _expUserMarker.setLatLng([_currentGpsLat, _currentGpsLng]);
+    }, 2000);
+
     expMap.invalidateSize();
   }, 50);
 }
@@ -7650,7 +7667,8 @@ function showLandmarkAlert(lm, idx, dist, pageId) {
     if (_walkAlertMap && _walkAlertUserMarker) {
       _walkAlertUserMarker.setLatLng([_currentGpsLat, _currentGpsLng]);
       if (_walkAlertPolyline) _walkAlertPolyline.setLatLngs([[_currentGpsLat, _currentGpsLng], [lm.lat, lm.lng]]);
-      try { _walkAlertMap.fitBounds([[_currentGpsLat, _currentGpsLng], [lm.lat, lm.lng]], {padding: [20, 20], animate: true, duration: 0.5}); } catch(e) {}
+      // Keep both user and landmark visible, pan smoothly
+      try { _walkAlertMap.fitBounds([[_currentGpsLat, _currentGpsLng], [lm.lat, lm.lng]], {padding:[20,20], animate:true, duration:0.8, maxZoom:17}); } catch(e) {}
     }
   }, 2000);
 
