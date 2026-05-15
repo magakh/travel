@@ -6728,8 +6728,8 @@ async function liveWikiSearch(lat, lng, radius, silent) {
       var accEl = dbg.querySelector('.dbg-acc');
       var accStr = accEl ? accEl.innerHTML : '';
       dbg.innerHTML = addr + '<br><span class="dbg-acc">' + accStr + '</span>'
-        + '<br>🌐 ' + allResults.length + ' wiki hits · 🗃 ' + _walkLiveCache.size + ' cached'
-        + '<br><span style="color:#ff0;font-size:10px;">Tap to clear cache</span>';
+        + '<br>🌐 ' + allResults.length + ' wiki hits · ✅ ' + _walkLiveCache.size + ' already seen'
+        + '<br><span style="color:#ff0;font-size:10px;">Tap to reset & search again</span>';
     })();
 
     var nearby = allResults.filter(function(p) {
