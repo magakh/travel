@@ -6546,6 +6546,11 @@ function _startWalkBarTicker() {
 
 // Run one auto-search cycle
 async function _doAutoSearch() {
+  // Safety: if _walkTourAlertOpen but no card is actually in the DOM, reset it
+  if (_walkTourAlertOpen && !document.getElementById('walkAlert')) {
+    console.warn('_walkTourAlertOpen was stuck — resetting');
+    _walkTourAlertOpen = false;
+  }
   if (!_walkTourActive || _walkTourAlertOpen) return;
   if (_walkSearching) { _walkCountdown = 0; return; } // already in progress
   if (_currentGpsLat === null) { _walkCountdown = 3; _updateWalkBar(); return; }
@@ -6856,28 +6861,22 @@ way["building"~"parliament|government|cathedral|palace"](around:${r2},${lat},${l
       name: hit.title, lat: hit.lat, lng: hit.lon,
       image: image, extract: extract, tldr: tldr, funFact: funFact,
       address: lmAddressFromGuard,
+      pageId: hit.pageid,
       wikiUrl: 'https://en.wikipedia.org/wiki/' + encodeURIComponent(hit.title)
     };
 
     if (_walkTourAlertOpen) {
       // A card is currently being read — queue this one silently
       if (!_walkQueue.find(function(q) { return q.name === lmObj.name; })) {
-        _walkLiveCache.add(hit.pageid); // cache now — confirmed good
         _walkQueue.push(lmObj);
-        // Silently refresh Coming Up panel if it's open
+        // Note: we add to cache only when the card actually shows (in showLandmarkAlert)
         var panel = document.getElementById('walkHistoryPanel');
         if (panel && panel.style.display !== 'none') renderWalkHistoryTab('upcoming');
         _flashWalkBar('📍 ' + hit.title + ' queued', 2000);
       }
       return;
     }
-    _walkLiveCache.add(hit.pageid); // cache confirmed — won't repeat
-    try {
-      showLandmarkAlert(lmObj, -1, currentDist);
-    } catch(e) {
-      console.error('showLandmarkAlert failed:', e);
-      _walkTourAlertOpen = false; // reset so searches continue
-    }
+    showLandmarkAlert(lmObj, -1, currentDist, hit.pageid);
 
     // ── Auto-add to today's schedule as a "passed by" stop ────────
     const snapDate = new Date();
@@ -7331,7 +7330,7 @@ async function getUserStreet(lat, lng) {
   } catch(e) { return ''; }
 }
 
-function showLandmarkAlert(lm, idx, dist) {
+function showLandmarkAlert(lm, idx, dist, pageId) {
   _walkTourAlertOpen = true;
   _activeLandmark = lm;
   // Add to session history (avoid duplicates by name)
@@ -7437,8 +7436,8 @@ function showLandmarkAlert(lm, idx, dist) {
     + '</div>';
 
   document.body.appendChild(el);
-
-  // ── Init mini Leaflet map ──────────────────────────────────────────────────
+  // Only mark as seen NOW — after the card is actually in the DOM
+  if (pageId) _walkLiveCache.add(pageId);
   if (typeof L !== 'undefined') {
     try {
       const mapEl = document.getElementById('walkAlertMap');
@@ -7561,7 +7560,7 @@ function dismissLandmarkAlert() {
     if (_walkTourActive && _walkQueue.length > 0) {
       var next = _walkQueue.shift();
       var dist = (_currentGpsLat !== null) ? _haversineMetres(_currentGpsLat, _currentGpsLng, next.lat, next.lng) : 0;
-      showLandmarkAlert(next, -1, dist);
+      showLandmarkAlert(next, -1, dist, next.pageId);
       if (document.getElementById('walkHistoryPanel') && document.getElementById('walkHistoryPanel').style.display !== 'none') {
         renderWalkHistoryTab('upcoming');
       }
