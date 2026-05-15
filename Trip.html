@@ -6581,32 +6581,32 @@ function startLiveWalkingTour() {
 }
 
 var _walkLastSearchLat = null, _walkLastSearchLng = null;
+var _walkLastSearchTime = 0;
 var _walkLiveCache = new Set();
-var _userCurrentStreet = ''; // road name of user's current street
-var _userStreetTs = 0;       // timestamp of last street name refresh
+var _userCurrentStreet = '';
+var _userStreetTs = 0;
 
 async function liveWikiSearch(lat, lng, radius) {
   if (!_walkTourActive || _walkTourAlertOpen) return;
   radius = radius || 80;
 
-  // Project ahead in walking direction to find what's coming up
-  // Only do this when we have reliable bearing — a wrong projection is worse than no projection
+  // Throttle: search at most every 5 seconds (regardless of movement — user may be standing still)
+  const now = Date.now();
+  if (radius <= 100 && (now - _walkLastSearchTime) < 5000) return;
+  _walkLastSearchTime = now;
+  _walkLastSearchLat = lat;
+  _walkLastSearchLng = lng;
+
+  // Project ahead in walking direction — only when high confidence bearing
   const bearingInfo = getWalkingBearingInfo();
   let searchLat = lat, searchLng = lng;
   if (bearingInfo.bearing !== null && bearingInfo.confidence === 'high' && radius <= 100) {
-    const LOOK_AHEAD = 30; // metres ahead to project search center
+    const LOOK_AHEAD = 30;
     const R = 6371000;
     const bearRad = bearingInfo.bearing * Math.PI / 180;
     searchLat = lat + (LOOK_AHEAD / R) * Math.cos(bearRad) * 180 / Math.PI;
     searchLng = lng + (LOOK_AHEAD / R) * Math.sin(bearRad) / Math.cos(lat * Math.PI / 180) * 180 / Math.PI;
   }
-
-  // Throttle: re-search after moving 15m
-  if (radius <= 100 && _walkLastSearchLat !== null) {
-    if (_haversineMetres(_walkLastSearchLat, _walkLastSearchLng, lat, lng) < 20) return;
-  }
-  _walkLastSearchLat = lat;
-  _walkLastSearchLng = lng;
 
   try {
     var res = await fetch('https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=' + searchLat + '|' + searchLng + '&gsradius=' + radius + '&gslimit=25&format=json&origin=*');
@@ -6623,8 +6623,8 @@ async function liveWikiSearch(lat, lng, radius) {
       var d = _haversineMetres(lat, lng, p.lat, p.lon);
       if (d > TRIGGER) return false;
       if (!hasBearing) return true; // no direction data — use proximity only
+      if (d <= 40) return true;     // right next to it — show regardless of direction
       var rp = getLandmarkRelativePos(lat, lng, p.lat, p.lon);
-      // Behind-you filter: generous for GPS jitter
       const behindCutoff = highConf ? -20 : -40;
       if (rp.metersAhead < behindCutoff) return false;
       // Cross-track: if you can't see it from where you stand, skip it.
@@ -6671,10 +6671,9 @@ way["building"~"parliament|government|cathedral|palace"](around:${r2},${lat},${l
           el.lat = elLat; el.lon = elLon;
           const d = _haversineMetres(lat, lng, elLat, elLon);
           if (d > r2) return false;
-          if (hasBearing) {
+          if (hasBearing && distToEl > 40) {
             const rp = getLandmarkRelativePos(lat, lng, elLat, elLon);
             if (rp.metersAhead < -20) return false;
-            // Same street-visibility rule: >15m sideways = can't see it
             if (rp.metersCross > 15) return false;
           }
           return true;
@@ -7567,7 +7566,7 @@ async function nextLandmark() {
   // Live GPS search — do NOT clear the session cache so we never repeat a landmark
   if (_currentGpsLat !== null) {
     _flashWalkBar('🔍 Searching…');
-    _walkLastSearchLat = null; // reset throttle so search runs immediately
+    _walkLastSearchLat = null; _walkLastSearchTime = 0; // reset throttle
     await liveWikiSearch(_currentGpsLat, _currentGpsLng, 150);
     _restoreWalkBar(); // restore as soon as search finishes (found or not)
   } else {
