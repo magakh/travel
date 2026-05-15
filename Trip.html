@@ -6552,7 +6552,7 @@ async function _doAutoSearch() {
   _walkCountdown = 0;
   _updateWalkBar();
   try {
-    await liveWikiSearch(_currentGpsLat, _currentGpsLng, 150, true);
+    await liveWikiSearch(_currentGpsLat, _currentGpsLng, 300, true);
   } catch(e) {
     console.warn('liveWikiSearch error:', e);
   } finally {
@@ -6622,7 +6622,7 @@ function startLiveWalkingTour() {
     setWalkBtnState(true);
     showToast('Walking guide active — landmarks will pop up as you walk');
     // Immediate first search from this position
-    if (_currentGpsLat !== null) liveWikiSearch(_currentGpsLat, _currentGpsLng, 150, true);
+    if (_currentGpsLat !== null) liveWikiSearch(_currentGpsLat, _currentGpsLng, 300, true);
     _walkTourWatchId = navigator.geolocation.watchPosition(
       function(pos2) {
         var lat = pos2.coords.latitude, lng = pos2.coords.longitude;
@@ -6640,7 +6640,7 @@ function startLiveWalkingTour() {
           getUserStreet(lat, lng).then(function(s) { _userCurrentStreet = s ? s.split(' ·')[0].trim() : ''; });
         }
         if (_tourLandmarks && _tourLandmarks.length) checkNearbyLandmarks(lat, lng);
-        liveWikiSearch(lat, lng, 150, true); // silent — interval handles user feedback
+        liveWikiSearch(lat, lng, 300, true); // silent — interval handles user feedback
       },
       function(err) { console.warn('GPS:', err); },
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
@@ -6689,8 +6689,8 @@ async function liveWikiSearch(lat, lng, radius, silent) {
 
     var allResults = (data.query && data.query.geosearch) || [];
 
-    // Debug: always show raw count so user knows if Wikipedia is responding
-    if (!silent) _flashWalkBar('🌐 Wikipedia: ' + allResults.length + ' results', 1500);
+    // Always briefly show Wikipedia count in bar so user can see if API is responding
+    if (allResults.length > 0) _flashWalkBar('🌐 ' + allResults.length + ' Wikipedia hits', 1200);
 
     var nearby = allResults.filter(function(p) {
       if (_walkLiveCache.has(p.pageid)) return false;
@@ -6703,7 +6703,7 @@ async function liveWikiSearch(lat, lng, radius, silent) {
       const behindCutoff = highConf ? -20 : -40;
       if (rp.metersAhead < behindCutoff) return false;
       // Cross-track: generous for city walking — landmarks are in plazas, across streets
-      const crossLimit = highConf ? 60 : 100;
+      const crossLimit = 200; // generous — GPS inside buildings is unreliable
       if (rp.metersCross > crossLimit) return false;
       return true;
     });
@@ -6832,7 +6832,12 @@ way["building"~"parliament|government|cathedral|palace"](around:${r2},${lat},${l
       return;
     }
     _walkLiveCache.add(hit.pageid); // cache confirmed — won't repeat
-    showLandmarkAlert(lmObj, -1, currentDist);
+    try {
+      showLandmarkAlert(lmObj, -1, currentDist);
+    } catch(e) {
+      console.error('showLandmarkAlert failed:', e);
+      _walkTourAlertOpen = false; // reset so searches continue
+    }
 
     // ── Auto-add to today's schedule as a "passed by" stop ────────
     const snapDate = new Date();
