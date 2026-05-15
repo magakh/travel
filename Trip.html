@@ -4428,7 +4428,7 @@ function showView(v) {
   if (v !== currentView) document.getElementById('mainArea').scrollTop = 0;
   if (v === 'settings') setTimeout(() => { loadSettingsUI(); loadHotelUI(); }, 50);
   const mapBtn = document.getElementById('mapToggleBtn');
-  if (mapBtn) mapBtn.style.display = (v === 'list') ? 'flex' : 'none';
+  if (mapBtn) mapBtn.style.display = (v === 'list' && window.innerWidth <= 700) ? 'flex' : 'none';
   currentView = v;
   updateBottomNav();
   updateTabHighlight();
