@@ -6822,8 +6822,11 @@ way["building"~"parliament|government|cathedral|palace"](around:${r2},${lat},${l
     }
 
     var hit = nearby[0];
-    // Flash debug count so user can see what was found
-    _flashWalkBar('📍 Found: ' + hit.title.slice(0, 25) + '…', 2000);
+    // Update debug overlay with what was found
+    (function() {
+      var dbg = document.getElementById('gpsDebug');
+      if (dbg) { var s = dbg.querySelector('.dbg-status'); if (s) s.textContent = '→ ' + hit.title.slice(0,30); }
+    })();
 
     // Get landmark address for display only — no blocking
     var lmAddressFromGuard = null;
@@ -6878,14 +6881,21 @@ way["building"~"parliament|government|cathedral|palace"](around:${r2},${lat},${l
       // A card is currently being read — queue this one silently
       if (!_walkQueue.find(function(q) { return q.name === lmObj.name; })) {
         _walkQueue.push(lmObj);
-        // Note: we add to cache only when the card actually shows (in showLandmarkAlert)
         var panel = document.getElementById('walkHistoryPanel');
         if (panel && panel.style.display !== 'none') renderWalkHistoryTab('upcoming');
-        _flashWalkBar('📍 ' + hit.title + ' queued', 2000);
       }
       return;
     }
-    showLandmarkAlert(lmObj, -1, currentDist, hit.pageid);
+
+    try {
+      showLandmarkAlert(lmObj, -1, currentDist, hit.pageid);
+    } catch(err) {
+      console.error('showLandmarkAlert failed:', err);
+      _walkTourAlertOpen = false;
+      // Show error in debug overlay so we can diagnose
+      var dbgErr = document.getElementById('gpsDebug');
+      if (dbgErr) dbgErr.innerHTML += '<br><span style="color:#f88;font-size:10px;">ERR: ' + String(err).slice(0, 60) + '</span>';
+    }
 
     // ── Auto-add to today's schedule as a "passed by" stop ────────
     const snapDate = new Date();
