@@ -6804,10 +6804,30 @@ async function liveWikiSearch(lat, lng, radius, silent) {
         if (d > 250) return null; // Nearby = within 250m only
         var rp = (hasBearing && d > 30) ? getLandmarkRelativePos(lat, lng, p.lat, p.lon) : null;
         var comingUp = rp ? (rp.metersAhead > 0 && rp.metersAhead <= 120 && rp.metersCross <= 35) : (d <= 50);
-        return { name: p.title, lat: p.lat, lng: p.lon, dist: d, pageid: p.pageid, comingUp: comingUp };
+        return { name: p.title, lat: p.lat, lng: p.lon, dist: d, pageid: p.pageid, comingUp: comingUp, image: null };
       })
       .filter(Boolean)
       .sort(function(a, b) { return a.dist - b.dist; });
+
+    // Batch-fetch thumbnails for all nearby items in one Wikipedia API call (fire-and-forget)
+    (async function() {
+      try {
+        if (!_walkNearbyResults.length) return;
+        var ids = _walkNearbyResults.map(function(r) { return r.pageid; }).join('|');
+        var imgRes = await fetch('https://en.wikipedia.org/w/api.php?action=query&pageids=' + ids + '&prop=pageimages&pithumbsize=120&format=json&origin=*');
+        var imgData = await imgRes.json();
+        var pages = (imgData.query && imgData.query.pages) || {};
+        _walkNearbyResults.forEach(function(item) {
+          var page = pages[item.pageid];
+          if (page && page.thumbnail) item.image = page.thumbnail.source;
+        });
+        // Refresh Nearby tab if it's the one currently shown
+        var panel = document.getElementById('walkHistoryPanel');
+        if (panel && panel.style.display !== 'none' && _walkActiveTab === 'nearby') {
+          renderWalkHistoryTab('nearby');
+        }
+      } catch(e) { /* images unavailable — list still shows without them */ }
+    })();
     // Refresh log panel if open
     var _panel = document.getElementById('walkHistoryPanel');
     if (_panel && _panel.style.display !== 'none') renderWalkHistoryTab(_walkActiveTab);
@@ -7156,10 +7176,15 @@ function _stopLogLiveTicker() {
   if (_logLiveInterval) { clearInterval(_logLiveInterval); _logLiveInterval = null; }
 }
 
+function _destroyNearbyMap() {
+  if (_nearbyTabMap) { try { _nearbyTabMap.remove(); } catch(e) {} _nearbyTabMap = null; }
+}
+
 function closeWalkHistory() {
   const panel = document.getElementById('walkHistoryPanel');
   const overlay = document.getElementById('walkHistoryOverlay');
   _stopLogLiveTicker();
+  _destroyNearbyMap();
   if (panel) {
     panel.style.transform = 'translateY(100%)';
     setTimeout(() => { panel.style.display = 'none'; panel.style.maxHeight = '75vh'; }, 320);
@@ -7168,6 +7193,7 @@ function closeWalkHistory() {
 }
 
 function switchWalkTab(tab) {
+  _destroyNearbyMap(); // clean up before switching
   _walkActiveTab = tab;
   var baseStyle = 'flex:1;border:none;border-radius:8px;padding:7px;font-size:12px;font-weight:700;cursor:pointer;';
   ['seen','nearby'].forEach(function(t) {
@@ -7274,26 +7300,77 @@ function renderWalkHistoryTab(tab) {
     var inPath = _walkNearbyResults.filter(function(i) { return i.comingUp; });
     var others = _walkNearbyResults.filter(function(i) { return !i.comingUp; });
 
-    // ── Section: In your path ──────────────────────────────────────
+    // ── Mini-map ──────────────────────────────────────────────────────────
+    _destroyNearbyMap();
+    var mapWrap = document.createElement('div');
+    mapWrap.style.cssText = 'height:170px;border-radius:14px;overflow:hidden;margin-bottom:12px;margin-top:4px;background:#dce8d0;flex-shrink:0;';
+    mapWrap.id = 'nearbyTabMapWrap';
+    logBody.appendChild(mapWrap);
+    if (typeof L !== 'undefined') {
+      try {
+        var mapCenter = _currentGpsLat ? [_currentGpsLat, _currentGpsLng] : [_walkNearbyResults[0].lat, _walkNearbyResults[0].lng];
+        _nearbyTabMap = L.map(mapWrap, { zoomControl: false, attributionControl: false, dragging: true, scrollWheelZoom: false, doubleClickZoom: true, touchZoom: true, center: mapCenter, zoom: 17 });
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(_nearbyTabMap);
+        // User dot
+        if (_currentGpsLat) {
+          var meIcon = L.divIcon({ html: '<div style="width:14px;height:14px;background:#1a73e8;border:3px solid #fff;border-radius:50%;box-shadow:0 0 0 4px rgba(26,115,232,0.25);"></div>', className:'', iconSize:[14,14], iconAnchor:[7,7] });
+          L.marker([_currentGpsLat, _currentGpsLng], { icon: meIcon, zIndexOffset: 1000 }).addTo(_nearbyTabMap);
+        }
+        // Landmark markers
+        _walkNearbyResults.forEach(function(item) {
+          var isPath = item.comingUp;
+          var color = isPath ? '#1a7a3a' : '#1565c0';
+          var markerHtml = item.image
+            ? '<div style="width:36px;height:36px;border-radius:50%;overflow:hidden;border:3px solid ' + color + ';box-shadow:0 2px 6px rgba(0,0,0,0.35);background:#f0f0f0;"><img src="' + item.image + '" style="width:100%;height:100%;object-fit:cover;"></div>'
+            : '<div style="width:14px;height:14px;background:' + color + ';border:3px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.4);"></div>';
+          var iconSize = item.image ? [36,36] : [14,14];
+          var iconAnchor = item.image ? [18,18] : [7,7];
+          var icon = L.divIcon({ html: markerHtml, className:'', iconSize: iconSize, iconAnchor: iconAnchor });
+          L.marker([item.lat, item.lng], { icon: icon })
+            .addTo(_nearbyTabMap)
+            .bindTooltip(item.name, { direction: 'top', offset: [0, -iconAnchor[1]], permanent: false })
+            .on('click', function() { openNearbyCard(item); });
+        });
+        // Fit all points
+        var allPts = _walkNearbyResults.map(function(r) { return [r.lat, r.lng]; });
+        if (_currentGpsLat) allPts.push([_currentGpsLat, _currentGpsLng]);
+        if (allPts.length > 1) _nearbyTabMap.fitBounds(allPts, { padding: [22, 22] });
+      } catch(e) { mapWrap.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:13px;">Map unavailable</div>'; }
+    } else {
+      mapWrap.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#888;font-size:13px;">Map loading…</div>';
+    }
+
+    // ── Helper for thumbnail ──────────────────────────────────────────────
+    function thumbHtml(item, isPath) {
+      var color = isPath ? '#1a7a3a' : '#1565c0';
+      if (item.image) {
+        return '<img src="' + item.image + '" style="width:48px;height:48px;border-radius:8px;object-fit:cover;flex-shrink:0;border:2px solid ' + color + ';" onerror="this.outerHTML=\'<div style=&quot;width:48px;height:48px;border-radius:8px;background:#f0f0f0;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:20px;&quot;>📍</div>\'">';
+      }
+      return '<div style="width:48px;height:48px;border-radius:8px;background:#f0f0f0;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:20px;">📍</div>';
+    }
+
+    // ── Section: In your path ─────────────────────────────────────────────
     if (inPath.length) {
       var pathHdr = document.createElement('div');
-      pathHdr.style.cssText = 'font-size:11px;font-weight:800;color:#1a7a3a;text-transform:uppercase;letter-spacing:0.5px;padding:10px 0 6px;';
+      pathHdr.style.cssText = 'font-size:11px;font-weight:800;color:#1a7a3a;text-transform:uppercase;letter-spacing:0.5px;padding:6px 0 6px;';
       pathHdr.textContent = '→ In your path — ' + inPath.length + ' ahead';
       logBody.appendChild(pathHdr);
       inPath.forEach(function(item) {
         var distStr = Math.round(item.dist) + 'm';
         var row = document.createElement('div');
-        row.style.cssText = 'display:flex;gap:10px;align-items:center;padding:11px 0;border-bottom:1px solid #e8f5e9;cursor:pointer;';
-        row.innerHTML = '<div style="width:10px;height:10px;border-radius:50%;background:#1a7a3a;flex-shrink:0;margin-top:2px;"></div>'
-          + '<div style="flex:1;font-size:13px;font-weight:700;color:#1a1a1a;">' + item.name + '</div>'
-          + '<div style="font-size:12px;color:#1a7a3a;font-weight:700;flex-shrink:0;">' + distStr + '</div>'
+        row.style.cssText = 'display:flex;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid #e8f5e9;cursor:pointer;';
+        row.innerHTML = thumbHtml(item, true)
+          + '<div style="flex:1;min-width:0;">'
+          +   '<div style="font-size:13px;font-weight:800;color:#1a1a1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + item.name + '</div>'
+          +   '<div style="font-size:11px;color:#1a7a3a;font-weight:700;margin-top:2px;">→ ' + distStr + ' ahead</div>'
+          + '</div>'
           + '<div style="color:#ccc;font-size:16px;flex-shrink:0;">›</div>';
         row.onclick = function() { openNearbyCard(item); };
         logBody.appendChild(row);
       });
     }
 
-    // ── Section: Also nearby ──────────────────────────────────────
+    // ── Section: Also nearby ──────────────────────────────────────────────
     if (others.length) {
       var alsoHdr = document.createElement('div');
       alsoHdr.style.cssText = 'font-size:11px;font-weight:800;color:#888;text-transform:uppercase;letter-spacing:0.5px;padding:12px 0 6px;';
@@ -7302,10 +7379,12 @@ function renderWalkHistoryTab(tab) {
       others.forEach(function(item) {
         var distStr = item.dist < 1000 ? Math.round(item.dist) + 'm' : (item.dist/1000).toFixed(1) + 'km';
         var row = document.createElement('div');
-        row.style.cssText = 'display:flex;gap:10px;align-items:center;padding:11px 0;border-bottom:1px solid #f0f0f0;cursor:pointer;';
-        row.innerHTML = '<div style="width:8px;height:8px;border-radius:50%;background:#1565c0;flex-shrink:0;margin-top:2px;"></div>'
-          + '<div style="flex:1;font-size:13px;font-weight:700;color:#1a1a1a;">' + item.name + '</div>'
-          + '<div style="font-size:12px;color:#888;flex-shrink:0;">' + distStr + '</div>'
+        row.style.cssText = 'display:flex;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid #f0f0f0;cursor:pointer;';
+        row.innerHTML = thumbHtml(item, false)
+          + '<div style="flex:1;min-width:0;">'
+          +   '<div style="font-size:13px;font-weight:700;color:#1a1a1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + item.name + '</div>'
+          +   '<div style="font-size:11px;color:#888;margin-top:2px;">📍 ' + distStr + ' away</div>'
+          + '</div>'
           + '<div style="color:#ccc;font-size:16px;flex-shrink:0;">›</div>';
         row.onclick = function() { openNearbyCard(item); };
         logBody.appendChild(row);
@@ -7527,6 +7606,7 @@ function wikiThumb(url, size) {
 }
 
 let _walkAlertMap = null; // Leaflet mini-map instance inside the landmark alert
+let _nearbyTabMap = null; // Leaflet mini-map inside the Nearby log tab
 let _walkAlertUserMarker = null; // live-updating user dot
 let _walkAlertPolyline = null;   // dashed line user→landmark
 
