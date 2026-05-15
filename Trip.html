@@ -6806,6 +6806,54 @@ function _showNoLandmarksCard() {
   setTimeout(function() { if (el.parentNode) { el.style.transform = 'translateY(100%)'; setTimeout(function(){ el.remove(); }, 320); } }, 8000);
 }
 
+function _expandWalkMap() {
+  if (!_walkAlertMap) return;
+  const center = _walkAlertMap.getCenter();
+  const zoom   = _walkAlertMap.getZoom();
+
+  // Build full-screen overlay
+  const ov = document.createElement('div');
+  ov.id = 'walkMapExpanded';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#000;display:flex;flex-direction:column;';
+
+  const closeBar = document.createElement('div');
+  closeBar.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#1a1a1a;flex-shrink:0;';
+  closeBar.innerHTML = '<span style="color:#fff;font-size:14px;font-weight:700;">🗺 Walking guide map</span>'
+    + '<button onclick="document.getElementById(\'walkMapExpanded\').remove();if(window._walkExpandedMap){window._walkExpandedMap.remove();window._walkExpandedMap=null;}" style="background:none;border:none;color:#fff;font-size:22px;cursor:pointer;line-height:1;">✕</button>';
+  ov.appendChild(closeBar);
+
+  const mapDiv = document.createElement('div');
+  mapDiv.id = 'walkMapExpandedEl';
+  mapDiv.style.cssText = 'flex:1;width:100%;';
+  ov.appendChild(mapDiv);
+
+  document.body.appendChild(ov);
+
+  // Init a fresh Leaflet map in the expanded view
+  setTimeout(function() {
+    const expMap = L.map('walkMapExpandedEl', {
+      zoomControl: true, attributionControl: false,
+      dragging: true, scrollWheelZoom: true,
+      doubleClickZoom: true, touchZoom: true,
+      center: center, zoom: zoom + 1
+    });
+    window._walkExpandedMap = expMap;
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 19}).addTo(expMap);
+
+    // Copy all markers from the mini map layers
+    _walkAlertMap.eachLayer(function(layer) {
+      try {
+        if (layer instanceof L.Marker) {
+          L.marker(layer.getLatLng(), {icon: layer.options.icon}).addTo(expMap);
+        } else if (layer instanceof L.Polyline && !(layer instanceof L.Polygon)) {
+          L.polyline(layer.getLatLngs(), layer.options).addTo(expMap);
+        }
+      } catch(e) {}
+    });
+    expMap.invalidateSize();
+  }, 50);
+}
+
 function stopLiveWalkingTour() {
   _walkTourActive = false;
   if (_walkTourWatchId !== null) { navigator.geolocation.clearWatch(_walkTourWatchId); _walkTourWatchId = null; }
@@ -7027,7 +7075,10 @@ function showLandmarkAlert(lm, idx, dist) {
     // Photo + map row
     + '<div style="display:flex;gap:8px;margin-bottom:10px;">'
     + photoHtml
+    + '<div style="position:relative;flex:1;">'
     + '<div id="walkAlertMap" style="flex:1;height:110px;border-radius:10px;overflow:hidden;background:#dce8d0;"></div>'
+    + '<button onclick="event.stopPropagation();_expandWalkMap()" title="Expand map" style="position:absolute;top:5px;right:5px;z-index:1000;background:rgba(255,255,255,0.92);border:none;border-radius:6px;padding:4px 7px;font-size:14px;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,0.2);">⤢</button>'
+    + '</div>'
     + '</div>'
     // Your street bar (green)
     + '<div style="background:#e8f5e9;border-radius:10px;padding:8px 12px;margin-bottom:8px;font-size:12px;display:flex;align-items:center;gap:7px;">'
@@ -7075,9 +7126,9 @@ function showLandmarkAlert(lm, idx, dist) {
     try {
       const mapEl = document.getElementById('walkAlertMap');
       _walkAlertMap = L.map(mapEl, {
-        zoomControl: false, attributionControl: false,
-        dragging: false, scrollWheelZoom: false,
-        doubleClickZoom: false, touchZoom: false,
+        zoomControl: true, attributionControl: false,
+        dragging: true, scrollWheelZoom: true,
+        doubleClickZoom: true, touchZoom: true,
         center: [lm.lat, lm.lng], zoom: 17
       });
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 19}).addTo(_walkAlertMap);
