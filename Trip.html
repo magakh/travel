@@ -6511,7 +6511,10 @@ function startLiveWalkingTour() {
         // Capture device GPS heading if available (accurate on mobile)
         if (pos2.coords.heading !== null && !isNaN(pos2.coords.heading) && pos2.coords.speed > 0.3) {
           _gpsHeading = pos2.coords.heading;
+          _gpsHeadingTs = Date.now();
         }
+        // Update direction badge on LIVE button
+        _updateBearingDebug();
         // Keep user's current street name fresh for street-match filtering
         const _now = Date.now();
         if (_now - _userStreetTs > 20000) {
@@ -6562,19 +6565,23 @@ async function liveWikiSearch(lat, lng, radius) {
     var data = await res.json();
 
     var TRIGGER = radius > 100 ? radius : WALK_TRIGGER_METRES;
-    var hasBearing = getWalkingBearing() !== null;
+    var bearingInfo = getWalkingBearingInfo();
+    var hasBearing = bearingInfo.bearing !== null;
+    var highConf = bearingInfo.confidence === 'high';
 
     // Always measure dist from actual user position (lat/lng), not projected search point
     var nearby = ((data.query && data.query.geosearch) || []).filter(function(p) {
       if (_walkLiveCache.has(p.pageid)) return false;
-      var d = _haversineMetres(lat, lng, p.lat, p.lon); // user position, not search point
+      var d = _haversineMetres(lat, lng, p.lat, p.lon);
       if (d > TRIGGER) return false;
-      if (!hasBearing) return d <= (TRIGGER > 100 ? TRIGGER : WALK_TRIGGER_METRES);
+      if (!hasBearing) return true; // no direction data — use proximity only
       var rp = getLandmarkRelativePos(lat, lng, p.lat, p.lon);
-      if (rp.metersAhead < -10) return false;
-      if (rp.metersAhead > TRIGGER) return false;
-      // Large buildings (Parliament, cathedrals) are across streets — be generous with cross-track
-      if (rp.metersCross > TRIGGER * 1.5) return false;
+      // Behind-you filter: generous margin (30m) for GPS jitter; even more generous when low confidence
+      const behindCutoff = highConf ? -20 : -40;
+      if (rp.metersAhead < behindCutoff) return false;
+      // Cross-track: large buildings span multiple streets — be generous
+      const crossLimit = highConf ? TRIGGER * 1.8 : TRIGGER * 3;
+      if (rp.metersCross > crossLimit) return false;
       return true;
     });
 
@@ -6878,6 +6885,7 @@ function checkNearbyLandmarks(lat, lng) {
 let _currentGpsLat = null, _currentGpsLng = null;
 let _prevGpsLat = null, _prevGpsLng = null;
 let _gpsHeading = null; // degrees 0-360 from device GPS, null if unavailable
+let _gpsHeadingTs = 0;  // timestamp of last valid GPS heading
 let _gpsHistory = []; // [{lat,lng,ts}] rolling buffer for stable bearing
 const _GPS_HIST_MAX = 30;
 
@@ -6922,24 +6930,73 @@ function bearingBetween(lat1, lng1, lat2, lng2) {
   return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
 }
 
-// Get current walking direction in degrees (0=N, 90=E, 180=S, 270=W)
-// Priority: GPS hardware heading → device compass → GPS history bearing
-function getWalkingBearing() {
-  if (_gpsHeading !== null && !isNaN(_gpsHeading)) return _gpsHeading;
-  if (_compassHeading !== null && !isNaN(_compassHeading)) return _compassHeading;
-  // Use history: find oldest point ≥10m away for a stable bearing
+// Average a list of bearings correctly (handles 0/360 wrap-around via unit vectors)
+function _avgBearings(bearings) {
+  if (!bearings.length) return null;
+  if (bearings.length === 1) return bearings[0];
+  let sinSum = 0, cosSum = 0;
+  for (const b of bearings) {
+    const r = b * Math.PI / 180;
+    sinSum += Math.sin(r); cosSum += Math.cos(r);
+  }
+  return (Math.atan2(sinSum, cosSum) * 180 / Math.PI + 360) % 360;
+}
+
+// Returns { bearing: degrees|null, confidence: 'high'|'low'|'none' }
+function getWalkingBearingInfo() {
+  // 1. GPS hardware heading — best when moving, expires after 8s
+  const _gpsHeadingAge = Date.now() - (_gpsHeadingTs || 0);
+  if (_gpsHeading !== null && !isNaN(_gpsHeading) && _gpsHeadingAge < 8000) {
+    return { bearing: _gpsHeading, confidence: 'high' };
+  }
+
+  // 2. GPS movement history — average multiple pairs (most reliable for actual direction)
   if (_gpsHistory.length >= 2) {
     const latest = _gpsHistory[_gpsHistory.length - 1];
-    for (let i = _gpsHistory.length - 2; i >= 0; i--) {
+    const bearings = [];
+    for (let i = _gpsHistory.length - 2; i >= Math.max(0, _gpsHistory.length - 20); i--) {
       const old = _gpsHistory[i];
       const dist = _haversineMetres(old.lat, old.lng, latest.lat, latest.lng);
-      if (dist >= 8) return bearingBetween(old.lat, old.lng, latest.lat, latest.lng);
+      if (dist >= 5) bearings.push(bearingBetween(old.lat, old.lng, latest.lat, latest.lng));
+      if (bearings.length >= 4) break;
     }
+    if (bearings.length >= 3) return { bearing: _avgBearings(bearings), confidence: 'high' };
+    if (bearings.length >= 1) return { bearing: _avgBearings(bearings), confidence: 'low' };
   }
-  if (_prevGpsLat === null || _currentGpsLat === null) return null;
-  const moved = _haversineMetres(_prevGpsLat, _prevGpsLng, _currentGpsLat, _currentGpsLng);
-  if (moved < 4) return null;
-  return bearingBetween(_prevGpsLat, _prevGpsLng, _currentGpsLat, _currentGpsLng);
+
+  // 3. Prev→current as fallback (at least 5m moved)
+  if (_prevGpsLat !== null && _currentGpsLat !== null) {
+    const moved = _haversineMetres(_prevGpsLat, _prevGpsLng, _currentGpsLat, _currentGpsLng);
+    if (moved >= 5) return { bearing: bearingBetween(_prevGpsLat, _prevGpsLng, _currentGpsLat, _currentGpsLng), confidence: 'low' };
+  }
+
+  // 4. Device compass — last resort (phone facing ≠ walking direction when in pocket/bag)
+  if (_compassHeading !== null && !isNaN(_compassHeading)) {
+    return { bearing: _compassHeading, confidence: 'low' };
+  }
+
+  return { bearing: null, confidence: 'none' };
+}
+
+function getWalkingBearing() {
+  return getWalkingBearingInfo().bearing;
+}
+
+// Show compass direction on the LIVE badge so user can verify
+function _updateBearingDebug() {
+  if (!_walkTourActive) return;
+  const { bearing, confidence } = getWalkingBearingInfo();
+  const badge = document.getElementById('walkLiveBadge');
+  if (!badge) return;
+  if (bearing === null) {
+    badge.textContent = 'LIVE';
+    badge.title = 'Direction: unknown (keep walking)';
+    return;
+  }
+  const dirs = ['N','NE','E','SE','S','SW','W','NW'];
+  const dir = dirs[Math.round(bearing / 45) % 8];
+  badge.textContent = 'LIVE ' + dir;
+  badge.title = 'Walking ' + dir + ' (' + Math.round(bearing) + '°) — ' + confidence + ' confidence';
 }
 
 // Returns relative position of landmark from current position + walking direction:
