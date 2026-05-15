@@ -6491,17 +6491,22 @@ function toggleWalkingGuide() {
   }
 }
 
-// Flash a temporary message inside the walk bar without covering it with a toast
+// Flash a temporary message inside the walk bar — restores after ms
 let _flashWalkTimer = null;
 function _flashWalkBar(msg, ms) {
   const bar = document.getElementById('walkNextBar');
-  if (!bar || bar.style.display === 'none') { showToast(msg); return; }
-  const next = bar.querySelector('span');
-  if (!next) return;
-  const orig = next.innerHTML;
+  const next = bar && bar.querySelector('span');
+  if (!next) { if (_walkTourActive) return; showToast(msg); return; }
   next.innerHTML = msg;
   clearTimeout(_flashWalkTimer);
-  _flashWalkTimer = setTimeout(function() { next.innerHTML = orig; }, ms || 2500);
+  if (ms) _flashWalkTimer = setTimeout(function() { _restoreWalkBar(); }, ms);
+}
+
+function _restoreWalkBar() {
+  clearTimeout(_flashWalkTimer);
+  const bar = document.getElementById('walkNextBar');
+  const next = bar && bar.querySelector('span');
+  if (next) next.innerHTML = '🚶 Next →';
 }
 
 function setWalkBtnState(active) {
@@ -6638,7 +6643,7 @@ async function liveWikiSearch(lat, lng, radius) {
 
     if (!nearby.length || _walkTourAlertOpen) {
       if (_walkTourAlertOpen) return;
-      if (radius > 100) { _flashWalkBar('📍 Nothing found nearby', 3000); return; }
+      if (radius > 100) { _flashWalkBar('📍 Nothing found nearby', 1500); return; }
 
       // Wikipedia found nothing — try OpenStreetMap Overpass for better local coverage
       try {
@@ -6689,7 +6694,7 @@ way["building"~"parliament|government|cathedral|palace"](around:${r2},${lat},${l
         }
       } catch(e) {}
 
-      _flashWalkBar('📍 Nothing within 80m', 2500);
+      _flashWalkBar('📍 Nothing within 80m', 1500);
       return;
     }
 
@@ -7556,14 +7561,15 @@ async function nextLandmark() {
       }
     }
     if (found) return;
-    _flashWalkBar('🔍 Searching further…', 2000);
+    _flashWalkBar('🔍 Searching…');
   }
 
   // Live GPS search — do NOT clear the session cache so we never repeat a landmark
   if (_currentGpsLat !== null) {
-    _flashWalkBar('🔍 Looking nearby…', 2000);
+    _flashWalkBar('🔍 Searching…');
     _walkLastSearchLat = null; // reset throttle so search runs immediately
     await liveWikiSearch(_currentGpsLat, _currentGpsLng, 150);
+    _restoreWalkBar(); // restore as soon as search finishes (found or not)
   } else {
     showToast('📍 Getting your location…');
     try {
@@ -7578,9 +7584,10 @@ async function nextLandmark() {
           { enableHighAccuracy: true, timeout: 8000 }
         );
       });
-      showToast('🔍 Looking for new landmarks nearby…');
+      _flashWalkBar('🔍 Searching…');
       _walkLastSearchLat = null;
       await liveWikiSearch(_currentGpsLat, _currentGpsLng, 150);
+      _restoreWalkBar();
     } catch(e) {
       showToast('📍 Could not get location — check GPS permissions', true);
     }
