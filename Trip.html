@@ -10019,12 +10019,12 @@ function geocodeAddStopAddress() {
 // ══════════════════════════════════════════════════════════════════
 
 const STORY_STYLES = [
-  { id:'humorous',   emoji:'😄', label:'Humorous & Fun',      desc:'Witty, playful, lots of laughs' },
-  { id:'warm',       emoji:'🌸', label:'Warm & Friendly',     desc:'Heartfelt, personal, cozy' },
-  { id:'adventure',  emoji:'🗺️', label:'Adventurous',         desc:'Epic, exploratory, inspiring' },
-  { id:'elegant',    emoji:'💎', label:'Elegant & Refined',   desc:'Sophisticated, evocative prose' },
-  { id:'casual',     emoji:'😎', label:'Casual & Real',       desc:'Like texting your best friend' },
-  { id:'foodie',     emoji:'🍽️', label:'Foodie-focused',      desc:'Flavours, aromas, restaurants' },
+  { id:'historical', emoji:'🏛️', label:'Historical & Factual',  desc:'History, facts, stories behind places' },
+  { id:'humorous',   emoji:'😄', label:'Humorous & Fun',        desc:'Witty, playful, lots of laughs' },
+  { id:'adventure',  emoji:'🗺️', label:'Adventurous',           desc:'Epic, exploratory, inspiring' },
+  { id:'elegant',    emoji:'💎', label:'Elegant & Refined',     desc:'Sophisticated, evocative prose' },
+  { id:'casual',     emoji:'😎', label:'Casual & Real',         desc:'Like texting your best friend' },
+  { id:'foodie',     emoji:'🍽️', label:'Foodie-focused',        desc:'Flavours, aromas, restaurants' },
 ];
 const STORY_TYPES = [
   { id:'couple',  emoji:'💑', label:"Couple's Getaway" },
@@ -10294,7 +10294,9 @@ async function generateStory() {
     });
   });
 
-  const prompt = `You are a skilled travel writer. Write a beautiful, personal trip story based on this itinerary.
+  const isHistorical = _storyStyles.includes('historical');
+
+  const prompt = `You are a ${isHistorical ? 'knowledgeable travel journalist and historian' : 'skilled travel writer'}. Write a substantive, fact-rich trip blog based on this itinerary.
 
 TRIP: ${tripName} / ${cityName}
 TRAVELERS: ${names || 'the travelers'}
@@ -10304,20 +10306,28 @@ EXTRA NOTES FROM TRAVELER: ${notes || 'none'}
 
 ITINERARY:${daySummaries}
 
-INSTRUCTIONS:
-1. Write a catchy, creative blog title (not just "X Trip" — make it evocative)
-2. Write a blog post (~600-900 words) that tells the story of this trip as a narrative. 
-   - Weave stops into a flowing story, don't just list them
-   - Use the writing style consistently throughout
-   - If travelers' names are provided, use them
-   - Where a stop has photos (marked [N photo(s)]), insert a photo placeholder like {{PHOTO:0:2}} immediately after mentioning that stop (use the correct day index starting at 0 and stop index starting at 0)
-   - Include sensory details, emotions, highlights
-   - End with a reflection or recommendation
-   - Use <h2> for sub-headings, <p> for paragraphs, <em> for emphasis, <strong> for key moments
-3. Write a Facebook post (150-250 words) — engaging, personal, shareable, with 2-3 emojis naturally placed
-4. Write an Instagram caption (60-90 words + 12-15 relevant hashtags on a new line)
+CORE MANDATE — avoid generic travel fluff:
+- NO filler phrases like "what an amazing day", "we couldn't believe our eyes", "truly magical", "hidden gem"
+- NO vague emotional padding — every sentence must contain a real fact, story, or observation
+- Every location gets: (a) a real historical fact or founding story, (b) one surprising or lesser-known detail, (c) what actually makes it worth visiting
+- Use specific numbers, dates, names, and events where known (e.g. "Built in 1667 by…", "The arcade has housed 44 shops since 1819…")
+- Interesting anecdotes and real stories about the places take priority over traveler emotions
 
-Return ONLY valid JSON (absolutely no markdown fences, no explanation outside the JSON):
+INSTRUCTIONS:
+1. Write a specific, factual blog title that reflects the places (not just "X Trip")
+2. Write a blog post (~700-950 words):
+   - Each stop gets its own paragraph with genuine historical/factual depth
+   - Weave stops into a readable flow — not a dry list, but not sentimental either
+   - Lead each location section with its most interesting historical fact or story
+   - Include one "did you know" style detail per major stop
+   - If travelers' names are provided, use them sparingly as connective tissue
+   - Where a stop has photos (marked [N photo(s)]), insert {{PHOTO:dayIndex:stopIndex}} right after that stop's paragraph
+   - End with a punchy factual takeaway or recommendation grounded in something real
+   - Use <h2> for location sub-headings, <p> for paragraphs, <em> for place names, <strong> for key facts
+3. Write a Facebook post (150-250 words) — share 2-3 genuinely interesting facts from the trip, conversational tone, 2-3 emojis
+4. Write an Instagram caption (60-90 words) leading with a surprising fact, + 12-15 relevant hashtags on a new line
+
+Return ONLY valid JSON (absolutely no markdown fences):
 {
   "title": "...",
   "blogHtml": "...",
@@ -10325,7 +10335,7 @@ Return ONLY valid JSON (absolutely no markdown fences, no explanation outside th
   "igCaption": "..."
 }
 
-blogHtml must be valid HTML fragments (no <html>/<body> tags). Photo placeholders use {{PHOTO:dayIndex:stopIndex}} format where indices are 0-based integers.`;
+blogHtml must be valid HTML fragments (no <html>/<body> tags). Photo placeholders: {{PHOTO:dayIndex:stopIndex}} with 0-based integers.`;
 
   try {
     const key = getApiKey ? getApiKey() : '';
