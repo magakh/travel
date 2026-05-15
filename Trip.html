@@ -6468,6 +6468,7 @@ let _walkTourWatchId = null;
 let _walkTourVisited = new Set();
 let _walkTourAlertOpen = false;
 let _walkHistory = []; // { name, tldr, funFact, image, lat, lng, dist, ts }
+let _walkQueue = [];   // landmarks queued while a card is showing — auto-plays next
 const WALK_TRIGGER_METRES = 80;
 
 function toggleWalkingGuide() {
@@ -6526,6 +6527,7 @@ function startLiveWalkingTour() {
     _walkTourActive = true;
     _walkTourVisited = new Set();
     _walkTourAlertOpen = false;
+    _walkQueue = [];
     _walkLastSearchLat = null;
     _walkLastSearchLng = null;
     setWalkBtnState(true);
@@ -6739,7 +6741,7 @@ way["building"~"parliament|government|cathedral|palace"](around:${r2},${lat},${l
       if (recheck.metersAhead > WALK_TRIGGER_METRES * 1.5) return; // bearing now shows too far
     }
 
-    // Show card immediately with Wikipedia text
+    // Show card immediately with Wikipedia text — or queue silently if card already showing
     var currentDist = _haversineMetres(_currentGpsLat || lat, _currentGpsLng || lng, hit.lat, hit.lon);
     var lmObj = {
       name: hit.title, lat: hit.lat, lng: hit.lon,
@@ -6747,6 +6749,18 @@ way["building"~"parliament|government|cathedral|palace"](around:${r2},${lat},${l
       address: lmAddressFromGuard,
       wikiUrl: 'https://en.wikipedia.org/wiki/' + encodeURIComponent(hit.title)
     };
+
+    if (_walkTourAlertOpen) {
+      // A card is currently being read — queue this one silently
+      if (!_walkQueue.find(function(q) { return q.name === lmObj.name; })) {
+        _walkQueue.push(lmObj);
+        // Silently refresh Coming Up panel if it's open
+        var panel = document.getElementById('walkHistoryPanel');
+        if (panel && panel.style.display !== 'none') renderWalkHistoryTab('upcoming');
+        _flashWalkBar('📍 ' + hit.title + ' queued', 2000);
+      }
+      return;
+    }
     showLandmarkAlert(lmObj, -1, currentDist);
 
     // ── Auto-add to today's schedule as a "passed by" stop ────────
@@ -6926,25 +6940,34 @@ function renderWalkHistoryTab(tab) {
         + '</div>';
     }).join('');
   } else {
-    // Coming up: all tour landmarks not yet visited, sorted by distance
+    // Coming up: queued nearby items first, then tour landmarks not yet visited
     var upcoming = [];
+
+    // 1. Queued items (already found, waiting to be read)
+    _walkQueue.forEach(function(lm) {
+      var dist = (_currentGpsLat !== null) ? _haversineMetres(_currentGpsLat, _currentGpsLng, lm.lat, lm.lng) : null;
+      upcoming.push({ lm: lm, dist: dist, queued: true });
+    });
+
+    // 2. Tour landmarks not yet visited
     if (_tourLandmarks && _tourLandmarks.length) {
       _tourLandmarks.forEach(function(lm, i) {
         if (_walkTourVisited.has(i)) return;
         var dist = (_currentGpsLat !== null) ? _haversineMetres(_currentGpsLat, _currentGpsLng, lm.lat, lm.lng) : null;
-        upcoming.push({ lm: lm, idx: i, dist: dist });
+        upcoming.push({ lm: lm, idx: i, dist: dist, queued: false });
       });
       upcoming.sort(function(a, b) { return (a.dist || 99999) - (b.dist || 99999); });
     }
-    // Also add known Wikipedia hits from cache that haven't been shown as cards — not available, so just show tour
-    if (!upcoming.length) { body.innerHTML = '<div style="text-align:center;color:#aaa;padding:32px 0;font-size:14px;">No scheduled stops upcoming.<br><span style="font-size:12px;">Landmarks will auto-appear as you walk.</span></div>'; return; }
+
+    if (!upcoming.length) { body.innerHTML = '<div style="text-align:center;color:#aaa;padding:32px 0;font-size:14px;">No upcoming landmarks yet.<br><span style="font-size:12px;">They appear automatically as you walk.</span></div>'; return; }
     body.innerHTML = upcoming.map(function(item) {
       var lm = item.lm;
       var distStr = item.dist !== null ? (item.dist < 1000 ? Math.round(item.dist) + ' m' : (item.dist/1000).toFixed(1) + ' km') : '?';
-      return '<div style="display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-bottom:1px solid #f0f0f0;cursor:pointer;" onclick="closeWalkHistory();showLandmarkAlert(' + JSON.stringify(lm).replace(/</g,'\\u003c') + ',' + item.idx + ',' + (item.dist||0) + ')">'
-        + (lm.image ? '<img src="' + lm.image + '" style="width:52px;height:52px;border-radius:8px;object-fit:cover;flex-shrink:0;" onerror="this.style.display=\'none\'">' : '<div style="width:52px;height:52px;border-radius:8px;background:#e8f5e9;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:20px;">🔭</div>')
+      var queueBadge = item.queued ? '<span style="font-size:10px;background:#1a7a3a;color:#fff;border-radius:4px;padding:1px 5px;font-weight:700;margin-left:4px;">NEXT</span>' : '';
+      return '<div style="display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-bottom:1px solid #f0f0f0;cursor:pointer;" onclick="closeWalkHistory();showLandmarkAlert(' + JSON.stringify(lm).replace(/</g,'\\u003c') + ',' + (item.idx !== undefined ? item.idx : -1) + ',' + (item.dist||0) + ')">'
+        + (lm.image ? '<img src="' + lm.image + '" style="width:52px;height:52px;border-radius:8px;object-fit:cover;flex-shrink:0;" onerror="this.style.display=\'none\'">' : '<div style="width:52px;height:52px;border-radius:8px;background:#e8f5e9;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:20px;">' + (item.queued ? '🔔' : '🔭') + '</div>')
         + '<div style="flex:1;min-width:0;">'
-        +   '<div style="font-size:14px;font-weight:800;color:#1a1a1a;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + lm.name + '</div>'
+        +   '<div style="font-size:14px;font-weight:800;color:#1a1a1a;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + lm.name + queueBadge + '</div>'
         +   '<div style="font-size:12px;color:#888;margin-bottom:2px;">📍 ' + distStr + ' away</div>'
         +   '<div style="font-size:12px;color:#555;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">' + (lm.tldr || lm.extract || '') + '</div>'
         + '</div>'
@@ -7348,8 +7371,9 @@ function showLandmarkAlert(lm, idx, dist) {
       const fullText = lm.name + '. ' + addrText + (lm.extract || lm.tldr || '') + (lm.funFact ? ' Interesting fact: ' + lm.funFact : '');
       const utt = new SpeechSynthesisUtterance(fullText.slice(0, 1800));
       utt.lang = 'en-GB'; utt.rate = 0.95;
-      utt.onend = function() { if (el) el._speechDone = true; };
-      utt.onerror = function() { if (el) el._speechDone = true; };
+      // Auto-dismiss when speech finishes — no need to wait for 20m distance
+      utt.onend = function() { dismissLandmarkAlert(); };
+      utt.onerror = function() { setTimeout(dismissLandmarkAlert, 800); };
       window.speechSynthesis.speak(utt);
     }
   });
@@ -7363,9 +7387,6 @@ function showLandmarkAlert(lm, idx, dist) {
       clearInterval(el._approachInterval); return;
     }
     var rp = getLandmarkRelativePos(_currentGpsLat, _currentGpsLng, lm.lat, lm.lng);
-    // Dismiss only when speech has finished AND walked 20m past — never cut off mid-sentence
-    const speechDone = el._speechDone || !window.speechSynthesis || !window.speechSynthesis.speaking;
-    if (rp.metersAhead < -20 && speechDone) { dismissLandmarkAlert(); return; }
     // Update approach banner
     var bar = document.getElementById('walkApproachBar');
     if (bar) bar.innerHTML = makeApproachBannerHtml(rp);
@@ -7390,10 +7411,21 @@ function dismissLandmarkAlert() {
   if (el._approachInterval) clearInterval(el._approachInterval);
   el.style.transform = 'translateY(100%)';
   setTimeout(function() { if (el.parentNode) el.remove(); }, 380);
-  // Show next bar only if NOT immediately showing next card
+
+  // Auto-show next queued landmark, or restore the Next bar
   setTimeout(function() {
-    var bar = document.getElementById('walkNextBar');
-    if (bar && _walkTourActive && !_walkTourAlertOpen) bar.style.display = 'flex';
+    if (_walkTourActive && _walkQueue.length > 0) {
+      var next = _walkQueue.shift();
+      var dist = (_currentGpsLat !== null) ? _haversineMetres(_currentGpsLat, _currentGpsLng, next.lat, next.lng) : 0;
+      showLandmarkAlert(next, -1, dist);
+      // Refresh Coming Up panel if open
+      if (document.getElementById('walkHistoryPanel') && document.getElementById('walkHistoryPanel').style.display !== 'none') {
+        renderWalkHistoryTab('upcoming');
+      }
+    } else {
+      var bar = document.getElementById('walkNextBar');
+      if (bar && _walkTourActive && !_walkTourAlertOpen) bar.style.display = 'flex';
+    }
   }, 400);
 }
 
