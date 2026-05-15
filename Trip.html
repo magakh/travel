@@ -6796,15 +6796,7 @@ way["building"~"parliament|government|cathedral|palace"](around:${r2},${lat},${l
           lmObj.funFact = parsed.funFact;
           if (factWrap) factWrap.style.display = '';
         }
-        // Re-speak enriched content (replace initial bare Wikipedia sentence)
-        if (window.speechSynthesis) {
-          window.speechSynthesis.cancel();
-          var addr = lmObj.address ? 'at ' + lmObj.address + '. ' : '';
-          var full = lmObj.name + '. ' + addr + (lmObj.tldr || '') + (lmObj.funFact ? ' Fun fact: ' + lmObj.funFact : '');
-          var utt = new SpeechSynthesisUtterance(full.slice(0, 1200));
-          utt.lang = 'en-GB'; utt.rate = 0.95;
-          window.speechSynthesis.speak(utt);
-        }
+        // Do NOT cancel or re-speak — the full extract is already being read uninterrupted
       } catch(e) {}
     }).catch(function() {});
 
@@ -7352,10 +7344,12 @@ function showLandmarkAlert(lm, idx, dist) {
       window.speechSynthesis.cancel();
       const sideText = side ? 'on your ' + side.toLowerCase() : '';
       const addrText = addr ? 'Located at ' + addr + (sideText ? ', ' + sideText : '') + '. ' : (sideText ? sideText + '. ' : '');
-      const factText = lm.funFact ? ' Fun fact: ' + lm.funFact : '';
-      const text = lm.name + '. ' + addrText + (lm.tldr || '') + factText;
-      const utt = new SpeechSynthesisUtterance(text.slice(0, 1000));
+      // Read the full Wikipedia extract — not just tldr — so speech never cuts off mid-article
+      const fullText = lm.name + '. ' + addrText + (lm.extract || lm.tldr || '') + (lm.funFact ? ' Interesting fact: ' + lm.funFact : '');
+      const utt = new SpeechSynthesisUtterance(fullText.slice(0, 1800));
       utt.lang = 'en-GB'; utt.rate = 0.95;
+      utt.onend = function() { if (el) el._speechDone = true; };
+      utt.onerror = function() { if (el) el._speechDone = true; };
       window.speechSynthesis.speak(utt);
     }
   });
@@ -7369,8 +7363,9 @@ function showLandmarkAlert(lm, idx, dist) {
       clearInterval(el._approachInterval); return;
     }
     var rp = getLandmarkRelativePos(_currentGpsLat, _currentGpsLng, lm.lat, lm.lng);
-    // Auto-dismiss if landmark is more than 30m behind (user walked past)
-    if (rp.metersAhead < -30) { dismissLandmarkAlert(); return; }
+    // Dismiss only when speech has finished AND walked 20m past — never cut off mid-sentence
+    const speechDone = el._speechDone || !window.speechSynthesis || !window.speechSynthesis.speaking;
+    if (rp.metersAhead < -20 && speechDone) { dismissLandmarkAlert(); return; }
     // Update approach banner
     var bar = document.getElementById('walkApproachBar');
     if (bar) bar.innerHTML = makeApproachBannerHtml(rp);
