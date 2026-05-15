@@ -6898,12 +6898,11 @@ way["building"~"parliament|government|cathedral|palace"](around:${r2},${lat},${l
       extract = built.trim() || rawExtract.slice(0, 800);
     }
     var image = (page.thumbnail && page.thumbnail.source) || null;
-    // Build richer initial content from Wikipedia without waiting for AI
-    // TL;DR: first 2-3 sentences (not just one)
     var sentences = extract.match(/[^.!?]+[.!?]+\s*/g) || [];
-    var tldr = sentences.slice(0, 3).join('').trim() || hit.title;
+    // Show the full extract initially — AI will replace with a proper summary
+    var tldr = extract || hit.title;
 
-    // Fun fact: find a sentence with a number, date, or superlative from the extract
+    // Fun fact: any sentence with a date, number or notable detail (not the first sentence)
     var funFact = '';
     var factSentence = sentences.find(function(s, i) {
       return i > 0 && /\d{3,}|\b(first|oldest|largest|tallest|biggest|only|famous|unique|secret|hidden|rare|never|original|ancient|survived|destroyed|rebuilt|designed by|built in|opened in|stands|measures|weighing)\b/i.test(s);
@@ -6973,10 +6972,10 @@ way["building"~"parliament|government|cathedral|palace"](around:${r2},${lat},${l
       showToast('📍 Added to Day ' + (currentDay+1) + ' · passed by at ' + snapTimeStr);
     }
 
-    // AI enrichment — appends continuation + facts, never replaces the initial tldr
+    // AI enrichment — replaces Wikipedia text with a proper synthesized summary
     callAnthropic({
-      prompt: 'Return ONLY valid JSON, no markdown fences:\n{"continuation":"2-3 sentences that CONTINUE the story below — add historical depth, atmosphere, or a key moment. Do NOT repeat anything already said. Pick up exactly where the text leaves off.","facts":"Exactly 2-3 surprising facts NOT already covered above — unexpected numbers, hidden stories, strange history, famous connections. Each is one punchy sentence. Separate with the pipe character | only."}\n\nOpening text already shown to visitor:\n' + (lm.tldr || '').slice(0, 300) + '\n\nFull Wikipedia extract for context:\n' + extract.slice(0, 500),
-      maxTokens: 400
+      prompt: 'Return ONLY valid JSON, no markdown fences:\n{"summary":"A flowing 4-5 sentence narrative summary of this place for a tourist standing outside right now. Synthesize and rephrase — do NOT copy Wikipedia sentences verbatim. Include: when it was built, what makes it architecturally or historically significant, one human story or notable event. Write as a knowledgeable guide, not an encyclopaedia.","facts":"Exactly 2-3 surprising facts NOT in the summary. Each one punchy sentence. Separate with | character."}\n\nAbout: "' + hit.title + '"\nWikipedia article:\n' + extract.slice(0, 700),
+      maxTokens: 500
     }).then(function(aiText) {
       if (!aiText || !aiText.trim()) return;
       if (!_activeLandmark || _activeLandmark.name !== hit.title) return;
@@ -6986,13 +6985,10 @@ way["building"~"parliament|government|cathedral|palace"](around:${r2},${lat},${l
         var tldrEl = document.getElementById('walkAlertTldr');
         var factWrap = document.getElementById('walkAlertFactWrap');
         var factEl = document.getElementById('walkAlertFact');
-        // APPEND continuation after the existing tldr — never replace it
-        if (parsed.continuation && tldrEl) {
-          var cont = document.createElement('span');
-          cont.textContent = ' ' + parsed.continuation;
-          cont.style.cssText = 'color:#555;';
-          tldrEl.appendChild(cont);
-          lmObj.tldr = (lmObj.tldr || '') + ' ' + parsed.continuation;
+        // REPLACE Wikipedia text with proper AI summary
+        if (parsed.summary && tldrEl) {
+          tldrEl.textContent = parsed.summary;
+          lmObj.tldr = parsed.summary;
         }
         if (parsed.facts && factEl) {
           var factLines = parsed.facts.split('|').map(function(f){return f.trim();}).filter(Boolean);
@@ -7002,7 +6998,7 @@ way["building"~"parliament|government|cathedral|palace"](around:${r2},${lat},${l
           lmObj.funFact = factLines.join(' ');
           if (factWrap) factWrap.style.display = '';
         }
-        // Do NOT re-speak — speech already running uninterrupted
+        // Do NOT re-speak — full extract already playing
       } catch(e) {}
     }).catch(function() {});
 
