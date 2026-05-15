@@ -1285,8 +1285,8 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
 
 <!-- GPS debug overlay — shown when walking guide is active, sits above the walk bar -->
 <div id="gpsDebug" style="display:none;position:fixed;bottom:calc(var(--bottom-h,60px) + 110px);left:50%;transform:translateX(-50%);z-index:29000;background:rgba(0,0,0,0.88);color:#4eff91;font-family:monospace;font-size:11px;font-weight:700;border-radius:8px;padding:6px 12px;line-height:1.8;max-width:calc(100vw - 24px);overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.4);cursor:pointer;text-align:center;" onclick="_clearWalkCache()" title="Tap to reset"></div>
-<div id="walkHistoryOverlay" style="display:none;position:fixed;inset:0;z-index:29999;background:rgba(0,0,0,0.55);" onclick="if(event.target===this)closeWalkHistory()"></div>
-<div id="walkHistoryPanel" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:30000;background:#fff;border-radius:20px 20px 0 0;max-height:78vh;flex-direction:column;transform:translateY(100%);transition:transform 0.3s ease;box-shadow:0 -4px 24px rgba(0,0,0,0.2);">
+<div id="walkHistoryOverlay" style="display:none;position:fixed;inset:0;z-index:35000;background:rgba(0,0,0,0.55);" onclick="if(event.target===this)closeWalkHistory()"></div>
+<div id="walkHistoryPanel" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:35001;background:#fff;border-radius:20px 20px 0 0;max-height:78vh;flex-direction:column;transform:translateY(100%);transition:transform 0.3s ease;box-shadow:0 -4px 24px rgba(0,0,0,0.2);">
   <div style="padding:10px 16px 0;flex-shrink:0;">
     <div style="width:36px;height:4px;background:#ddd;border-radius:2px;margin:0 auto 12px;"></div>
     <div style="display:flex;gap:0;background:#f0f0f0;border-radius:10px;padding:3px;margin-bottom:12px;">
@@ -6888,7 +6888,15 @@ way["building"~"parliament|government|cathedral|palace"](around:${r2},${lat},${l
     var extRes = await fetch('https://en.wikipedia.org/w/api.php?action=query&pageids=' + hit.pageid + '&prop=extracts|pageimages&exintro=1&explaintext=1&pithumbsize=400&format=json&origin=*');
     var extData = await extRes.json();
     var page = (extData.query && extData.query.pages && extData.query.pages[hit.pageid]) || {};
-    var extract = (page.extract || '').replace(/\n+/g, ' ').trim().slice(0, 800);
+    var rawExtract = (page.extract || '').replace(/\n+/g, ' ').trim();
+    // Cut at sentence boundary — never mid-sentence
+    var extract = rawExtract;
+    if (rawExtract.length > 600) {
+      var sentences = rawExtract.match(/[^.!?]+[.!?]+\s*/g) || [];
+      var built = '', i = 0;
+      while (i < sentences.length && (built + sentences[i]).length < 800) { built += sentences[i]; i++; }
+      extract = built.trim() || rawExtract.slice(0, 800);
+    }
     var image = (page.thumbnail && page.thumbnail.source) || null;
     // Build richer initial content from Wikipedia without waiting for AI
     // TL;DR: first 2-3 sentences (not just one)
@@ -7009,7 +7017,7 @@ function _showNoLandmarksCard() {
 
   const el = document.createElement('div');
   el.id = 'noLandmarksCard';
-  el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:30000;background:#fff;border-radius:20px 20px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,0.2);padding:22px 20px 36px;transform:translateY(100%);transition:transform 0.3s ease;';
+  el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:35001;background:#fff;border-radius:20px 20px 0 0;box-shadow:0 -4px 24px rgba(0,0,0,0.2);padding:22px 20px 36px;transform:translateY(100%);transition:transform 0.3s ease;';
 
   el.innerHTML =
     '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">'
@@ -7435,7 +7443,7 @@ function showLandmarkAlert(lm, idx, dist, pageId) {
 
   const el = document.createElement('div');
   el.id = 'walkAlert';
-  el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:30000;background:#fff;border-radius:20px 20px 0 0;box-shadow:0 -4px 30px rgba(0,0,0,0.3);max-height:82vh;overflow-y:auto;transform:translateY(100%);transition:transform 0.35s ease;';
+  el.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:35001;background:#fff;border-radius:20px 20px 0 0;box-shadow:0 -4px 30px rgba(0,0,0,0.3);max-height:82vh;overflow-y:auto;transform:translateY(100%);transition:transform 0.35s ease;';
 
   const distLabel = dist >= 0 ? _fmtDist(dist) : '';
   const idxLabel = idx >= 0 ? '#' + (idx+1) : '';
