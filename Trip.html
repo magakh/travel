@@ -6550,7 +6550,7 @@ function startLiveWalkingTour() {
     // Search every 5 seconds regardless of GPS movement — catches standing-still cases
     _walkSearchInterval = setInterval(function() {
       if (_currentGpsLat !== null && !_walkTourAlertOpen) {
-        liveWikiSearch(_currentGpsLat, _currentGpsLng, 80);
+        liveWikiSearch(_currentGpsLat, _currentGpsLng, 150);
       }
     }, 5000);
 
@@ -6630,21 +6630,23 @@ async function liveWikiSearch(lat, lng, radius) {
   }
 
   try {
-    var res = await fetch('https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=' + searchLat + '|' + searchLng + '&gsradius=' + radius + '&gslimit=25&format=json&origin=*');
+    // Always search from actual GPS position (not projected) — projection misleads when standing still
+    var res = await fetch('https://en.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=' + lat + '|' + lng + '&gsradius=' + radius + '&gslimit=25&format=json&origin=*');
     var data = await res.json();
 
-    var TRIGGER = radius > 100 ? radius : WALK_TRIGGER_METRES;
+    var TRIGGER = radius;
     var filterBearingInfo = getWalkingBearingInfo();
     var hasBearing = filterBearingInfo.bearing !== null;
     var highConf = filterBearingInfo.confidence === 'high';
 
-    // Always measure dist from actual user position (lat/lng), not projected search point
-    var nearby = ((data.query && data.query.geosearch) || []).filter(function(p) {
+    var allResults = (data.query && data.query.geosearch) || [];
+    // Filter
+    var nearby = allResults.filter(function(p) {
       if (_walkLiveCache.has(p.pageid)) return false;
       var d = _haversineMetres(lat, lng, p.lat, p.lon);
       if (d > TRIGGER) return false;
-      if (!hasBearing) return true; // no direction data — use proximity only
-      if (d <= 40) return true;     // right next to it — show regardless of direction
+      if (!hasBearing) return true;
+      if (d <= 40) return true; // right next to it — always show
       var rp = getLandmarkRelativePos(lat, lng, p.lat, p.lon);
       const behindCutoff = highConf ? -20 : -40;
       if (rp.metersAhead < behindCutoff) return false;
@@ -6719,10 +6721,10 @@ way["building"~"parliament|government|cathedral|palace"](around:${r2},${lat},${l
     }
 
     var hit = nearby[0];
-    _walkLiveCache.add(hit.pageid);
+    // Flash debug count so user can see what was found
+    _flashWalkBar('📍 Found: ' + hit.title.slice(0, 25) + '…', 2000);
 
-    // Get landmark address for display only — not used for blocking
-    // (street guard removed: Wikipedia coords for large buildings can be 50m+ off, causing false blocks)
+    // Get landmark address for display only — no blocking
     var lmAddressFromGuard = null;
     if (radius <= 100) {
       try {
@@ -6768,6 +6770,7 @@ way["building"~"parliament|government|cathedral|palace"](around:${r2},${lat},${l
     if (_walkTourAlertOpen) {
       // A card is currently being read — queue this one silently
       if (!_walkQueue.find(function(q) { return q.name === lmObj.name; })) {
+        _walkLiveCache.add(hit.pageid); // cache now — confirmed good
         _walkQueue.push(lmObj);
         // Silently refresh Coming Up panel if it's open
         var panel = document.getElementById('walkHistoryPanel');
@@ -6776,6 +6779,7 @@ way["building"~"parliament|government|cathedral|palace"](around:${r2},${lat},${l
       }
       return;
     }
+    _walkLiveCache.add(hit.pageid); // cache confirmed — won't repeat
     showLandmarkAlert(lmObj, -1, currentDist);
 
     // ── Auto-add to today's schedule as a "passed by" stop ────────
