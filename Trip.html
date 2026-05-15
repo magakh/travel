@@ -6541,16 +6541,15 @@ async function liveWikiSearch(lat, lng, radius) {
   radius = radius || 80;
 
   // Project ahead in walking direction to find what's coming up
-  const bearing = getWalkingBearing();
+  // Only do this when we have reliable bearing — a wrong projection is worse than no projection
+  const bearingInfo = getWalkingBearingInfo();
   let searchLat = lat, searchLng = lng;
-  if (bearing !== null && radius <= 100) {
-    const LOOK_AHEAD = 40; // metres to project ahead
+  if (bearingInfo.bearing !== null && bearingInfo.confidence === 'high' && radius <= 100) {
+    const LOOK_AHEAD = 30; // metres ahead to project search center
     const R = 6371000;
-    const bearRad = bearing * Math.PI / 180;
-    const dLat = (LOOK_AHEAD / R) * Math.cos(bearRad) * 180 / Math.PI;
-    const dLng = (LOOK_AHEAD / R) * Math.sin(bearRad) / Math.cos(lat * Math.PI / 180) * 180 / Math.PI;
-    searchLat = lat + dLat;
-    searchLng = lng + dLng;
+    const bearRad = bearingInfo.bearing * Math.PI / 180;
+    searchLat = lat + (LOOK_AHEAD / R) * Math.cos(bearRad) * 180 / Math.PI;
+    searchLng = lng + (LOOK_AHEAD / R) * Math.sin(bearRad) / Math.cos(lat * Math.PI / 180) * 180 / Math.PI;
   }
 
   // Throttle: re-search after moving 15m
@@ -6576,11 +6575,12 @@ async function liveWikiSearch(lat, lng, radius) {
       if (d > TRIGGER) return false;
       if (!hasBearing) return true; // no direction data — use proximity only
       var rp = getLandmarkRelativePos(lat, lng, p.lat, p.lon);
-      // Behind-you filter: generous margin (30m) for GPS jitter; even more generous when low confidence
+      // Behind-you filter: generous for GPS jitter
       const behindCutoff = highConf ? -20 : -40;
       if (rp.metersAhead < behindCutoff) return false;
-      // Cross-track: large buildings span multiple streets — be generous
-      const crossLimit = highConf ? TRIGGER * 1.8 : TRIGGER * 3;
+      // Cross-track: if you can't see it from where you stand, skip it.
+      // ~15m = roughly one street width. Even 20m puts it deep into a side street.
+      const crossLimit = highConf ? 15 : 25;
       if (rp.metersCross > crossLimit) return false;
       return true;
     });
@@ -6624,9 +6624,9 @@ way["building"~"parliament|government|cathedral|palace"](around:${r2},${lat},${l
           if (d > r2) return false;
           if (hasBearing) {
             const rp = getLandmarkRelativePos(lat, lng, elLat, elLon);
-            if (rp.metersAhead < -10) return false;
-            // Be generous with cross-track — large buildings are often across the street
-            if (rp.metersCross > r2 * 1.5) return false;
+            if (rp.metersAhead < -20) return false;
+            // Same street-visibility rule: >15m sideways = can't see it
+            if (rp.metersCross > 15) return false;
           }
           return true;
         });
