@@ -6564,9 +6564,9 @@ async function liveWikiSearch(lat, lng, radius) {
     var data = await res.json();
 
     var TRIGGER = radius > 100 ? radius : WALK_TRIGGER_METRES;
-    var bearingInfo = getWalkingBearingInfo();
-    var hasBearing = bearingInfo.bearing !== null;
-    var highConf = bearingInfo.confidence === 'high';
+    var filterBearingInfo = getWalkingBearingInfo();
+    var hasBearing = filterBearingInfo.bearing !== null;
+    var highConf = filterBearingInfo.confidence === 'high';
 
     // Always measure dist from actual user position (lat/lng), not projected search point
     var nearby = ((data.query && data.query.geosearch) || []).filter(function(p) {
