@@ -6783,7 +6783,7 @@ async function liveWikiSearch(lat, lng, radius, silent) {
       if (_walkLiveCache.has(p.pageid)) return false;
       var d = _haversineMetres(lat, lng, p.lat, p.lon);
       if (d > TRIGGER) return false;
-      if (!hasBearing) return true;
+      if (!hasBearing) return d <= 50; // no direction — only show if very close
       if (d <= 40) return true; // right next to it — always show
       var rp = getLandmarkRelativePos(lat, lng, p.lat, p.lon);
       const behindCutoff = highConf ? -20 : -40;
@@ -7092,8 +7092,11 @@ function openWalkHistory() {
   const overlay = document.getElementById('walkHistoryOverlay');
   if (!panel) return;
   panel.style.display = 'flex';
-  overlay.style.display = 'block';
-  requestAnimationFrame(() => panel.style.transform = 'translateY(0)');
+  // Show overlay AFTER panel starts animating so it doesn't intercept the opening tap
+  requestAnimationFrame(() => {
+    panel.style.transform = 'translateY(0)';
+    setTimeout(() => { if (overlay) overlay.style.display = 'block'; }, 150);
+  });
   renderWalkHistoryTab(_walkActiveTab);
 
   // Swipe down to close
