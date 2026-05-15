@@ -6721,16 +6721,10 @@ way["building"~"parliament|government|cathedral|palace"](around:${r2},${lat},${l
     var hit = nearby[0];
     _walkLiveCache.add(hit.pageid);
 
-    // Street-name guard — always check, Wikipedia coords can be off by 50m+
+    // Get landmark address for display only — not used for blocking
+    // (street guard removed: Wikipedia coords for large buildings can be 50m+ off, causing false blocks)
     var lmAddressFromGuard = null;
     if (radius <= 100) {
-      if (!_userCurrentStreet) {
-        try {
-          var s = await getUserStreet(lat, lng);
-          _userCurrentStreet = s ? s.split(' ·')[0].trim() : '__unknown__';
-          _userStreetTs = Date.now();
-        } catch(e) { _userCurrentStreet = '__unknown__'; }
-      }
       try {
         var sgRes = await fetch(
           'https://nominatim.openstreetmap.org/reverse?format=json&lat=' + hit.lat + '&lon=' + hit.lon + '&zoom=18',
@@ -6738,21 +6732,12 @@ way["building"~"parliament|government|cathedral|palace"](around:${r2},${lat},${l
         );
         var sgData = await sgRes.json();
         var sa = sgData.address || {};
-        var lmRoad = (sa.road || sa.pedestrian || sa.path || sa.footway || '').toLowerCase().trim();
-        var myRoad = (_userCurrentStreet || '').toLowerCase().replace('__unknown__', '').trim();
-        if (lmRoad) {
-          // Know the landmark's street — enforce same-street rule strictly
-          if (!myRoad || lmRoad !== myRoad) {
-            if (hitDist > 12) { _walkLiveCache.delete(hit.pageid); return; }
-          }
-        }
         lmAddressFromGuard = [sa.house_number, sa.road || sa.pedestrian || sa.path || sa.footway].filter(Boolean).join(' ') || null;
-      } catch(e) {
-        // Geocode failed — block unless < 12m
-        if (_haversineMetres(lat, lng, hit.lat, hit.lon) > 12) { _walkLiveCache.delete(hit.pageid); return; }
-      }
+        if (!_userCurrentStreet) {
+          try { var s = await getUserStreet(lat, lng); _userCurrentStreet = s ? s.split(' \xb7')[0].trim() : ''; _userStreetTs = Date.now(); } catch(e) {}
+        }
+      } catch(e) { /* address unavailable — still show the card */ }
     }
-
     // Wikipedia content fetch
     var extRes = await fetch('https://en.wikipedia.org/w/api.php?action=query&pageids=' + hit.pageid + '&prop=extracts|pageimages&exintro=1&explaintext=1&pithumbsize=400&format=json&origin=*');
     var extData = await extRes.json();
@@ -6770,13 +6755,6 @@ way["building"~"parliament|government|cathedral|palace"](around:${r2},${lat},${l
       return i > 0 && /\d{3,}|\b(first|oldest|largest|tallest|biggest|only|famous|unique|secret|hidden|rare|never|original|ancient|survived|destroyed|rebuilt|designed by|built in|opened in|stands|measures|weighing)\b/i.test(s);
     });
     if (factSentence) funFact = factSentence.trim();
-
-    // Re-verify with latest GPS/bearing — abort if passed or now too far ahead
-    if (_currentGpsLat !== null && hasBearing) {
-      var recheck = getLandmarkRelativePos(_currentGpsLat, _currentGpsLng, hit.lat, hit.lon);
-      if (recheck.metersAhead < -5) return;
-      if (recheck.metersAhead > WALK_TRIGGER_METRES * 1.5) return; // bearing now shows too far
-    }
 
     // Show card immediately with Wikipedia text — or queue silently if card already showing
     var currentDist = _haversineMetres(_currentGpsLat || lat, _currentGpsLng || lng, hit.lat, hit.lon);
