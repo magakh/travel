@@ -5218,7 +5218,8 @@ function speakText(section, stopIdx, dayIdx) {
 // MAGIC LANDMARK TOUR
 let _tourTolerance = 0.25;
 let _tourRouteLayer = null;
-let _tourMarkers = [];
+let _tourMarkers = [];      // ALL markers (START, END, landmarks) — for cleanup
+let _landmarkMarkers = []; // ONLY numbered landmark markers — for highlight/scroll sync
 let _tourLandmarks = [];
 
 async function runMagicTour(midLat, midLng, afterIdx, dayIdx, beforeIdx) {
@@ -6543,42 +6544,59 @@ function renderTourCards(tour, fromStop, toStop, afterIdx, dayIdx, beforeIdx) {
   // Update the map with all landmark markers and the full walking route
   drawTourRoute({ landmarks: landmarks, totalM: totalM, directM: directM }, fromStop, toStop);
 
-  // Scroll-based highlight: find which card is most visible in the list container
+  // Scroll sync: IntersectionObserver highlights map marker as each card scrolls into view
   const listContainer = document.getElementById('suggestResultsList');
-  if (listContainer) {
-    listContainer.onscroll = function() {
-      const containerRect = listContainer.getBoundingClientRect();
-      const midY = containerRect.top + containerRect.height / 2;
-      let bestIdx = 0, bestDist = Infinity;
-      document.querySelectorAll('.tour-card').forEach(function(el) {
-        const rect = el.getBoundingClientRect();
-        const cardMid = rect.top + rect.height / 2;
-        const dist = Math.abs(cardMid - midY);
-        if (dist < bestDist) { bestDist = dist; bestIdx = parseInt(el.getAttribute('data-idx')); }
+  if (listContainer && _landmarkMarkers.length) {
+    if (window._tourScrollObserver) window._tourScrollObserver.disconnect();
+    window._tourScrollObserver = new IntersectionObserver(function(entries) {
+      let best = null, bestRatio = 0;
+      entries.forEach(function(e) {
+        if (e.isIntersecting && e.intersectionRatio > bestRatio) {
+          bestRatio = e.intersectionRatio; best = e.target;
+        }
       });
-      highlightTourMarker(bestIdx);
-    };
+      if (best) {
+        const idx = parseInt(best.getAttribute('data-idx'));
+        if (!isNaN(idx)) highlightTourMarker(idx);
+      }
+    }, { root: listContainer, threshold: [0.4, 0.7, 1.0] });
+
+    document.querySelectorAll('.tour-card').forEach(function(card) {
+      window._tourScrollObserver.observe(card);
+    });
   }
 }
 
 function highlightTourMarker(idx) {
-  _tourMarkers.forEach(function(mk, i) {
+  // Highlight/dim map markers (only numbered landmark markers, not START/END)
+  _landmarkMarkers.forEach(function(mk, i) {
     var active = i === idx;
     var bg = active ? '#e67e22' : '#5c4db1';
-    var size = active ? 32 : 26;
+    var size = active ? 34 : 26;
     var fontSize = active ? 13 : 11;
     mk.setIcon(L.divIcon({
       className: '',
-      html: '<div style="background:' + bg + ';color:#fff;border:2px solid #fff;border-radius:50%;width:' + size + 'px;height:' + size + 'px;display:flex;align-items:center;justify-content:center;font-size:' + fontSize + 'px;font-weight:900;box-shadow:0 2px 8px rgba(0,0,0,0.4);transition:all 0.2s;">' + (i + 1) + '</div>',
+      html: '<div style="background:' + bg + ';color:#fff;border:' + (active?'3':'2') + 'px solid #fff;border-radius:50%;width:' + size + 'px;height:' + size + 'px;display:flex;align-items:center;justify-content:center;font-size:' + fontSize + 'px;font-weight:900;box-shadow:0 2px 8px rgba(0,0,0,' + (active?'0.5':'0.3') + ');transition:all 0.2s;">' + (i + 1) + '</div>',
       iconSize: [size, size],
       iconAnchor: [size/2, size/2]
     }));
-    if (active) mk.setZIndexOffset(1000);
-    else mk.setZIndexOffset(0);
+    mk.setZIndexOffset(active ? 1000 : 0);
+    var el = mk.getElement && mk.getElement();
+    if (el) el.style.opacity = active ? '1' : '0.55';
   });
-  // Pan map to active marker smoothly
-  if (_suggestMap && _tourMarkers[idx]) {
-    _suggestMap.panTo(_tourMarkers[idx].getLatLng(), {animate: true, duration: 0.3});
+  // Highlight active card, dim others
+  document.querySelectorAll('.tour-card').forEach(function(el, j) {
+    el.style.borderColor = j === idx ? '#e67e22' : '#eee';
+    el.style.background = j === idx ? '#fff8f0' : '#fff';
+    el.style.boxShadow = j === idx ? '0 0 0 2px rgba(230,126,34,0.3)' : '';
+  });
+  document.querySelectorAll('.tour-num').forEach(function(el, j) {
+    el.style.background = j === idx ? '#e67e22' : '#5c4db1';
+    el.style.transform = j === idx ? 'scale(1.2)' : 'scale(1)';
+  });
+  // Pan map smoothly to active marker
+  if (_suggestMap && _landmarkMarkers[idx]) {
+    _suggestMap.panTo(_landmarkMarkers[idx].getLatLng(), {animate: true, duration: 0.35});
   }
 }
 
@@ -6605,7 +6623,7 @@ async function drawTourRoute(tour, fromStop, toStop) {
   if(!_suggestMap) return;
   if(_tourRouteLayer){try{_suggestMap.removeLayer(_tourRouteLayer);}catch(e){} _tourRouteLayer=null;}
   _tourMarkers.forEach(function(m){try{_suggestMap.removeLayer(m);}catch(e){}});
-  _tourMarkers=[];
+  _tourMarkers=[]; _landmarkMarkers=[];
 
   // 1. Focus map on landmarks immediately — don't wait for OSRM
   var allPts = [fromStop].concat(tour.landmarks).concat([toStop]).filter(function(p){return p&&p.lat&&p.lng;});
@@ -6636,6 +6654,7 @@ async function drawTourRoute(tour, fromStop, toStop) {
       .bindPopup('<b>'+lm.name+'</b>'+(lm.tldr?'<br><span style="font-size:11px;color:#555;">'+lm.tldr.slice(0,80)+'…</span>':''));
     mk.on('click', function(){ panToTourMarker(i); });
     _tourMarkers.push(mk);
+    _landmarkMarkers.push(mk); // separate array for scroll sync
   });
 
   // 3. Draw straight connector lines between FROM → landmarks → TO
@@ -8941,7 +8960,7 @@ function suggestBetween(afterIdx, beforeIdx, dayIdx) {
   // Init interactive Leaflet map with real OSRM walking route
   setTimeout(async () => {
     if (_suggestMap) { _suggestMap.remove(); _suggestMap = null; }
-    _tourMarkers = []; _tourRouteLayer = null; // clear all tracked markers from prev session
+    _tourMarkers = []; _landmarkMarkers = []; _tourRouteLayer = null; // clear all tracked markers from prev session
     const mapEl = document.getElementById('suggestMapDiv');
     if (!mapEl) return;
 
