@@ -2136,8 +2136,9 @@ async function cloudLoad() {
     if (error) { console.warn('cloudLoad', error); return false; }
     if (!data) return false;
     applyRemoteData(data);
-    _migratePhotosToPaths();   // convert any legacy URLs → sb: paths (saves back if changed)
-    _signAllPhotos();          // batch-sign all sb: paths → session cache (async, renders when ready)
+    _migratePhotosToPaths();
+    _signAllPhotos();
+    _startPhotoCacheRefresh(); // refresh signed URLs every 90 min
     window._tripCloudData = data.data || {};
     _lastKnownSignature = stateSignature(data);
     _ourLastSavedAt = (data.data && data.data.savedAt) || '';
@@ -2192,7 +2193,6 @@ async function _batchSignPhotos(paths) {
 }
 
 async function _signAllPhotos() {
-  // Collect every storage path from all stops across all days
   const paths = [];
   days.forEach(day => (day.stops || []).forEach(stop => {
     (stop.userPhotos || []).forEach(p => {
@@ -2203,9 +2203,25 @@ async function _signAllPhotos() {
   if (paths.length) {
     console.log('[photos] signing', paths.length, 'photos');
     await _batchSignPhotos(paths);
-    // Re-render now that URLs are available
     try { renderStopList(); } catch(e) {}
   }
+}
+
+// Re-sign ALL photos every 90 min — prevents 2-hour signed URL expiry mid-session
+function _startPhotoCacheRefresh() {
+  if (window._photoCacheTimer) clearInterval(window._photoCacheTimer);
+  window._photoCacheTimer = setInterval(async function() {
+    const allPaths = [];
+    days.forEach(day => (day.stops || []).forEach(stop => {
+      (stop.userPhotos || []).forEach(p => { const path = _sbPath(p); if (path) allPaths.push(path); });
+    }));
+    if (allPaths.length) {
+      _photoCache.clear();
+      await _batchSignPhotos(allPaths);
+      try { renderStopList(); } catch(e) {}
+      console.log('[photos] cache refreshed:', allPaths.length, 'paths');
+    }
+  }, 90 * 60 * 1000);
 }
 
 // Migrate any legacy URL formats → sb: paths (runs once on load, then saves back to Supabase)
@@ -4829,21 +4845,43 @@ function _cleanInvalidPhotos() {
 
 function _onPhotoError(img) {
   const div = img.parentNode;
-  if (!div) return;
-  const photoIdx = parseInt(div.dataset.idx);
-  const stopIdx = parseInt(div.dataset.stop);
-  const dayIdx  = parseInt(div.dataset.day);
-
-  // NEVER auto-delete — a load failure could be network, CORS, or temporary.
-  // Just show a placeholder with a manual delete button.
+  if (!div || div.querySelector('._photo-err')) return;
   img.style.display = 'none';
-  const inner = document.createElement('div');
-  inner.style.cssText = 'width:100%;height:100%;background:#f8f0f0;border:1.5px dashed #e74c3c;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#e74c3c;font-size:10px;gap:2px;position:relative;';
-  inner.innerHTML = '<span style="font-size:16px;">📷</span><span>Failed</span>'
-    + (!isNaN(photoIdx) && !isNaN(stopIdx) && !isNaN(dayIdx)
-      ? '<button onclick="event.stopPropagation();deleteStopPhoto('+stopIdx+','+dayIdx+','+photoIdx+')" style="position:absolute;top:3px;right:3px;background:rgba(200,0,0,0.7);border:none;color:#fff;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;line-height:1;">✕</button>'
-      : '');
-  div.appendChild(inner);
+
+  const photoIdx = parseInt(div.dataset.idx);
+  const stopIdx  = parseInt(div.dataset.stop);
+  const dayIdx   = parseInt(div.dataset.day);
+
+  const ph = document.createElement('div');
+  ph.className = '_photo-err';
+  ph.style.cssText = 'width:100%;height:100%;background:#f8f0f0;border:1.5px dashed #e74c3c;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#e74c3c;font-size:10px;gap:4px;position:relative;cursor:pointer;';
+  ph.title = 'Tap to retry loading';
+  ph.innerHTML = '<span style="font-size:18px;">📷</span><span style="font-weight:700;">Tap to retry</span>';
+
+  // Tap → re-sign this photo and retry
+  ph.onclick = async function(e) {
+    e.stopPropagation();
+    const s = days[dayIdx] && days[dayIdx].stops[stopIdx];
+    const p = s && s.userPhotos && s.userPhotos[photoIdx];
+    if (!p) return;
+    const path = _sbPath(p);
+    if (!path) return;
+    ph.innerHTML = '<span style="font-size:14px;">⏳</span><span>Signing…</span>';
+    try {
+      const { data, error } = await supa.storage.from(PHOTO_BUCKET).createSignedUrls([path], 7200);
+      if (!error && data && data[0] && data[0].signedUrl) {
+        _photoCache.set(path, data[0].signedUrl);
+        img.src = data[0].signedUrl;
+        img.style.display = '';
+        ph.remove();
+      } else {
+        ph.innerHTML = '<span style="font-size:18px;">📷</span><span style="font-weight:700;">Still failing</span>';
+      }
+    } catch(e2) {
+      ph.innerHTML = '<span style="font-size:18px;">📷</span><span>Retry failed</span>';
+    }
+  };
+  div.appendChild(ph);
 }
 
 async function _deleteFromStorage(photoUrl) {
@@ -11833,21 +11871,44 @@ function _openPhoto(day, stop, idx) {
 }
 
 function _onPhotoError(img) {
-  // Never auto-delete. Just show a placeholder with a manual remove button.
+  // Photo failed to load — show retry button. NEVER auto-delete: the sb: path is valid,
+  // the signed URL may have just expired or not yet been generated (race with _signAllPhotos).
   const div = img.parentNode;
-  if (!div) return;
+  if (!div || div.querySelector('._photo-err')) return;
   img.style.display = 'none';
-  if (div.querySelector('._photo-err')) return; // already shown
+
+  const photoIdx = parseInt(div.dataset.idx);
+  const stopIdx  = parseInt(div.dataset.stop);
+  const dayIdx   = parseInt(div.dataset.day);
+
   const ph = document.createElement('div');
   ph.className = '_photo-err';
-  ph.style.cssText = 'width:100%;height:100%;background:#fff0f0;border:1.5px dashed #e74c3c;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#e74c3c;font-size:10px;gap:2px;position:relative;';
-  const stopIdx = parseInt(div.dataset.stop);
-  const dayIdx  = parseInt(div.dataset.day);
-  const photoIdx = parseInt(div.dataset.idx);
-  ph.innerHTML = '<span style="font-size:16px;">📷</span><span>Failed to load</span>'
-    + (!isNaN(stopIdx) && !isNaN(dayIdx) && !isNaN(photoIdx)
-      ? '<button onclick="event.stopPropagation();deleteStopPhoto('+stopIdx+','+dayIdx+','+photoIdx+')" style="position:absolute;top:3px;right:3px;background:rgba(200,0,0,0.7);border:none;color:#fff;border-radius:50%;width:20px;height:20px;font-size:11px;cursor:pointer;line-height:1;">✕</button>'
-      : '');
+  ph.style.cssText = 'width:100%;height:100%;background:#fff0f0;border:1.5px dashed #e74c3c;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#e74c3c;font-size:10px;gap:4px;position:relative;cursor:pointer;';
+  ph.title = 'Tap to retry';
+  ph.innerHTML = '<span style="font-size:18px;">📷</span><span style="font-weight:700;">Tap to retry</span>';
+
+  ph.onclick = async function(e) {
+    e.stopPropagation();
+    const s = days[dayIdx] && days[dayIdx].stops[stopIdx];
+    const p = s && s.userPhotos && s.userPhotos[photoIdx];
+    if (!p) return;
+    const path = _sbPath(p);
+    if (!path) return;
+    ph.innerHTML = '<span style="font-size:14px;">⏳</span><span>Signing…</span>';
+    try {
+      const { data, error } = await supa.storage.from(PHOTO_BUCKET).createSignedUrls([path], 7200);
+      if (!error && data && data[0] && data[0].signedUrl) {
+        _photoCache.set(path, data[0].signedUrl);
+        img.src = data[0].signedUrl;
+        img.style.display = '';
+        ph.remove();
+      } else {
+        ph.innerHTML = '<span style="font-size:18px;">📷</span><span>Still failing</span>';
+      }
+    } catch(e2) {
+      ph.innerHTML = '<span style="font-size:18px;">📷</span><span>Retry failed</span>';
+    }
+  };
   div.appendChild(ph);
 }
 function showMovePhotoSheet(fromStop, fromDay, photoIdx) {
