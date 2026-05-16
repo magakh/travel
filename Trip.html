@@ -6579,15 +6579,15 @@ async function drawTourRoute(tour, fromStop, toStop) {
     var fIc = L.divIcon({className:'', iconSize:[36,36], iconAnchor:[18,18],
       html:'<div style="background:#1a7a3a;color:#fff;border:2.5px solid #fff;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;box-shadow:0 2px 8px rgba(0,0,0,0.4);">START</div>'
     });
-    L.marker([fromStop.lat,fromStop.lng],{icon:fIc,zIndexOffset:1000}).addTo(_suggestMap)
-      .bindTooltip(fromStop.name||'Start', {direction:'top',permanent:false});
+    _tourMarkers.push(L.marker([fromStop.lat,fromStop.lng],{icon:fIc,zIndexOffset:1000}).addTo(_suggestMap)
+      .bindTooltip(fromStop.name||'Start', {direction:'top',permanent:false}));
   }
   if (toStop && toStop.lat) {
     var tIc = L.divIcon({className:'', iconSize:[36,36], iconAnchor:[18,18],
       html:'<div style="background:#c0392b;color:#fff;border:2.5px solid #fff;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;box-shadow:0 2px 8px rgba(0,0,0,0.4);">END</div>'
     });
-    L.marker([toStop.lat,toStop.lng],{icon:tIc,zIndexOffset:1000}).addTo(_suggestMap)
-      .bindTooltip(toStop.name||'End', {direction:'top',permanent:false});
+    _tourMarkers.push(L.marker([toStop.lat,toStop.lng],{icon:tIc,zIndexOffset:1000}).addTo(_suggestMap)
+      .bindTooltip(toStop.name||'End', {direction:'top',permanent:false}));
   }
 
   tour.landmarks.forEach(function(lm,i){
@@ -8901,6 +8901,7 @@ function suggestBetween(afterIdx, beforeIdx, dayIdx) {
   // Init interactive Leaflet map with real OSRM walking route
   setTimeout(async () => {
     if (_suggestMap) { _suggestMap.remove(); _suggestMap = null; }
+    _tourMarkers = []; _tourRouteLayer = null; // clear all tracked markers from prev session
     const mapEl = document.getElementById('suggestMapDiv');
     if (!mapEl) return;
 
@@ -8919,8 +8920,10 @@ function suggestBetween(afterIdx, beforeIdx, dayIdx) {
       const ic = L.divIcon({ className:'', iconSize:[36,36], iconAnchor:[18,18],
         html: '<div style="width:36px;height:36px;background:'+color+';border:3px solid #fff;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;color:#fff;font-size:9px;font-weight:900;letter-spacing:0.5px;">'+label+'</div>'
       });
-      return L.marker([lat, lng], { icon: ic, zIndexOffset: 1000 }).addTo(_suggestMap)
+      const mk = L.marker([lat, lng], { icon: ic, zIndexOffset: 1000 }).addTo(_suggestMap)
         .bindTooltip(name, { direction:'top', permanent: false });
+      _tourMarkers.push(mk); // track so it clears on next tour draw
+      return mk;
     };
     if (fromS) mkPin(fLat, fLng, 'FROM', '#1a7a3a', fromS.name || 'Start');
     if (toS)   mkPin(tLat, tLng, 'TO',   '#c0392b', toS.name   || 'End');
