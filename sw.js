@@ -1,5 +1,5 @@
 // Travel app service worker — handles background notifications
-const CACHE = 'travel-sw-v3';
+const CACHE = 'travel-sw-v4';
 
 self.addEventListener('install', e => self.skipWaiting());
 
