@@ -1523,7 +1523,6 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
           <button onclick="exportFile()" style="flex:1;padding:8px 12px;border-radius:8px;border:1px solid #444;background:#1e1e1e;color:#ccc;font-size:12px;font-weight:700;cursor:pointer;">📤 Export</button>
           <button onclick="document.getElementById('import-input').click()" style="flex:1;padding:8px 12px;border-radius:8px;border:1px solid #444;background:#1e1e1e;color:#ccc;font-size:12px;font-weight:700;cursor:pointer;">📥 Import</button>
         </div>
-        <button onclick="_fixAllPhotoUrls()" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid #1a56c4;background:#e8f0fe;color:#1a56c4;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:8px;">🔗 Fix photos (migrate URLs → paths, re-sign)</button>
         <button onclick="_cleanBrokenPhotosNow()" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid #c0392b;background:#fef0f0;color:#c0392b;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:8px;">🗑 Remove all broken photos</button>
 
       <!-- ── DANGER ZONE ── -->
@@ -5079,9 +5078,8 @@ function renderDetail() {
       ${(s.userPhotos && s.userPhotos.length)
         ? '<div id="photoGrid-'+currentDay+'-'+currentStop+'" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">'
           + s.userPhotos.filter(_isValidPhoto).map(function(p,pi){
-              const safe = (p||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;');
               return '<div class="photo-drag-item" data-day="'+currentDay+'" data-stop="'+currentStop+'" data-idx="'+pi+'" style="position:relative;aspect-ratio:1;cursor:pointer;" onclick="_openPhoto('+currentDay+','+currentStop+','+pi+')">'
-                + '<img src="'+safe+'" onerror="_onPhotoError(this)" style="width:100%;height:100%;object-fit:cover;border-radius:8px;pointer-events:none;user-select:none;">'
+                + '<img src="'+_rp(p)+'" onerror="_onPhotoError(this)" style="width:100%;height:100%;object-fit:cover;border-radius:8px;pointer-events:none;user-select:none;">'
                 + (EDITOR_MODE ? '<button onclick="event.stopPropagation();deleteStopPhoto('+currentStop+','+currentDay+','+pi+')" style="position:absolute;top:3px;right:3px;background:rgba(0,0,0,0.6);border:none;color:#fff;border-radius:50%;width:22px;height:22px;font-size:11px;cursor:pointer;line-height:1;">✕</button>' : '')
                 + (EDITOR_MODE ? '<button onclick="event.stopPropagation();showMovePhotoSheet('+currentStop+','+currentDay+','+pi+')" style="position:absolute;bottom:3px;right:3px;background:rgba(26,115,232,0.85);border:none;color:#fff;border-radius:50%;width:22px;height:22px;font-size:13px;cursor:pointer;line-height:22px;text-align:center;">⇄</button>' : '')
                 + '<div style="position:absolute;top:3px;left:3px;background:rgba(0,0,0,0.4);border-radius:3px;padding:1px 3px;font-size:10px;color:rgba(255,255,255,0.8);pointer-events:none;">⠿</div>'
