@@ -8880,7 +8880,7 @@ function suggestBetween(afterIdx, beforeIdx, dayIdx) {
       <div class="suggest-header">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
           <div style="font-size:15px;font-weight:800;">✨ Add a stop</div>
-          <button onclick="document.getElementById('suggest-overlay').remove();if(_suggestMap){_suggestMap.remove();_suggestMap=null;}" style="background:none;border:none;font-size:22px;color:#aaa;cursor:pointer;">✕</button>
+          <button onclick="document.getElementById('suggest-overlay').remove();if(_suggestMap){_suggestMap.remove();_suggestMap=null;}if(window.speechSynthesis)window.speechSynthesis.cancel();" style="background:none;border:none;font-size:22px;color:#aaa;cursor:pointer;">✕</button>
         </div>
         <div class="suggest-subtitle">Between <b>${afterName}</b> → <b>${beforeName}</b>${routeSummary ? ' &nbsp;<span style="color:#1a7a3a;font-weight:600;">' + routeSummary + '</span>' : ''}</div>
 
