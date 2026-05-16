@@ -1221,7 +1221,7 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
 .suggest-results { order:3; padding:10px 16px 20px; min-height:80px; flex-shrink:0; }
 .suggest-map {
   order:2; width:100%; flex:1 1 auto; min-height:160px;
-  background:#e8f0e4;
+  background:#e8f0e4; position:sticky; top:0; z-index:5;
 }
 /* When results exist: results pane scrolls; map keeps a fixed useful size */
 .suggest-panel.has-results .suggest-results { flex:1 1 auto; overflow-y:auto; min-height:0; }
@@ -6463,17 +6463,19 @@ function renderTourCards(tour, fromStop, toStop, afterIdx, dayIdx, beforeIdx) {
     return '<a href="'+p.url+'" target="_blank" style="display:inline-flex;align-items:center;gap:4px;padding:7px 11px;background:#4285f4;color:#fff;border-radius:20px;font-size:11px;font-weight:700;text-decoration:none;flex-shrink:0;">'+label+'</a>';
   }).join('');
 
-  var html = '<div style="padding:0 0 12px;border-bottom:1px solid #eee;margin-bottom:0;">'
-    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">'
-    +'<div style="flex:1;"><div style="font-size:13px;font-weight:800;">'+landmarks.length+' landmark'+(landmarks.length>1?'s':'')+' on the way</div>'
-    +'<div style="font-size:11px;color:#888;margin-top:2px;">~'+totalMins+' min'+(extra>0?' (+'+extra+' vs direct)':'')+'</div></div>'
-    +'<div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0;">'+gmLinksHtml+'</div>'
+  var html = '<div style="padding:0 0 8px;border-bottom:1px solid #eee;margin-bottom:0;">'
+    // Compact stats + Google Maps pill row
+    +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">'
+    +'<div style="flex:1;"><span style="font-size:13px;font-weight:800;">'+landmarks.length+' landmark'+(landmarks.length>1?'s':'')+'</span>'
+    +' <span style="font-size:11px;color:#888;">~'+totalMins+' min'+(extra>0?' (+'+extra+')':'')+'</span></div>'
+    +'<div style="display:flex;gap:4px;flex-shrink:0;">'+gmLinksHtml+'</div>'
     +'</div>'
-    // Full-route Google Maps — prominent, acts as the "map"
-    +'<a href="'+gmParts[0].url+'" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:12px;border-radius:12px;border:none;background:#4285f4;color:#fff;font-size:13px;font-weight:800;text-decoration:none;margin-bottom:8px;">🗺️ Open full route in Google Maps</a>'
-    // Save all to trip
-    +'<button onclick="_saveTourToTrip('+afterIdx+','+dayIdx+','+beforeIdx+')" style="width:100%;padding:10px;border-radius:12px;border:none;background:#1a56c4;color:#fff;font-size:13px;font-weight:800;cursor:pointer;margin-bottom:6px;display:flex;align-items:center;justify-content:center;gap:6px;">💾 Save all stops to my trip</button>'
-    +'<button id="startWalkBtnTop" onclick="startLiveWalkingTour()" style="width:100%;padding:11px;border-radius:12px;border:none;background:#1a7a3a;color:#fff;font-size:13px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;">&#x1F6B6; Start live walking tour · auto-alerts as you approach</button>'
+    // Two compact button rows
+    +'<div style="display:flex;gap:6px;margin-bottom:0;">'
+    +'<a href="'+gmParts[0].url+'" target="_blank" style="flex:1;display:flex;align-items:center;justify-content:center;gap:4px;padding:8px 6px;border-radius:10px;background:#4285f4;color:#fff;font-size:12px;font-weight:800;text-decoration:none;">🗺️ Maps</a>'
+    +'<button onclick="_saveTourToTrip('+afterIdx+','+dayIdx+','+beforeIdx+')" style="flex:1;padding:8px 6px;border-radius:10px;border:none;background:#1a56c4;color:#fff;font-size:12px;font-weight:800;cursor:pointer;">💾 Add to trip</button>'
+    +'<button id="startWalkBtnTop" onclick="startLiveWalkingTour()" style="flex:1;padding:8px 6px;border-radius:10px;border:none;background:#1a7a3a;color:#fff;font-size:12px;font-weight:800;cursor:pointer;">🚶 Live tour</button>'
+    +'</div>'
     +'</div>';
 
   html += '<div style="display:flex;align-items:center;gap:12px;padding:14px 0 6px;">'
@@ -6488,7 +6490,7 @@ function renderTourCards(tour, fromStop, toStop, afterIdx, dayIdx, beforeIdx) {
       +'<div style="font-size:11px;color:#5a7a8a;padding:3px 0;font-weight:600;">&#x1F6B6; '+walkMins+' min'+(walkDist?' · '+walkDist:'')+'</div></div>';
 
     var imgBit = lm.image
-      ? '<div style="overflow:hidden;"><img src="'+lm.image+'" style="width:100%;height:auto;display:block;max-height:340px;object-fit:contain;background:#f5f5f5;" loading="lazy" onerror="this.parentElement.style.display=\'none\'"></div>'
+      ? '<div style="overflow:hidden;"><img src="'+lm.image+'" style="width:100%;height:110px;display:block;object-fit:cover;background:#f5f5f5;" loading="lazy" onerror="this.parentElement.style.display=\'none\'"></div>'
       : '';
 
     // Per-landmark: walk from my location (or from prev stop) to this landmark
