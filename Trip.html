@@ -1523,7 +1523,7 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
           <button onclick="exportFile()" style="flex:1;padding:8px 12px;border-radius:8px;border:1px solid #444;background:#1e1e1e;color:#ccc;font-size:12px;font-weight:700;cursor:pointer;">📤 Export</button>
           <button onclick="document.getElementById('import-input').click()" style="flex:1;padding:8px 12px;border-radius:8px;border:1px solid #444;background:#1e1e1e;color:#ccc;font-size:12px;font-weight:700;cursor:pointer;">📥 Import</button>
         </div>
-        <button onclick="_fixAllPhotoUrls()" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid #1a56c4;background:#e8f0fe;color:#1a56c4;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:8px;">🔗 Fix photo URLs (run once to fix 'Failed to load')</button>
+        <button onclick="_fixAllPhotoUrls()" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid #1a56c4;background:#e8f0fe;color:#1a56c4;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:8px;">🔗 Fix photos (migrate URLs → paths, re-sign)</button>
         <button onclick="_cleanBrokenPhotosNow()" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid #c0392b;background:#fef0f0;color:#c0392b;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:8px;">🗑 Remove all broken photos</button>
 
       <!-- ── DANGER ZONE ── -->
@@ -2060,8 +2060,6 @@ function applyRemoteData(row) {
       if (dd.title) days[i].title = dd.title;
       if (dd.note) days[i].note = dd.note;
     });
-    // Convert any stored signed/legacy URLs to stable public URLs (pure string transform, no API call)
-    _normalizeAllPhotoUrls(days);
   }
 
   // Remove phantom days beyond numDays that have no stops (e.g. "Jul 10" from a mis-saved setting)
@@ -2139,9 +2137,8 @@ async function cloudLoad() {
     if (error) { console.warn('cloudLoad', error); return false; }
     if (!data) return false;
     applyRemoteData(data);
-    _refreshSignedUrlsIfNeeded(data.data); // silently re-sign URLs older than 6 months
-    // PHOTO RECOVERY: if Supabase has stops missing photos, restore from localStorage
-    _recoverPhotosFromLocal();
+    _migratePhotosToPaths();   // convert any legacy URLs → sb: paths (saves back if changed)
+    _signAllPhotos();          // batch-sign all sb: paths → session cache (async, renders when ready)
     window._tripCloudData = data.data || {};
     _lastKnownSignature = stateSignature(data);
     _ourLastSavedAt = (data.data && data.data.savedAt) || '';
@@ -2156,79 +2153,123 @@ async function cloudLoad() {
 // ── SUPABASE PHOTO STORAGE ─────────────────────────────────────────
 const PHOTO_BUCKET = 'trip-photos';
 
-// Convert any legacy signed URLs to stable public URLs (pure string transform, no API call).
-// ── SIGNED URL AUTO-REFRESH ─────────────────────────────────────────
-// Signed URLs last 1 year. Re-sign silently every 6 months in background.
-async function _refreshSignedUrlsIfNeeded(remoteData) {
-  try {
-    const SIX_MONTHS = 180 * 24 * 60 * 60 * 1000;
-    const refreshedAt = remoteData && remoteData.photoUrlsRefreshedAt;
-    const age = refreshedAt ? Date.now() - new Date(refreshedAt).getTime() : Infinity;
-    if (age < SIX_MONTHS) return;
+// ── Photo path resolver ──────────────────────────────────────────────────────
+// Stored format: "sb:london2026/HASH.jpg"  (stable, never expires, cross-device)
+// Session cache: path → signed URL (generated fresh on each page load, never saved)
+const _photoCache = new Map(); // path → signedUrl
 
-    const refs = [];
-    days.forEach((day, di) => {
-      (day.stops || []).forEach((stop, si) => {
-        (stop.userPhotos || []).forEach((url, pi) => {
-          if (!url || !url.includes('/storage/v1/sign/')) return;
-          const m = url.match(/\/trip-photos\/([^?#]+)/);
-          if (m) refs.push({ di, si, pi, path: decodeURIComponent(m[1]) });
-        });
-      });
-    });
-    if (!refs.length) return;
-
-    const uniquePaths = [...new Set(refs.map(r => r.path))];
-    console.log('[Photos] Refreshing', uniquePaths.length, 'signed URLs (age:', Math.round(age / 86400000), 'days)');
-    const { data: signed, error } = await supa.storage.from(PHOTO_BUCKET).createSignedUrls(uniquePaths, 31536000);
-    if (error || !signed) { console.warn('[Photos] Refresh failed:', error); return; }
-
-    const urlMap = {};
-    signed.forEach(s => { if (s.signedUrl) urlMap[s.path] = s.signedUrl; });
-
-    let updated = 0;
-    refs.forEach(({ di, si, pi, path }) => {
-      const newUrl = urlMap[path];
-      if (!newUrl) return;
-      if (days[di] && days[di].stops[si] && days[di].stops[si].userPhotos) {
-        days[di].stops[si].userPhotos[pi] = newUrl;
-        updated++;
-      }
-    });
-    if (!updated) return;
-
-    window._photoUrlsRefreshedAt = new Date().toISOString();
-    saveToStorage();
-    schedulePush();
-    console.log('[Photos] Refreshed', updated, 'URLs, pushed to Supabase');
-  } catch(e) { console.warn('[Photos] Auto-refresh error:', e); }
+function _sbPath(p) {
+  // Extract the storage path from any format (sb:path, https://...sign/..., https://...public/...)
+  if (!p) return null;
+  if (p.startsWith('sb:')) return p.slice(3);
+  if (p.startsWith('data:')) return null; // base64 — not a storage path
+  const m = p.match(/\/trip-photos\/([^?#]+)/);
+  return m ? decodeURIComponent(m[1]) : null;
 }
 
-// Signed: /storage/v1/sign/trip-photos/PATH?token=XXX
-// Public: /storage/v1/object/public/trip-photos/PATH
-function _toPublicPhotoUrl(url) {
-  if (!url || typeof url !== 'string') return url;
-  if (!url.includes(PHOTO_BUCKET)) return url;
-  if (url.includes('/object/public/')) return url; // already public
-  const match = url.match(/\/trip-photos\/([^?#]+)/);
-  if (!match) return url;
-  const filepath = decodeURIComponent(match[1]);
-  return APP_CONFIG.supabaseUrl + '/storage/v1/object/public/' + PHOTO_BUCKET + '/' + filepath;
+function _rp(p) {
+  // Resolve any photo value → displayable URL
+  if (!p) return '';
+  if (p.startsWith('data:')) return p; // base64 — render directly
+  const path = _sbPath(p);
+  if (!path) return p; // unknown format — try as-is
+  return _photoCache.get(path) || ''; // '' triggers onerror UI if not cached yet
 }
 
-// Run on every data load — silently convert all signed/old URLs to public URLs in-memory.
-function _normalizeAllPhotoUrls(daysArr) {
-  (daysArr || []).forEach(day => (day.stops || []).forEach(stop => {
-    if (!stop.userPhotos) return;
-    stop.userPhotos = stop.userPhotos.map(p => _toPublicPhotoUrl(p));
+function _isStoragePath(p) {
+  return p && (p.startsWith('sb:') || p.includes('/trip-photos/'));
+}
+
+async function _batchSignPhotos(paths) {
+  // Sign up to 100 at a time (Supabase limit per call)
+  const unique = [...new Set(paths)].filter(Boolean);
+  for (let i = 0; i < unique.length; i += 100) {
+    const batch = unique.slice(i, i + 100);
+    try {
+      const { data, error } = await supa.storage.from(PHOTO_BUCKET).createSignedUrls(batch, 7200); // 2 hours
+      if (!error && data) data.forEach(s => { if (s.signedUrl) _photoCache.set(s.path, s.signedUrl); });
+    } catch(e) { console.warn('[photos] batch sign error', e); }
+  }
+}
+
+async function _signAllPhotos() {
+  // Collect every storage path from all stops across all days
+  const paths = [];
+  days.forEach(day => (day.stops || []).forEach(stop => {
+    (stop.userPhotos || []).forEach(p => {
+      const path = _sbPath(p);
+      if (path && !_photoCache.has(path)) paths.push(path);
+    });
   }));
+  if (paths.length) {
+    console.log('[photos] signing', paths.length, 'photos');
+    await _batchSignPhotos(paths);
+    // Re-render now that URLs are available
+    try { renderStopList(); } catch(e) {}
+  }
+}
+
+// Migrate any legacy URL formats → sb: paths (runs once on load, then saves back to Supabase)
+function _migratePhotosToPaths() {
+  let changed = 0;
+  days.forEach(day => (day.stops || []).forEach(stop => {
+    if (!stop.userPhotos) return;
+    stop.userPhotos = stop.userPhotos.map(p => {
+      if (!p || p.startsWith('data:') || p.startsWith('sb:')) return p;
+      const path = _sbPath(p);
+      if (path) { changed++; return 'sb:' + path; }
+      return p;
+    });
+  }));
+  if (changed) {
+    console.log('[photos] migrated', changed, 'URLs → sb: paths');
+    saveToStorage(); schedulePush();
+  }
+}
+
+function _isValidPhoto(p) {
+  if (!p || typeof p !== 'string' || p.length < 4) return false;
+  return p.startsWith('data:') || p.startsWith('sb:') || p.includes('/trip-photos/');
+}
+
+function _photoFingerprint(dataUrl) {
+  const b64 = dataUrl.startsWith('data:') ? dataUrl.slice(dataUrl.indexOf(',') + 1) : dataUrl;
+  const len = b64.length;
+  const samples = [
+    b64.slice(Math.floor(len * 0.10), Math.floor(len * 0.10) + 50),
+    b64.slice(Math.floor(len * 0.35), Math.floor(len * 0.35) + 50),
+    b64.slice(Math.floor(len * 0.65), Math.floor(len * 0.65) + 50),
+    b64.slice(Math.max(0, len - 50))
+  ].join('') + len;
+  let h = 0;
+  for (let i = 0; i < samples.length; i++) { h = Math.imul(31, h) + samples.charCodeAt(i) | 0; }
+  return Math.abs(h).toString(36);
+}
+
+async function _uploadPhotoToStorage(base64DataUrl) {
+  const res = await fetch(base64DataUrl);
+  const blob = await res.blob();
+  const filename = TRIP_ID + '/' + _photoFingerprint(base64DataUrl) + '.jpg';
+
+  const { error } = await supa.storage.from(PHOTO_BUCKET).upload(filename, blob, {
+    contentType: 'image/jpeg', upsert: false
+  });
+  if (error && !error.message.includes('already exists') && error.statusCode !== '409' && error.statusCode !== 409) {
+    throw error;
+  }
+
+  // Sign immediately for this session so it renders right away
+  const { data: signed, error: se } = await supa.storage.from(PHOTO_BUCKET).createSignedUrl(filename, 7200);
+  if (signed && signed.signedUrl) _photoCache.set(filename, signed.signedUrl);
+
+  return 'sb:' + filename; // ← stable path stored in Supabase forever
 }
 
 async function _ensurePhotoBucket() {
   try {
     const { error } = await supa.storage.getBucket(PHOTO_BUCKET);
     if (error && error.message && error.message.includes('not found')) {
-      await supa.storage.createBucket(PHOTO_BUCKET, { public: true, fileSizeLimit: 5242880 });
+      await supa.storage.createBucket(PHOTO_BUCKET, { public: false, fileSizeLimit: 5242880 });
     }
   } catch(e) { console.log('bucket check:', e.message); }
 }
@@ -2254,18 +2295,19 @@ async function _uploadPhotoToStorage(base64DataUrl, stopKey) {
   const blob = await res.blob();
   const filename = TRIP_ID + '/' + _photoFingerprint(base64DataUrl) + '.jpg';
 
-  // Try to insert (upsert:false) — no UPDATE permission needed
   const { error } = await supa.storage.from(PHOTO_BUCKET).upload(filename, blob, {
     contentType: 'image/jpeg', upsert: false
   });
 
-  // 409 = file already exists — that's fine, just use the public URL
   if (error && !error.message.includes('already exists') && error.statusCode !== '409' && error.statusCode !== 409) {
     throw error;
   }
 
-  // Bucket is public — return a permanent public URL (never expires, works on all devices)
-  return APP_CONFIG.supabaseUrl + '/storage/v1/object/public/' + PHOTO_BUCKET + '/' + filename;
+  // Bucket is PRIVATE — must use signed URL (2 years). Stored in trip data and refreshed every 6 months.
+  const { data: signed, error: signErr } = await supa.storage
+    .from(PHOTO_BUCKET).createSignedUrl(filename, 63072000); // 2 years
+  if (signErr) throw signErr;
+  return signed.signedUrl;
 }
 
 async function _migratePhotosToStorage(daysData) {
@@ -2298,8 +2340,20 @@ async function _migratePhotosToStorage(daysData) {
           } catch(e) { console.warn('photo upload fail:', e.message); /* skip broken upload — don't save blank */ }
 
         } else if (p.includes(APP_CONFIG.supabaseUrl + '/storage')) {
-          // Already a storage URL — convert to public URL (permanent, works on all devices)
-          newPhotos.push(_toPublicPhotoUrl(p)); verified++;
+          // Existing storage URL — re-sign it (handles expired tokens and public→signed conversion)
+          try {
+            const match = p.match(/\/trip-photos\/([^?#]+)/);
+            if (match) {
+              const filename = decodeURIComponent(match[1]);
+              const { data: signed, error: se } = await supa.storage.from(PHOTO_BUCKET).createSignedUrl(filename, 63072000);
+              if (se || !signed) {
+                broken++; console.warn('Storage file gone:', filename);
+                newPhotos.push(p);
+              } else {
+                newPhotos.push(signed.signedUrl); verified++;
+              }
+            } else { newPhotos.push(p); }
+          } catch(e) { newPhotos.push(p); }
 
         } else {
           newPhotos.push(p); // external URL — keep as-is
@@ -4676,76 +4730,55 @@ function addStopPhotos(stopIdx, dayIdx) {
   input.onchange = async function() {
     document.body.removeChild(input);
     const files = Array.from(input.files || [])
-      .sort((a, b) => a.lastModified - b.lastModified); // oldest first = chronological order
+      .sort((a, b) => a.lastModified - b.lastModified);
     if (!files.length) return;
     const s = days[dayIdx].stops[stopIdx];
     if (!s.userPhotos) s.userPhotos = [];
     if (!s.userPhotosMeta) s.userPhotosMeta = [];
-    showToast('⏳ Resizing ' + files.length + ' photo' + (files.length>1?'s':'') + '…');
-    let added = 0;
+    showToast('⏳ Uploading ' + files.length + ' photo' + (files.length > 1 ? 's' : '') + '…');
+    let added = 0, failed = 0;
     for (const file of files) {
       try {
         const b64 = await resizeStopPhoto(file, 1200);
         const fp = _photoFingerprint(b64);
-        // Check if already in this stop
-        const existingIdx = s.userPhotos.findIndex(p => {
-          if (p && p.startsWith('data:')) return _photoFingerprint(p) === fp;
-          if (p && p.startsWith('http')) return _fingerprintFromUrl(p) === fp;
-          return false;
-        });
-        if (existingIdx >= 0 && s.userPhotos[existingIdx].startsWith('data:')) {
-          // Exact base64 duplicate — truly already here
-          showToast('⚠️ Photo already added to this stop — skipped'); continue;
+        const sbKey = 'sb:' + TRIP_ID + '/' + fp + '.jpg';
+
+        // Skip if exact path already in this stop
+        if (s.userPhotos.includes(sbKey)) {
+          showToast('⚠️ Photo already added — skipped'); continue;
         }
-        if (existingIdx >= 0 && s.userPhotos[existingIdx].startsWith('http')) {
-          // Signed URL exists for this fingerprint — could be broken. Re-upload to get fresh URL.
-          showToast('🔄 Refreshing photo URL…');
-          try {
-            const freshUrl = await _uploadPhotoToStorage(b64, TRIP_ID + '_s' + stopIdx + 'd' + dayIdx);
-            s.userPhotos[existingIdx] = freshUrl; // replace broken URL with fresh one
-            added++;
-            continue;
-          } catch(e) { /* fall through to normal add */ }
-        }
-        s.userPhotos.push(b64);
+
+        // Upload to Supabase Storage immediately — no localStorage
+        const sbPath = await _uploadPhotoToStorage(b64); // returns 'sb:...'
+        s.userPhotos.push(sbPath);
         s.userPhotosMeta.push({ taken: file.lastModified || Date.now() });
         added++;
       } catch(e) {
-        console.error('Photo resize failed:', e);
-        showToast('Photo resize failed: ' + (e.message || e), true);
+        failed++;
+        console.error('Photo upload failed:', e);
+        showToast('❌ Upload failed: ' + (e.message || e), true);
       }
     }
     if (!added) return;
 
-    // Sort ALL photos in this stop by time taken (globally, across all upload sessions)
+    // Sort by time taken
     if (s.userPhotosMeta.length === s.userPhotos.length) {
-      const pairs = s.userPhotos.map((p, i) => ({ p, taken: s.userPhotosMeta[i] ? s.userPhotosMeta[i].taken : 0 }));
+      const pairs = s.userPhotos.map((p, i) => ({ p, taken: (s.userPhotosMeta[i] || {}).taken || 0 }));
       pairs.sort((a, b) => a.taken - b.taken);
       s.userPhotos = pairs.map(x => x.p);
       s.userPhotosMeta = pairs.map(x => ({ taken: x.taken }));
     }
 
     renderStopList(); renderDetail();
-    // Save and explicitly report cloud save result
     const ok = await doAutoPush();
-    if (ok === false) {
-      showToast('⚠️ Photos saved locally but sync failed — check connection', true);
-    } else {
-      showToast('📷 ' + added + ' photo' + (added>1?'s':'') + ' saved ✓');
-    }
+    const msg = added + ' photo' + (added > 1 ? 's' : '') + ' uploaded ✓' + (failed ? ' (' + failed + ' failed)' : '');
+    showToast(ok === false ? '⚠️ Photos uploaded but sync failed — retry' : '📷 ' + msg, ok === false);
   };
   setTimeout(function(){ input.click(); }, 30);
 }
 
 function _isAliveStorageUrl(url) {
-  if (!url || !url.startsWith('http')) return false;
-  if (!url.includes('supabase.co/storage')) return false;
-  return true;
-}
-
-function _isValidPhoto(p) {
-  if (!p || typeof p !== 'string') return false;
-  return p.startsWith('data:image') || p.startsWith('https://') || p.startsWith('http://');
+  return url && url.startsWith('sb:');
 }
 
 // Auto-clean invalid photo entries (HTML strings etc) from all stops
@@ -4870,7 +4903,7 @@ function openPhotoGallery(stopIdx, dayIdx, startIdx) {
         <span style="color:#fff;font-size:14px;font-weight:800;text-align:center;flex:1;padding:0 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${days[dayIdx].stops[stopIdx].name || ''}</span>
         <button onclick="document.getElementById('photoGalleryOv').remove()" style="background:rgba(255,255,255,0.15);border:none;color:#fff;font-size:20px;width:40px;height:40px;border-radius:50%;cursor:pointer;flex-shrink:0;">✕</button>
       </div>
-      <img src="${photos[cur]}" style="max-width:100%;max-height:74vh;object-fit:contain;pointer-events:none;user-select:none;">
+      <img src="${_rp(photos[cur])}" style="max-width:100%;max-height:74vh;object-fit:contain;pointer-events:none;user-select:none;">
       <div style="display:flex;align-items:center;width:100%;max-width:480px;padding:0 16px;margin-top:16px;gap:0;">
         ${EDITOR_MODE
           ? `<button onclick="showMovePhotoSheet(${stopIdx},${dayIdx},${cur})" style="background:rgba(255,255,255,0.14);border:none;color:#fff;padding:8px 12px;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;">↔️ Move</button>`
@@ -4905,30 +4938,52 @@ function openPhotoGallery(stopIdx, dayIdx, startIdx) {
   render();
 }
 
-// Convert all stored signed/legacy photo URLs to permanent public URLs, then push to Supabase.
-// Run once to fix "Failed to load" on any device. Safe to run multiple times.
+// Re-sign ALL photo URLs in trip data (handles expired signed URLs AND broken public URLs).
+// Run once from Settings to fix "Failed to load" on any device.
 async function _fixAllPhotoUrls() {
-  showToast('🔗 Converting photo URLs to public format…');
-  let fixed = 0, total = 0;
-  days.forEach(function(day) {
-    (day.stops || []).forEach(function(s) {
-      if (!s.userPhotos) return;
-      s.userPhotos = s.userPhotos.map(function(p) {
-        if (!p || p.startsWith('data:') || !p.includes(PHOTO_BUCKET)) return p;
-        total++;
-        const pub = _toPublicPhotoUrl(p);
-        if (pub !== p) fixed++;
-        return pub;
-      }).filter(Boolean);
+  showToast('🔗 Re-signing all photo URLs…');
+  try {
+    // Collect every unique storage path across all stops
+    const refs = []; // { di, si, pi, path }
+    days.forEach(function(day, di) {
+      (day.stops || []).forEach(function(s, si) {
+        (s.userPhotos || []).forEach(function(p, pi) {
+          if (!p || p.startsWith('data:') || !p.includes(PHOTO_BUCKET)) return;
+          const m = p.match(/\/trip-photos\/([^?#]+)/);
+          if (m) refs.push({ di, si, pi, path: decodeURIComponent(m[1]) });
+        });
+      });
     });
-  });
-  if (fixed === 0 && total > 0) {
-    showToast('✅ All ' + total + ' photos already use public URLs — no fix needed');
-    return;
-  }
-  saveToStorage();
-  await schedulePush();
-  showToast('✅ Fixed ' + fixed + ' of ' + total + ' photo URLs → pushed to Supabase. Refresh to confirm.');
+
+    if (!refs.length) { showToast('No storage photos found to fix'); return; }
+
+    const uniquePaths = [...new Set(refs.map(r => r.path))];
+    showToast('🔗 Re-signing ' + uniquePaths.length + ' photos…');
+
+    // Batch re-sign in groups of 100
+    const urlMap = {};
+    for (let i = 0; i < uniquePaths.length; i += 100) {
+      const batch = uniquePaths.slice(i, i + 100);
+      const { data: signed, error } = await supa.storage.from(PHOTO_BUCKET).createSignedUrls(batch, 63072000);
+      if (error) { showToast('❌ Re-sign failed: ' + error.message); return; }
+      (signed || []).forEach(function(s) { if (s.signedUrl) urlMap[s.path] = s.signedUrl; });
+    }
+
+    let fixed = 0;
+    refs.forEach(function(ref) {
+      const newUrl = urlMap[ref.path];
+      if (!newUrl) return;
+      if (days[ref.di] && days[ref.di].stops[ref.si] && days[ref.di].stops[ref.si].userPhotos) {
+        days[ref.di].stops[ref.si].userPhotos[ref.pi] = newUrl;
+        fixed++;
+      }
+    });
+
+    window._photoUrlsRefreshedAt = new Date().toISOString();
+    saveToStorage();
+    await schedulePush();
+    showToast('✅ Re-signed ' + fixed + ' photo URLs → pushed. Refresh to confirm.');
+  } catch(e) { showToast('❌ Error: ' + e.message); }
 }
 
 async function _cleanBrokenPhotosNow() {
@@ -4972,7 +5027,7 @@ function stopPhotosHtml(stopIdx, dayIdx) {
   const thumbs = photos.map(function(p, pi) {
     const realIdx = (s.userPhotos || []).indexOf(p);
     return '<div data-stop="'+stopIdx+'" data-day="'+dayIdx+'" data-idx="'+realIdx+'" style="position:relative;flex-shrink:0;">'
-      + '<img src="'+p+'" onclick="event.stopPropagation();openPhotoGallery('+stopIdx+','+dayIdx+','+pi+')" '
+      + '<img src="'+_rp(p)+'" onclick="event.stopPropagation();openPhotoGallery('+stopIdx+','+dayIdx+','+pi+')" '
       + 'onerror="_onPhotoError(this.parentNode)" '
       + 'style="width:52px;height:52px;border-radius:8px;object-fit:cover;cursor:pointer;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.2);">'
       + '</div>';
@@ -11202,7 +11257,7 @@ function _buildSocialPhotosHtml() {
   });
   if (!photos.length) return '';
   return '<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;">' +
-    photos.map(p => `<img src="${p}" style="width:80px;height:80px;object-fit:cover;border-radius:10px;flex-shrink:0;">`).join('') +
+    photos.map(p => `<img src="${_rp(p)}" style="width:80px;height:80px;object-fit:cover;border-radius:10px;flex-shrink:0;">`).join('') +
     '</div>';
 }
 
@@ -11242,7 +11297,7 @@ function _injectStoryPhotos(html) {
     if (photos.length === 1) {
       return `<div class="story-photo-block"><img src="${photos[0]}" alt="${_escHtml(stop.name)}"><div class="story-photo-caption">${_escHtml(stop.name)}${stop.time ? ' · ' + stop.time : ''}</div></div>`;
     }
-    const grid = photos.slice(0, 4).map(p => `<img src="${p}" alt="${_escHtml(stop.name)}">`).join('');
+    const grid = photos.slice(0, 4).map(p => `<img src="${_rp(p)}" alt="${_escHtml(stop.name)}">`).join('');
     return `<div class="story-photo-grid">${grid}</div><div class="story-photo-caption" style="padding:0 2px 8px;">${_escHtml(stop.name)}${stop.time ? ' · ' + stop.time : ''}</div>`;
   });
 }
