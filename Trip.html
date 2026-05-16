@@ -6500,14 +6500,8 @@ function renderTourCards(tour, fromStop, toStop, afterIdx, dayIdx, beforeIdx) {
     }));
   } catch(e) {}
 
-  // Update the Google Maps iframe to show full route with all waypoints
-  const gmFrame = document.getElementById('suggestGmapFrame');
-  if (gmFrame && fromStop && toStop) {
-    const wpts = landmarks.slice(0, 8).map(l => l.lat+','+l.lng).join('/');
-    gmFrame.src = 'https://maps.google.com/maps?saddr='+fromStop.lat+','+fromStop.lng
-      +(wpts?'&via='+wpts.replace(/\//g,'%7C'):'')
-      +'&daddr='+toStop.lat+','+toStop.lng+'&dirflg=w&output=embed';
-  }
+  // Update the map with all landmark markers and the full walking route
+  drawTourRoute({ landmarks: landmarks, totalM: totalM, directM: directM }, fromStop, toStop);
 
   // Scroll-based highlight: find which card is most visible in the list container
   const listContainer = document.getElementById('suggestResultsList');
@@ -8884,10 +8878,7 @@ function suggestBetween(afterIdx, beforeIdx, dayIdx) {
         </div>
       </div>
 
-      <iframe id="suggestGmapFrame" class="suggest-map"
-        src="https://maps.google.com/maps?saddr=${fromLat},${fromLng}&daddr=${toLat},${toLng}&dirflg=w&output=embed"
-        style="border:0;width:100%;" allowfullscreen loading="lazy"
-        referrerpolicy="no-referrer-when-downgrade"></iframe>
+      <div id="suggestMapDiv" class="suggest-map"></div>
 
       <div id="suggestResultsList" class="suggest-results">
         <p style="color:#aaa;font-size:13px;text-align:center;padding:20px 0;">Choose a category or type to search</p>
@@ -8896,6 +8887,49 @@ function suggestBetween(afterIdx, beforeIdx, dayIdx) {
 
   document.body.appendChild(overlay);
   // Don't close on tap-outside — user needs to navigate away; only ✕ closes it
+
+  // Init interactive Leaflet map with real OSRM walking route
+  setTimeout(async () => {
+    if (_suggestMap) { _suggestMap.remove(); _suggestMap = null; }
+    const mapEl = document.getElementById('suggestMapDiv');
+    if (!mapEl) return;
+
+    const fromS = afterIdx >= 0 && days[dayIdx].stops[afterIdx] ? days[dayIdx].stops[afterIdx] : window.HOTEL_DATA;
+    const toS   = beforeIdx >= 0 && days[dayIdx].stops[beforeIdx] ? days[dayIdx].stops[beforeIdx] : window.HOTEL_DATA;
+    const fLat = fromS ? fromS.lat : midLat, fLng = fromS ? fromS.lng : midLng;
+    const tLat = toS   ? toS.lat   : midLat, tLng = toS   ? toS.lng   : midLng;
+    const cLat = (fLat + tLat) / 2, cLng = (fLng + tLng) / 2;
+
+    _suggestMap = L.map(mapEl, { zoomControl: true, attributionControl: false, dragging: true, scrollWheelZoom: false, doubleClickZoom: true, touchZoom: true })
+      .setView([cLat, cLng], 15);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(_suggestMap);
+
+    // FROM marker (green)
+    const mkPin = (lat, lng, label, color, name) => {
+      const ic = L.divIcon({ className:'', iconSize:[36,36], iconAnchor:[18,18],
+        html: '<div style="width:36px;height:36px;background:'+color+';border:3px solid #fff;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;color:#fff;font-size:9px;font-weight:900;letter-spacing:0.5px;">'+label+'</div>'
+      });
+      return L.marker([lat, lng], { icon: ic, zIndexOffset: 1000 }).addTo(_suggestMap)
+        .bindTooltip(name, { direction:'top', permanent: false });
+    };
+    if (fromS) mkPin(fLat, fLng, 'FROM', '#1a7a3a', fromS.name || 'Start');
+    if (toS)   mkPin(tLat, tLng, 'TO',   '#c0392b', toS.name   || 'End');
+
+    // Fit bounds to FROM/TO
+    if (fromS && toS) _suggestMap.fitBounds([[fLat,fLng],[tLat,tLng]], { padding:[36,36], maxZoom:16 });
+
+    // Draw OSRM walking route
+    try {
+      const res = await fetch(`https://router.project-osrm.org/route/v1/foot/${fLng},${fLat};${tLng},${tLat}?overview=full&geometries=geojson`);
+      const data = await res.json();
+      const coords = data.routes && data.routes[0] && data.routes[0].geometry && data.routes[0].geometry.coordinates;
+      if (coords && _suggestMap) {
+        const latlngs = coords.map(c => [c[1], c[0]]);
+        _tourRouteLayer = L.polyline(latlngs, { color:'#1a56c4', weight:4, opacity:0.85 }).addTo(_suggestMap);
+        _suggestMap.fitBounds(latlngs, { padding:[36,36], maxZoom:16 });
+      }
+    } catch(e) { /* route unavailable — markers still show */ }
+  }, 150);
 
   // Restore last tour from session (survives navigating to Google Maps and back)
   try {
