@@ -6363,9 +6363,16 @@ function _restoreLastTour(afterIdx, dayIdx, beforeIdx) {
   try {
     var t = JSON.parse(sessionStorage.getItem('_lastMagicTour'));
     if (!t || !t.landmarks) { showToast('No saved tour found', true); return; }
+
+    // Ensure tourCards div exists — renderTourCards returns early without it
+    var listEl = document.getElementById('suggestResultsList');
+    if (listEl && !document.getElementById('tourCards')) {
+      listEl.innerHTML = '<div id="tourCards" style="padding:0 16px 16px;"></div>';
+    }
+
     var tour = { landmarks: t.landmarks, totalM: t.totalM || 0, directM: t.directM || 0 };
     renderTourCards(tour, t.fromStop, t.toStop, afterIdx, dayIdx, beforeIdx);
-    // Scroll to tour cards
+
     var el = document.getElementById('tourCards');
     if (el) el.scrollIntoView({ behavior: 'smooth' });
   } catch(e) { showToast('Could not restore tour: ' + e.message, true); }
@@ -8872,11 +8879,8 @@ function suggestBetween(afterIdx, beforeIdx, dayIdx) {
           <button class="suggest-chip suggest-more-btn" onclick="document.getElementById('suggestPanel').classList.add('show-extra')">⋯ More</button>
           ${SUGGEST_CATEGORIES_MORE.map(c => `<button class="suggest-chip suggest-chip-extra" onclick="document.getElementById('suggestQuery').value='${c.label}';runSuggest(${midLat},${midLng},${afterIdx},${dayIdx},${beforeIdx})">${c.icon} ${c.label}</button>`).join('')}
         </div>
-      </div>
-
-      <div id="suggestMapDiv" style="margin:0 0 4px;">
         <a id="suggestGmapLink" href="https://www.google.com/maps/dir/${fromLat},${fromLng}/${toLat},${toLng}/@${midLat},${midLng},15z/data=!3m1!4b1!4m2!4m1!3e2" target="_blank"
-           style="display:flex;align-items:center;justify-content:center;gap:8px;background:#e8f0fe;border:1.5px solid #4285f4;border-radius:12px;padding:11px 16px;color:#1a56c4;font-size:13px;font-weight:800;text-decoration:none;width:100%;box-sizing:border-box;">
+           style="display:flex;align-items:center;justify-content:center;gap:8px;background:#e8f0fe;border:1.5px solid #4285f4;border-radius:12px;padding:10px 16px;margin-bottom:10px;color:#1a56c4;font-size:13px;font-weight:800;text-decoration:none;">
           🗺️ View route in Google Maps · walking
         </a>
       </div>
