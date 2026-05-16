@@ -6382,6 +6382,35 @@ function _restoreLastTour(afterIdx, dayIdx, beforeIdx) {
   } catch(e) { showToast('Could not restore tour: ' + e.message, true); }
 }
 
+// Remove a landmark from the tour, update map + Google Maps links + card count
+function _removeTourLandmark(idx, afterIdx, dayIdx, beforeIdx) {
+  if (!_tourLandmarks || !_tourLandmarks[idx]) return;
+  _tourLandmarks.splice(idx, 1);
+
+  // Re-build tour object and re-render everything
+  var ctxStops = days[dayIdx] && days[dayIdx].stops || [];
+  var fromStop = afterIdx >= 0 && ctxStops[afterIdx] ? ctxStops[afterIdx] : window.HOTEL_DATA;
+  var toStop   = beforeIdx >= 0 && ctxStops[beforeIdx] ? ctxStops[beforeIdx] : window.HOTEL_DATA;
+
+  // Re-calculate total distance
+  var totalM = 0;
+  var pts = [fromStop].concat(_tourLandmarks).concat([toStop]);
+  for (var p = 0; p < pts.length - 1; p++) {
+    totalM += _haversineMetres(pts[p].lat, pts[p].lng, pts[p+1].lat, pts[p+1].lng);
+  }
+  var directM = _haversineMetres(fromStop.lat, fromStop.lng, toStop.lat, toStop.lng);
+
+  var tour = { landmarks: _tourLandmarks, totalM: totalM, directM: directM };
+
+  // Re-render cards (also updates Google Maps links)
+  renderTourCards(tour, fromStop, toStop, afterIdx, dayIdx, beforeIdx);
+
+  // Update map markers and connector lines
+  drawTourRoute(tour, fromStop, toStop);
+
+  showToast('Removed · ' + _tourLandmarks.length + ' landmark' + (_tourLandmarks.length !== 1 ? 's' : '') + ' remaining');
+}
+
 function _saveTourToTrip(afterIdx, dayIdx, beforeIdx) {
   if (!_tourLandmarks || !_tourLandmarks.length) { showToast('No tour generated yet', true); return; }
   var dayStops = days[dayIdx].stops;
@@ -6475,10 +6504,11 @@ function renderTourCards(tour, fromStop, toStop, afterIdx, dayIdx, beforeIdx) {
       +'<div style="padding:10px 12px;">'
       +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:5px;">'
       +'<div style="font-size:13px;font-weight:800;line-height:1.3;">'+lm.name+'</div>'
-      +'<div style="display:flex;gap:5px;flex-shrink:0;">'
+      +'<div style="display:flex;gap:5px;flex-shrink:0;align-items:center;">'
       +walkHereBtn
       +'<a href="'+lm.wikiUrl+'" target="_blank" style="font-size:11px;color:#1a73e8;text-decoration:none;padding:3px 7px;border:1px solid #d0e8ff;border-radius:8px;white-space:nowrap;">&#x1F4D6; Wiki</a>'
       +'<button onclick="speakTourLandmark('+i+')" style="background:none;border:none;font-size:15px;cursor:pointer;opacity:0.6;padding:2px;">&#x1F50A;</button>'
+      +'<button onclick="_removeTourLandmark('+i+','+afterIdx+','+dayIdx+','+beforeIdx+')" title="Remove from tour" style="background:none;border:none;font-size:15px;cursor:pointer;color:#e74c3c;padding:2px;opacity:0.7;" title="Remove">✕</button>'
       +'</div></div>'
       +'<p style="font-size:13px;color:#333;line-height:1.5;margin:0;">'+lm.tldr+'</p>'
       +'</div></div></div>';
