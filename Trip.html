@@ -9102,6 +9102,55 @@ function renderSuggestResults(results, afterIdx, dayIdx) {
   });
   html += '<button id="suggestMoreBtn" onclick="event.stopPropagation();runSuggestMore()" style="width:100%;margin-top:8px;padding:10px;border-radius:12px;border:1px dashed #bbb;background:#fafafa;font-size:13px;font-weight:700;color:#555;cursor:pointer;">🔄 Suggest more</button>';
   listEl.innerHTML = html;
+
+  // If map wasn't ready yet when markers were added, retry now
+  if (_suggestMap && _suggestMarkers.length === 0 && results.length > 0) {
+    _suggestResults.forEach(function(r, i) {
+      if (!r.lat || !r.lng) return;
+      const colors2 = ['#e74c3c','#e67e22','#f1c40f','#27ae60','#3498db','#9b59b6','#1abc9c','#e91e63'];
+      const ic = L.divIcon({ className:'', iconSize:[28,28], iconAnchor:[14,14],
+        html:'<div style="background:'+colors2[i % colors2.length]+';color:#fff;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.3);">'+(i+1)+'</div>'
+      });
+      const mk = L.marker([r.lat, r.lng], { icon: ic }).addTo(_suggestMap)
+        .bindPopup('<b>'+r.name+'</b><br><span style="font-size:11px;color:#666;">'+r.address+'</span>');
+      mk.on('click', function() { highlightSuggestResult(i); });
+      _suggestMarkers.push(mk);
+    });
+    if (_suggestMarkers.length) {
+      try { _suggestMap.fitBounds(L.latLngBounds(_suggestResults.filter(r=>r.lat).map(r=>[r.lat,r.lng])), {padding:[30,30]}); } catch(e){}
+    }
+  }
+
+  // Auto-pan map as user scrolls through result cards (IntersectionObserver)
+  if (_suggestMap && _suggestResults.length) {
+    if (window._suggestScrollObserver) window._suggestScrollObserver.disconnect();
+    window._suggestScrollObserver = new IntersectionObserver(function(entries) {
+      // Find the most visible card
+      let best = null, bestRatio = 0;
+      entries.forEach(function(e) {
+        if (e.isIntersecting && e.intersectionRatio > bestRatio) {
+          bestRatio = e.intersectionRatio;
+          best = e.target;
+        }
+      });
+      if (best) {
+        const idx = parseInt(best.dataset.resultIdx);
+        if (!isNaN(idx) && _suggestMarkers[idx] && _suggestResults[idx]) {
+          const r = _suggestResults[idx];
+          _suggestMap.panTo([r.lat, r.lng], { animate: true, duration: 0.4 });
+          _suggestMarkers.forEach(function(m, j) {
+            const el = m.getElement && m.getElement();
+            if (el) el.style.opacity = j === idx ? '1' : '0.5';
+          });
+        }
+      }
+    }, { root: listEl, threshold: [0.5] });
+
+    document.querySelectorAll('[id^="suggestResult"]').forEach(function(card, i) {
+      card.dataset.resultIdx = i;
+      window._suggestScrollObserver.observe(card);
+    });
+  }
 }
 
 function toggleSuggestDetail(i) {
@@ -9136,15 +9185,21 @@ async function runSuggestMore() {
 }
 
 function highlightSuggestResult(i) {
-  // Scroll map to this marker
-  if (_suggestMarkers[i] && _suggestMap) {
-    const r = _suggestResults[i];
-    _suggestMap.setView([r.lat, r.lng], 16);
-    _suggestMarkers[i].openPopup();
+  if (!_suggestResults[i] || !_suggestResults[i].lat) return;
+  // Pan map to this result
+  if (_suggestMap) {
+    _suggestMap.setView([_suggestResults[i].lat, _suggestResults[i].lng], 16, { animate: true });
+    if (_suggestMarkers[i]) _suggestMarkers[i].openPopup();
   }
-  // Highlight card
-  document.querySelectorAll('[id^="suggestResult"]').forEach((el,j) => {
+  // Fade all markers except this one
+  _suggestMarkers.forEach(function(m, j) {
+    const el = m.getElement && m.getElement();
+    if (el) el.style.opacity = j === i ? '1' : '0.4';
+  });
+  // Highlight selected card, dim others
+  document.querySelectorAll('[id^="suggestResult"]').forEach(function(el, j) {
     el.style.background = j === i ? '#f0f7ff' : '#fff';
+    el.style.boxShadow = j === i ? '0 0 0 2px #1a56c4' : '';
   });
 }
 
