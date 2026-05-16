@@ -6288,8 +6288,11 @@ async function buildGuidedTour(fromStop, toStop, tolerance) {
   var maxPerSeg = tolerance <= 0.1 ? 1 : tolerance <= 0.35 ? 2 : tolerance <= 0.7 ? 3 : 4;
   var spread = spreadAlongRoute(fromStop, deduped, toStop, maxPerSeg);
 
-  // 3. Sort by position along actual walking route — guarantees forward-only order
+  // 3. Sort landmarks: start with greedy nearest-neighbor (no crossings guaranteed),
+  //    then try OSRM route-projection and keep it only if it gives a shorter total path.
   var selected = [];
+  var nnOrder = nearestNeighborOrder(fromStop, spread, toStop);
+
   try {
     var routeRes = await Promise.any([
       fetch('https://routing.openstreetmap.de/routed-foot/route/v1/driving/'+fromStop.lng+','+fromStop.lat+';'+toStop.lng+','+toStop.lat+'?overview=full&geometries=geojson'),
@@ -6298,27 +6301,34 @@ async function buildGuidedTour(fromStop, toStop, tolerance) {
     var routeData = await routeRes.json();
     var rCoords = routeData.routes && routeData.routes[0] && routeData.routes[0].geometry.coordinates;
     if (rCoords && rCoords.length > 1) {
+      // Project each landmark onto the route to get its position
       spread.forEach(function(lm) {
         var minD = Infinity, rPos = 0, cum = 0;
         for (var ri = 0; ri < rCoords.length - 1; ri++) {
           var s = rCoords[ri], e = rCoords[ri+1];
           var sLen = _haversineMetres(s[1],s[0],e[1],e[0]);
           var dx2 = e[0]-s[0], dy2 = e[1]-s[1], l2 = dx2*dx2+dy2*dy2||1;
-          var t = Math.max(0,Math.min(1,((lm.lng-s[0])*dx2+(lm.lat-s[1])*dy2)/l2));
-          var d = _haversineMetres(lm.lat,lm.lng,s[1]+t*(e[1]-s[1]),s[0]+t*dx2);
-          if (d < minD) { minD = d; rPos = cum + t*sLen; }
+          var t2 = Math.max(0,Math.min(1,((lm.lng-s[0])*dx2+(lm.lat-s[1])*dy2)/l2));
+          var d = _haversineMetres(lm.lat,lm.lng,s[1]+t2*(e[1]-s[1]),s[0]+t2*dx2);
+          if (d < minD) { minD = d; rPos = cum + t2*sLen; }
           cum += sLen;
         }
         lm.routePos = rPos;
       });
-      spread.sort(function(a,b){return a.routePos-b.routePos;});
+      var routeOrder = spread.slice().sort(function(a,b){return a.routePos-b.routePos;});
+
+      // Compare total path length of both orderings — keep the shorter one
+      var pathLen = function(pts) {
+        var d = _haversineMetres(fromStop.lat, fromStop.lng, pts[0].lat, pts[0].lng);
+        for (var k = 0; k < pts.length-1; k++) d += _haversineMetres(pts[k].lat, pts[k].lng, pts[k+1].lat, pts[k+1].lng);
+        return d + _haversineMetres(pts[pts.length-1].lat, pts[pts.length-1].lng, toStop.lat, toStop.lng);
+      };
+      spread = pathLen(routeOrder) < pathLen(nnOrder) ? routeOrder : nnOrder;
     } else {
-      // Route empty — use nearest-neighbor greedy sort
-      spread = nearestNeighborOrder(fromStop, spread, toStop);
+      spread = nnOrder;
     }
   } catch(e) {
-    // Fallback to nearest-neighbor greedy sort on routing error
-    spread = nearestNeighborOrder(fromStop, spread, toStop);
+    spread = nnOrder;
   }
   selected = spread.slice(0, 50);
 
@@ -6545,8 +6555,10 @@ function renderTourCards(tour, fromStop, toStop, afterIdx, dayIdx, beforeIdx) {
   drawTourRoute({ landmarks: landmarks, totalM: totalM, directM: directM }, fromStop, toStop);
 
   // Scroll sync: IntersectionObserver highlights map marker as each card scrolls into view
+  // Note: _landmarkMarkers is filled by drawTourRoute (called after this) — the observer
+  // will find them populated by the time the user actually starts scrolling.
   const listContainer = document.getElementById('suggestResultsList');
-  if (listContainer && _landmarkMarkers.length) {
+  if (listContainer) {
     if (window._tourScrollObserver) window._tourScrollObserver.disconnect();
     window._tourScrollObserver = new IntersectionObserver(function(entries) {
       let best = null, bestRatio = 0;
@@ -6555,11 +6567,11 @@ function renderTourCards(tour, fromStop, toStop, afterIdx, dayIdx, beforeIdx) {
           bestRatio = e.intersectionRatio; best = e.target;
         }
       });
-      if (best) {
+      if (best && _landmarkMarkers.length) {
         const idx = parseInt(best.getAttribute('data-idx'));
         if (!isNaN(idx)) highlightTourMarker(idx);
       }
-    }, { root: listContainer, threshold: [0.4, 0.7, 1.0] });
+    }, { root: listContainer, threshold: [0.3, 0.6, 1.0] });
 
     document.querySelectorAll('.tour-card').forEach(function(card) {
       window._tourScrollObserver.observe(card);
