@@ -6581,18 +6581,29 @@ async function drawTourRoute(tour, fromStop, toStop) {
     _tourMarkers.push(mk);
   });
 
-  // 3. Fetch OSRM walking route and draw polyline
+  // 3. Fetch walking route — foot-specific OSRM (Promise.any with fallback)
   var ordered = [fromStop].concat(tour.landmarks).concat([toStop]);
   var coordStr = ordered.map(function(p){return p.lng+','+p.lat;}).join(';');
-  try {
-    var r = await fetch('https://router.project-osrm.org/route/v1/foot/'+coordStr+'?overview=full&geometries=geojson');
-    var d = await r.json();
-    if(d.routes&&d.routes[0]){
-      var coords = d.routes[0].geometry.coordinates.map(function(c){return [c[1],c[0]];});
-      _tourRouteLayer = L.polyline(coords,{color:'#5c4db1',weight:4,opacity:0.85}).addTo(_suggestMap);
-    } else throw new Error('no route');
-  } catch(e){
-    _tourRouteLayer = L.polyline(ordered.map(function(p){return [p.lat,p.lng];}),{color:'#5c4db1',weight:3,opacity:0.7,dashArray:'8,4'}).addTo(_suggestMap);
+  var totalDist = _haversineMetres(fromStop.lat, fromStop.lng, toStop.lat, toStop.lng);
+
+  // For very short origin→destination with no meaningful detour, keep existing route line
+  if (totalDist < 200 && tour.landmarks.length === 0) {
+    _tourRouteLayer = L.polyline(ordered.map(function(p){return [p.lat,p.lng];}), {color:'#5c4db1',weight:3,opacity:0.7,dashArray:'8,8'}).addTo(_suggestMap);
+  } else {
+    try {
+      var r = await Promise.any([
+        fetch('https://routing.openstreetmap.de/routed-foot/route/v1/driving/'+coordStr+'?overview=full&geometries=geojson'),
+        fetch('https://router.project-osrm.org/route/v1/foot/'+coordStr+'?overview=full&geometries=geojson')
+      ]);
+      var d = await r.json();
+      if (d.routes && d.routes[0]) {
+        var coords = d.routes[0].geometry.coordinates.map(function(c){return [c[1],c[0]];});
+        _tourRouteLayer = L.polyline(coords, {color:'#5c4db1',weight:4,opacity:0.85}).addTo(_suggestMap);
+      } else throw new Error('no route');
+    } catch(e) {
+      // Fallback: straight dashed lines between all stops
+      _tourRouteLayer = L.polyline(ordered.map(function(p){return [p.lat,p.lng];}), {color:'#5c4db1',weight:3,opacity:0.7,dashArray:'8,4'}).addTo(_suggestMap);
+    }
   }
 
   // 4. Re-fit to include the full route line
