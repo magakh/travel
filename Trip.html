@@ -8918,17 +8918,31 @@ function suggestBetween(afterIdx, beforeIdx, dayIdx) {
     // Fit bounds to FROM/TO
     if (fromS && toS) _suggestMap.fitBounds([[fLat,fLng],[tLat,tLng]], { padding:[36,36], maxZoom:16 });
 
-    // Draw OSRM walking route
-    try {
-      const res = await fetch(`https://router.project-osrm.org/route/v1/foot/${fLng},${fLat};${tLng},${tLat}?overview=full&geometries=geojson`);
-      const data = await res.json();
-      const coords = data.routes && data.routes[0] && data.routes[0].geometry && data.routes[0].geometry.coordinates;
-      if (coords && _suggestMap) {
-        const latlngs = coords.map(c => [c[1], c[0]]);
-        _tourRouteLayer = L.polyline(latlngs, { color:'#1a56c4', weight:4, opacity:0.85 }).addTo(_suggestMap);
-        _suggestMap.fitBounds(latlngs, { padding:[36,36], maxZoom:16 });
+    // Draw real walking route — try foot-specific OSRM, fallback to dashed straight line
+    const dist = _haversineMetres(fLat, fLng, tLat, tLng);
+    if (dist < 250) {
+      // Too short for routing — draw a simple dashed straight line
+      _tourRouteLayer = L.polyline([[fLat,fLng],[tLat,tLng]], { color:'#1a56c4', weight:3, opacity:0.7, dashArray:'8,8' }).addTo(_suggestMap);
+      _suggestMap.fitBounds([[fLat,fLng],[tLat,tLng]], { padding:[50,50], maxZoom:17 });
+    } else {
+      try {
+        const res = await Promise.any([
+          fetch(`https://routing.openstreetmap.de/routed-foot/route/v1/driving/${fLng},${fLat};${tLng},${tLat}?overview=full&geometries=geojson`),
+          fetch(`https://router.project-osrm.org/route/v1/foot/${fLng},${fLat};${tLng},${tLat}?overview=full&geometries=geojson`)
+        ]);
+        const data = await res.json();
+        const coords = data.routes && data.routes[0] && data.routes[0].geometry && data.routes[0].geometry.coordinates;
+        if (coords && _suggestMap) {
+          const latlngs = coords.map(c => [c[1], c[0]]);
+          _tourRouteLayer = L.polyline(latlngs, { color:'#1a56c4', weight:4, opacity:0.85 }).addTo(_suggestMap);
+          _suggestMap.fitBounds(latlngs, { padding:[36,36], maxZoom:16 });
+        }
+      } catch(e) {
+        // Fallback to dashed straight line if routing fails
+        _tourRouteLayer = L.polyline([[fLat,fLng],[tLat,tLng]], { color:'#1a56c4', weight:3, opacity:0.7, dashArray:'8,8' }).addTo(_suggestMap);
+        _suggestMap.fitBounds([[fLat,fLng],[tLat,tLng]], { padding:[50,50], maxZoom:16 });
       }
-    } catch(e) { /* route unavailable — markers still show */ }
+    }
   }, 150);
 
   // Restore last tour from session (survives navigating to Google Maps and back)
