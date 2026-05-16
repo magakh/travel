@@ -6359,6 +6359,18 @@ async function buildGuidedTour(fromStop, toStop, tolerance) {
   return {landmarks:selected, totalM:totalM, directM:directM};
 }
 
+function _restoreLastTour(afterIdx, dayIdx, beforeIdx) {
+  try {
+    var t = JSON.parse(sessionStorage.getItem('_lastMagicTour'));
+    if (!t || !t.landmarks) { showToast('No saved tour found', true); return; }
+    var tour = { landmarks: t.landmarks, totalM: t.totalM || 0, directM: t.directM || 0 };
+    renderTourCards(tour, t.fromStop, t.toStop, afterIdx, dayIdx, beforeIdx);
+    // Scroll to tour cards
+    var el = document.getElementById('tourCards');
+    if (el) el.scrollIntoView({ behavior: 'smooth' });
+  } catch(e) { showToast('Could not restore tour: ' + e.message, true); }
+}
+
 function _saveTourToTrip(afterIdx, dayIdx, beforeIdx) {
   if (!_tourLandmarks || !_tourLandmarks.length) { showToast('No tour generated yet', true); return; }
   var dayStops = days[dayIdx].stops;
@@ -6478,6 +6490,14 @@ function renderTourCards(tour, fromStop, toStop, afterIdx, dayIdx, beforeIdx) {
       afterIdx: afterIdx, dayIdx: dayIdx, beforeIdx: beforeIdx, totalM: totalM, directM: directM
     }));
   } catch(e) {}
+
+  // Update the Google Maps link in the panel header to include all waypoints
+  const gmLink = document.getElementById('suggestGmapLink');
+  if (gmLink && fromStop && toStop) {
+    const wpts = landmarks.slice(0, 9).map(l => l.lat+','+l.lng).join('/');
+    gmLink.href = 'https://www.google.com/maps/dir/'+fromStop.lat+','+fromStop.lng+'/'+(wpts?wpts+'/':'')+toStop.lat+','+toStop.lng+'/data=!3m1!4b1!4m2!4m1!3e2';
+    gmLink.innerHTML = '🗺️ Full walking route with all '+landmarks.length+' landmarks · Google Maps';
+  }
 
   // Scroll-based highlight: find which card is most visible in the list container
   const listContainer = document.getElementById('suggestResultsList');
@@ -8826,6 +8846,8 @@ function suggestBetween(afterIdx, beforeIdx, dayIdx) {
   const totalDist = _hdrFrom && _hdrTo ? Math.round(_haversineMetres(_hdrFrom.lat, _hdrFrom.lng, _hdrTo.lat, _hdrTo.lng)) : null;
   const distLabel = totalDist ? (totalDist >= 1000 ? (totalDist/1000).toFixed(1) + ' km' : totalDist + ' m') : '';
   const routeSummary = totalWalk ? '🚶 ' + totalWalk + (distLabel ? ' · ' + distLabel : '') + ' total' : '';
+  const fromLat = _hdrFrom ? _hdrFrom.lat : midLat, fromLng = _hdrFrom ? _hdrFrom.lng : midLng;
+  const toLat   = _hdrTo   ? _hdrTo.lat   : midLat, toLng   = _hdrTo   ? _hdrTo.lng   : midLng;
 
   const overlay = document.createElement('div');
   overlay.id = 'suggest-overlay';
@@ -8852,7 +8874,12 @@ function suggestBetween(afterIdx, beforeIdx, dayIdx) {
         </div>
       </div>
 
-      <div id="suggestMapDiv" class="suggest-map"></div>
+      <div id="suggestMapDiv" style="margin:0 0 4px;">
+        <a id="suggestGmapLink" href="https://www.google.com/maps/dir/${fromLat},${fromLng}/${toLat},${toLng}/@${midLat},${midLng},15z/data=!3m1!4b1!4m2!4m1!3e2" target="_blank"
+           style="display:flex;align-items:center;justify-content:center;gap:8px;background:#e8f0fe;border:1.5px solid #4285f4;border-radius:12px;padding:11px 16px;color:#1a56c4;font-size:13px;font-weight:800;text-decoration:none;width:100%;box-sizing:border-box;">
+          🗺️ View route in Google Maps · walking
+        </a>
+      </div>
 
       <div id="suggestResultsList" class="suggest-results">
         <p style="color:#aaa;font-size:13px;text-align:center;padding:20px 0;">Choose a category or type to search</p>
@@ -8872,46 +8899,14 @@ function suggestBetween(afterIdx, beforeIdx, dayIdx) {
         if (resultsEl) {
           var restore = document.createElement('div');
           restore.style.cssText = 'background:#fffbeb;border:1px solid #f59e0b;border-radius:10px;padding:10px 14px;margin:10px 0;display:flex;align-items:center;gap:10px;';
-          restore.innerHTML = '<div style="flex:1;font-size:12px;font-weight:700;color:#92400e;">📋 Previous tour: '+t.landmarks.length+' landmarks between '+t.fromStop.name+'→'+t.toStop.name+'</div>'
-            + '<button onclick="renderTourCards(JSON.parse(sessionStorage.getItem(\'_lastMagicTour\')),JSON.parse(sessionStorage.getItem(\'_lastMagicTour\')).fromStop,JSON.parse(sessionStorage.getItem(\'_lastMagicTour\')).toStop,'+afterIdx+','+dayIdx+','+beforeIdx+')" style="padding:6px 12px;background:#f59e0b;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer;flex-shrink:0;">Restore</button>';
+          restore.innerHTML = '<div style="flex:1;font-size:12px;font-weight:700;color:#92400e;">📋 Previous tour: '+t.landmarks.length+' landmarks between '+t.fromStop.name+' → '+t.toStop.name+'</div>'
+            + '<button onclick="_restoreLastTour('+afterIdx+','+dayIdx+','+beforeIdx+')" style="padding:6px 12px;background:#f59e0b;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer;flex-shrink:0;">Restore</button>';
           resultsEl.prepend(restore);
         }
       }
     }
   } catch(e) {}
 
-  // Init mini map
-  setTimeout(() => {
-    if (_suggestMap) { _suggestMap.remove(); _suggestMap = null; }
-    const mapEl = document.getElementById('suggestMapDiv');
-    if (!mapEl) return;
-    _suggestMap = L.map(mapEl, { zoomControl: true, attributionControl: false }).setView([midLat, midLng], 15);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(_suggestMap);
-
-    // FROM/TO pins as colored circles (green = from, red = to)
-    const mkContextPin = (lat, lng, label, name) => {
-      const color = label === 'FROM' ? '#1a7a3a' : '#c0392b';
-      const ic = L.divIcon({ className:'', html:
-        '<div style="position:relative;width:36px;height:36px;">' +
-          '<div style="position:absolute;inset:0;background:' + color + ';border:3px solid #fff;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;color:#fff;font-size:9px;font-weight:900;letter-spacing:0.5px;">' + label + '</div>' +
-        '</div>',
-        iconSize:[36,36], iconAnchor:[18,18] });
-      L.marker([lat, lng], { icon: ic, zIndexOffset: 1000 }).addTo(_suggestMap).bindPopup('<b>' + label + ':</b> ' + name);
-    };
-    const ctx = days[dayIdx].stops;
-    if (afterIdx >= 0 && ctx[afterIdx]) {
-      const a = ctx[afterIdx];
-      mkContextPin(a.lat, a.lng, 'FROM', a.name);
-    } else if (window.HOTEL_DATA) {
-      mkContextPin(window.HOTEL_DATA.lat, window.HOTEL_DATA.lng, 'FROM', window.HOTEL_DATA.name);
-    }
-    if (beforeIdx >= 0 && ctx[beforeIdx]) {
-      const b = ctx[beforeIdx];
-      mkContextPin(b.lat, b.lng, 'TO', b.name);
-    } else if (window.HOTEL_DATA) {
-      mkContextPin(window.HOTEL_DATA.lat, window.HOTEL_DATA.lng, 'TO', window.HOTEL_DATA.name);
-    }
-  }, 150);
 }
 
 async function runSuggest(midLat, midLng, afterIdx, dayIdx, beforeIdx) {
