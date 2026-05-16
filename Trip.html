@@ -6431,11 +6431,13 @@ function renderTourCards(tour, fromStop, toStop, afterIdx, dayIdx, beforeIdx) {
   }).join('');
 
   var html = '<div style="padding:0 0 12px;border-bottom:1px solid #eee;margin-bottom:0;">'
-    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">'
+    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">'
     +'<div style="flex:1;"><div style="font-size:13px;font-weight:800;">'+landmarks.length+' landmark'+(landmarks.length>1?'s':'')+' on the way</div>'
     +'<div style="font-size:11px;color:#888;margin-top:2px;">~'+totalMins+' min'+(extra>0?' (+'+extra+' vs direct)':'')+'</div></div>'
     +'<div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0;">'+gmLinksHtml+'</div>'
     +'</div>'
+    // Full-route Google Maps — prominent, acts as the "map"
+    +'<a href="'+gmParts[0].url+'" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:12px;border-radius:12px;border:none;background:#4285f4;color:#fff;font-size:13px;font-weight:800;text-decoration:none;margin-bottom:8px;">🗺️ Open full route in Google Maps</a>'
     // Save all to trip
     +'<button onclick="_saveTourToTrip('+afterIdx+','+dayIdx+','+beforeIdx+')" style="width:100%;padding:10px;border-radius:12px;border:none;background:#1a56c4;color:#fff;font-size:13px;font-weight:800;cursor:pointer;margin-bottom:6px;display:flex;align-items:center;justify-content:center;gap:6px;">💾 Save all stops to my trip</button>'
     +'<button id="startWalkBtnTop" onclick="startLiveWalkingTour()" style="width:100%;padding:11px;border-radius:12px;border:none;background:#1a7a3a;color:#fff;font-size:13px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;">&#x1F6B6; Start live walking tour · auto-alerts as you approach</button>'
@@ -6498,7 +6500,7 @@ function renderTourCards(tour, fromStop, toStop, afterIdx, dayIdx, beforeIdx) {
     }));
   } catch(e) {}
 
-  // Update the Google Maps link in the panel header to include all waypoints
+  // Update the main Google Maps link to include all waypoints (if the link element still exists)
   const gmLink = document.getElementById('suggestGmapLink');
   if (gmLink && fromStop && toStop) {
     const wpts = landmarks.slice(0, 9).map(l => l.lat+','+l.lng).join('/');
@@ -8879,10 +8881,6 @@ function suggestBetween(afterIdx, beforeIdx, dayIdx) {
           <button class="suggest-chip suggest-more-btn" onclick="document.getElementById('suggestPanel').classList.add('show-extra')">⋯ More</button>
           ${SUGGEST_CATEGORIES_MORE.map(c => `<button class="suggest-chip suggest-chip-extra" onclick="document.getElementById('suggestQuery').value='${c.label}';runSuggest(${midLat},${midLng},${afterIdx},${dayIdx},${beforeIdx})">${c.icon} ${c.label}</button>`).join('')}
         </div>
-        <a id="suggestGmapLink" href="https://www.google.com/maps/dir/${fromLat},${fromLng}/${toLat},${toLng}/@${midLat},${midLng},15z/data=!3m1!4b1!4m2!4m1!3e2" target="_blank"
-           style="display:flex;align-items:center;justify-content:center;gap:8px;background:#e8f0fe;border:1.5px solid #4285f4;border-radius:12px;padding:10px 16px;margin-bottom:10px;color:#1a56c4;font-size:13px;font-weight:800;text-decoration:none;">
-          🗺️ View route in Google Maps · walking
-        </a>
       </div>
 
       <div id="suggestResultsList" class="suggest-results">
