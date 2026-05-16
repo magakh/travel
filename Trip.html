@@ -6500,12 +6500,13 @@ function renderTourCards(tour, fromStop, toStop, afterIdx, dayIdx, beforeIdx) {
     }));
   } catch(e) {}
 
-  // Update the main Google Maps link to include all waypoints (if the link element still exists)
-  const gmLink = document.getElementById('suggestGmapLink');
-  if (gmLink && fromStop && toStop) {
-    const wpts = landmarks.slice(0, 9).map(l => l.lat+','+l.lng).join('/');
-    gmLink.href = 'https://www.google.com/maps/dir/'+fromStop.lat+','+fromStop.lng+'/'+(wpts?wpts+'/':'')+toStop.lat+','+toStop.lng+'/data=!3m1!4b1!4m2!4m1!3e2';
-    gmLink.innerHTML = '🗺️ Full walking route with all '+landmarks.length+' landmarks · Google Maps';
+  // Update the Google Maps iframe to show full route with all waypoints
+  const gmFrame = document.getElementById('suggestGmapFrame');
+  if (gmFrame && fromStop && toStop) {
+    const wpts = landmarks.slice(0, 8).map(l => l.lat+','+l.lng).join('/');
+    gmFrame.src = 'https://maps.google.com/maps?saddr='+fromStop.lat+','+fromStop.lng
+      +(wpts?'&via='+wpts.replace(/\//g,'%7C'):'')
+      +'&daddr='+toStop.lat+','+toStop.lng+'&dirflg=w&output=embed';
   }
 
   // Scroll-based highlight: find which card is most visible in the list container
@@ -8882,6 +8883,11 @@ function suggestBetween(afterIdx, beforeIdx, dayIdx) {
           ${SUGGEST_CATEGORIES_MORE.map(c => `<button class="suggest-chip suggest-chip-extra" onclick="document.getElementById('suggestQuery').value='${c.label}';runSuggest(${midLat},${midLng},${afterIdx},${dayIdx},${beforeIdx})">${c.icon} ${c.label}</button>`).join('')}
         </div>
       </div>
+
+      <iframe id="suggestGmapFrame" class="suggest-map"
+        src="https://maps.google.com/maps?saddr=${fromLat},${fromLng}&daddr=${toLat},${toLng}&dirflg=w&output=embed"
+        style="border:0;width:100%;" allowfullscreen loading="lazy"
+        referrerpolicy="no-referrer-when-downgrade"></iframe>
 
       <div id="suggestResultsList" class="suggest-results">
         <p style="color:#aaa;font-size:13px;text-align:center;padding:20px 0;">Choose a category or type to search</p>
