@@ -6287,10 +6287,13 @@ async function buildGuidedTour(fromStop, toStop, tolerance) {
   var maxPerSeg = tolerance <= 0.1 ? 1 : tolerance <= 0.35 ? 2 : tolerance <= 0.7 ? 3 : 4;
   var spread = spreadAlongRoute(fromStop, deduped, toStop, maxPerSeg);
 
-  // 3. Sort by position along actual OSRM walking route — guarantees forward-only order
+  // 3. Sort by position along actual walking route — guarantees forward-only order
   var selected = [];
   try {
-    var routeRes = await fetch('https://router.project-osrm.org/route/v1/foot/'+fromStop.lng+','+fromStop.lat+';'+toStop.lng+','+toStop.lat+'?overview=full&geometries=geojson');
+    var routeRes = await Promise.any([
+      fetch('https://routing.openstreetmap.de/routed-foot/route/v1/driving/'+fromStop.lng+','+fromStop.lat+';'+toStop.lng+','+toStop.lat+'?overview=full&geometries=geojson'),
+      fetch('https://router.project-osrm.org/route/v1/foot/'+fromStop.lng+','+fromStop.lat+';'+toStop.lng+','+toStop.lat+'?overview=full&geometries=geojson')
+    ]);
     var routeData = await routeRes.json();
     var rCoords = routeData.routes && routeData.routes[0] && routeData.routes[0].geometry.coordinates;
     if (rCoords && rCoords.length > 1) {
@@ -6309,16 +6312,12 @@ async function buildGuidedTour(fromStop, toStop, tolerance) {
       });
       spread.sort(function(a,b){return a.routePos-b.routePos;});
     } else {
-      // Fallback: project onto A→B straight line
-      var dx=toStop.lng-fromStop.lng, dy=toStop.lat-fromStop.lat, l2=dx*dx+dy*dy||1;
-      spread.forEach(function(lm){lm.routePos=((lm.lng-fromStop.lng)*dx+(lm.lat-fromStop.lat)*dy)/l2;});
-      spread.sort(function(a,b){return a.routePos-b.routePos;});
+      // Route empty — use nearest-neighbor greedy sort
+      spread = nearestNeighborOrder(fromStop, spread, toStop);
     }
   } catch(e) {
-    // Fallback sort on error
-    var dx=toStop.lng-fromStop.lng, dy=toStop.lat-fromStop.lat, l2=dx*dx+dy*dy||1;
-    spread.forEach(function(lm){lm.routePos=((lm.lng-fromStop.lng)*dx+(lm.lat-fromStop.lat)*dy)/l2;});
-    spread.sort(function(a,b){return a.routePos-b.routePos;});
+    // Fallback to nearest-neighbor greedy sort on routing error
+    spread = nearestNeighborOrder(fromStop, spread, toStop);
   }
   selected = spread.slice(0, 50);
 
@@ -6361,10 +6360,15 @@ async function buildGuidedTour(fromStop, toStop, tolerance) {
 
 function _restoreLastTour(afterIdx, dayIdx, beforeIdx) {
   try {
-    var t = JSON.parse(sessionStorage.getItem('_lastMagicTour'));
-    if (!t || !t.landmarks) { showToast('No saved tour found', true); return; }
+    // Try keyed history first, fall back to legacy _lastMagicTour
+    var ctxStops = days[dayIdx] && days[dayIdx].stops || [];
+    var fromStop = afterIdx >= 0 && ctxStops[afterIdx] ? ctxStops[afterIdx] : window.HOTEL_DATA;
+    var toStop   = beforeIdx >= 0 && ctxStops[beforeIdx] ? ctxStops[beforeIdx] : window.HOTEL_DATA;
+    var tourKey = (fromStop && fromStop.name || '') + '→' + (toStop && toStop.name || '');
+    var allTours = JSON.parse(sessionStorage.getItem('_tourHistory') || '{}');
+    var t = allTours[tourKey] || JSON.parse(sessionStorage.getItem('_lastMagicTour') || 'null');
+    if (!t || !t.landmarks) { showToast('No saved tour found for this route', true); return; }
 
-    // Ensure tourCards div exists — renderTourCards returns early without it
     var listEl = document.getElementById('suggestResultsList');
     if (listEl && !document.getElementById('tourCards')) {
       listEl.innerHTML = '<div id="tourCards" style="padding:0 16px 16px;"></div>';
@@ -6492,12 +6496,16 @@ function renderTourCards(tour, fromStop, toStop, afterIdx, dayIdx, beforeIdx) {
   _tourLandmarks = landmarks;
   _nextLandmarkIdx = 0;
 
-  // Persist tour in sessionStorage so returning to the panel restores it
+  // Persist tour keyed by FROM→TO route so restore only shows for same route
   try {
-    sessionStorage.setItem('_lastMagicTour', JSON.stringify({
+    var tourKey = (fromStop.name || '') + '→' + (toStop.name || '');
+    var allTours = JSON.parse(sessionStorage.getItem('_tourHistory') || '{}');
+    allTours[tourKey] = {
       landmarks: landmarks, fromStop: fromStop, toStop: toStop,
       afterIdx: afterIdx, dayIdx: dayIdx, beforeIdx: beforeIdx, totalM: totalM, directM: directM
-    }));
+    };
+    sessionStorage.setItem('_tourHistory', JSON.stringify(allTours));
+    sessionStorage.setItem('_lastMagicTour', JSON.stringify(allTours[tourKey])); // legacy compat
   } catch(e) {}
 
   // Update the map with all landmark markers and the full walking route
@@ -8958,20 +8966,19 @@ function suggestBetween(afterIdx, beforeIdx, dayIdx) {
     }
   }, 150);
 
-  // Restore last tour from session (survives navigating to Google Maps and back)
+  // Restore last tour — only show if it matches THIS exact FROM→TO route
   try {
-    var saved = sessionStorage.getItem('_lastMagicTour');
-    if (saved) {
-      var t = JSON.parse(saved);
-      if (t && t.landmarks && t.landmarks.length) {
-        var resultsEl = document.getElementById('suggestResultsList');
-        if (resultsEl) {
-          var restore = document.createElement('div');
-          restore.style.cssText = 'background:#fffbeb;border:1px solid #f59e0b;border-radius:10px;padding:10px 14px;margin:10px 0;display:flex;align-items:center;gap:10px;';
-          restore.innerHTML = '<div style="flex:1;font-size:12px;font-weight:700;color:#92400e;">📋 Previous tour: '+t.landmarks.length+' landmarks between '+t.fromStop.name+' → '+t.toStop.name+'</div>'
-            + '<button onclick="_restoreLastTour('+afterIdx+','+dayIdx+','+beforeIdx+')" style="padding:6px 12px;background:#f59e0b;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer;flex-shrink:0;">Restore</button>';
-          resultsEl.prepend(restore);
-        }
+    var tourKey = afterName + '→' + beforeName;
+    var allTours = JSON.parse(sessionStorage.getItem('_tourHistory') || '{}');
+    var t = allTours[tourKey];
+    if (t && t.landmarks && t.landmarks.length) {
+      var resultsEl = document.getElementById('suggestResultsList');
+      if (resultsEl) {
+        var restore = document.createElement('div');
+        restore.style.cssText = 'background:#fffbeb;border:1px solid #f59e0b;border-radius:10px;padding:10px 14px;margin:10px 0;display:flex;align-items:center;gap:10px;';
+        restore.innerHTML = '<div style="flex:1;font-size:12px;font-weight:700;color:#92400e;">📋 Previous tour: '+t.landmarks.length+' landmarks · '+afterName+' → '+beforeName+'</div>'
+          + '<button onclick="_restoreLastTour('+afterIdx+','+dayIdx+','+beforeIdx+')" style="padding:6px 12px;background:#f59e0b;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer;flex-shrink:0;">Restore</button>';
+        resultsEl.prepend(restore);
       }
     }
   } catch(e) {}
