@@ -6574,37 +6574,36 @@ async function drawTourRoute(tour, fromStop, toStop) {
     _suggestMap.fitBounds(allPts.map(function(p){return [p.lat,p.lng];}), {padding:[36,36],maxZoom:16});
   }
 
-  // 2. Add numbered landmark markers right away
+  // 2. Add numbered landmark markers + FROM/TO name labels
+  if (fromStop && fromStop.lat) {
+    var fIc = L.divIcon({className:'', iconSize:[36,36], iconAnchor:[18,18],
+      html:'<div style="background:#1a7a3a;color:#fff;border:2.5px solid #fff;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;box-shadow:0 2px 8px rgba(0,0,0,0.4);">START</div>'
+    });
+    L.marker([fromStop.lat,fromStop.lng],{icon:fIc,zIndexOffset:1000}).addTo(_suggestMap)
+      .bindTooltip(fromStop.name||'Start', {direction:'top',permanent:false});
+  }
+  if (toStop && toStop.lat) {
+    var tIc = L.divIcon({className:'', iconSize:[36,36], iconAnchor:[18,18],
+      html:'<div style="background:#c0392b;color:#fff;border:2.5px solid #fff;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;box-shadow:0 2px 8px rgba(0,0,0,0.4);">END</div>'
+    });
+    L.marker([toStop.lat,toStop.lng],{icon:tIc,zIndexOffset:1000}).addTo(_suggestMap)
+      .bindTooltip(toStop.name||'End', {direction:'top',permanent:false});
+  }
+
   tour.landmarks.forEach(function(lm,i){
-    var ic = L.divIcon({className:'', html:'<div style="background:#5c4db1;color:#fff;border:2px solid #fff;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;box-shadow:0 2px 6px rgba(0,0,0,0.4);transition:all 0.2s;">'+(i+1)+'</div>', iconSize:[26,26], iconAnchor:[13,13]});
-    var mk = L.marker([lm.lat,lm.lng],{icon:ic}).addTo(_suggestMap).bindPopup('<b>'+lm.name+'</b><br><small>'+lm.tldr+'</small>');
+    var ic = L.divIcon({className:'', html:'<div style="background:#5c4db1;color:#fff;border:2px solid #fff;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;box-shadow:0 2px 6px rgba(0,0,0,0.4);cursor:pointer;">'+(i+1)+'</div>', iconSize:[28,28], iconAnchor:[14,14]});
+    var mk = L.marker([lm.lat,lm.lng],{icon:ic}).addTo(_suggestMap)
+      .bindPopup('<b>'+lm.name+'</b>'+(lm.tldr?'<br><span style="font-size:11px;color:#555;">'+lm.tldr.slice(0,80)+'…</span>':''));
+    mk.on('click', function(){ panToTourMarker(i); });
     _tourMarkers.push(mk);
   });
 
-  // 3. Fetch walking route — foot-specific OSRM (Promise.any with fallback)
+  // 3. Draw straight connector lines between FROM → landmarks → TO
+  // (in-app map is a visual overview; real navigation is via Google Maps button)
   var ordered = [fromStop].concat(tour.landmarks).concat([toStop]);
-  var coordStr = ordered.map(function(p){return p.lng+','+p.lat;}).join(';');
-  var totalDist = _haversineMetres(fromStop.lat, fromStop.lng, toStop.lat, toStop.lng);
-
-  // For very short origin→destination with no meaningful detour, keep existing route line
-  if (totalDist < 200 && tour.landmarks.length === 0) {
-    _tourRouteLayer = L.polyline(ordered.map(function(p){return [p.lat,p.lng];}), {color:'#5c4db1',weight:3,opacity:0.7,dashArray:'8,8'}).addTo(_suggestMap);
-  } else {
-    try {
-      var r = await Promise.any([
-        fetch('https://routing.openstreetmap.de/routed-foot/route/v1/driving/'+coordStr+'?overview=full&geometries=geojson'),
-        fetch('https://router.project-osrm.org/route/v1/foot/'+coordStr+'?overview=full&geometries=geojson')
-      ]);
-      var d = await r.json();
-      if (d.routes && d.routes[0]) {
-        var coords = d.routes[0].geometry.coordinates.map(function(c){return [c[1],c[0]];});
-        _tourRouteLayer = L.polyline(coords, {color:'#5c4db1',weight:4,opacity:0.85}).addTo(_suggestMap);
-      } else throw new Error('no route');
-    } catch(e) {
-      // Fallback: straight dashed lines between all stops
-      _tourRouteLayer = L.polyline(ordered.map(function(p){return [p.lat,p.lng];}), {color:'#5c4db1',weight:3,opacity:0.7,dashArray:'8,4'}).addTo(_suggestMap);
-    }
-  }
+  var latlngs = ordered.map(function(p){ return [p.lat, p.lng]; });
+  if (_tourRouteLayer) { try { _suggestMap.removeLayer(_tourRouteLayer); } catch(e){} _tourRouteLayer = null; }
+  _tourRouteLayer = L.polyline(latlngs, { color:'#5c4db1', weight:3, opacity:0.7, dashArray:'6,6' }).addTo(_suggestMap);
 
   // 4. Re-fit to include the full route line
   if(_tourRouteLayer){
