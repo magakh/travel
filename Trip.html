@@ -2174,7 +2174,10 @@ function _rp(p) {
   if (p.startsWith('data:')) return p; // base64 — render directly
   const path = _sbPath(p);
   if (!path) return p; // unknown format — try as-is
-  return _photoCache.get(path) || ''; // '' triggers onerror UI if not cached yet
+  const cached = _photoCache.get(path);
+  // Return cached signed URL, or an invalid data URI that always triggers onerror
+  // ('' or 'about:blank' shows a blank white box silently; this forces the retry UI)
+  return cached || 'data:image/png;base64,X';
 }
 
 function _isStoragePath(p) {
@@ -4890,6 +4893,9 @@ function _onPhotoError(img) {
   ph.onclick = function(e) { if (e.target === ph) ph._retry(); };
   showRetry();
   div.appendChild(ph);
+
+  // Auto-retry once after a short delay — most failures are just signing not yet complete
+  setTimeout(function() { if (ph.parentNode) ph._retry(); }, 1500);
 }
 
 async function _deleteFromStorage(photoUrl) {
