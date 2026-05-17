@@ -1523,6 +1523,7 @@ body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
           <button onclick="exportFile()" style="flex:1;padding:8px 12px;border-radius:8px;border:1px solid #444;background:#1e1e1e;color:#ccc;font-size:12px;font-weight:700;cursor:pointer;">📤 Export</button>
           <button onclick="document.getElementById('import-input').click()" style="flex:1;padding:8px 12px;border-radius:8px;border:1px solid #444;background:#1e1e1e;color:#ccc;font-size:12px;font-weight:700;cursor:pointer;">📥 Import</button>
         </div>
+        <button onclick="_deduplicatePhotos()" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid #7e5bc2;background:#f5f0ff;color:#7e5bc2;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:8px;">🔁 Remove duplicate photos across stops</button>
         <button onclick="_cleanBrokenPhotosNow()" style="width:100%;padding:8px 12px;border-radius:8px;border:1px solid #c0392b;background:#fef0f0;color:#c0392b;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:8px;">🗑 Remove all broken photos</button>
 
       <!-- ── DANGER ZONE ── -->
@@ -4854,18 +4855,26 @@ function _onPhotoError(img) {
 
   const ph = document.createElement('div');
   ph.className = '_photo-err';
-  ph.style.cssText = 'width:100%;height:100%;background:#f8f0f0;border:1.5px dashed #e74c3c;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#e74c3c;font-size:10px;gap:4px;position:relative;cursor:pointer;';
-  ph.title = 'Tap to retry loading';
-  ph.innerHTML = '<span style="font-size:18px;">📷</span><span style="font-weight:700;">Tap to retry</span>';
+  ph.style.cssText = 'width:100%;height:100%;background:#f8f0f0;border:1.5px dashed #e74c3c;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#e74c3c;font-size:10px;gap:4px;position:relative;';
 
-  // Tap → re-sign this photo and retry
-  ph.onclick = async function(e) {
-    e.stopPropagation();
+  function showRetry() {
+    ph.innerHTML = '<span style="font-size:18px;">📷</span>'
+      + '<span style="font-weight:700;cursor:pointer;" onclick="this.parentElement._retry()">↩ Tap to retry</span>';
+  }
+  function showFailed() {
+    ph.innerHTML = '<span style="font-size:16px;">📷</span><span style="font-weight:700;">Still failing</span>'
+      + ((!isNaN(stopIdx) && !isNaN(dayIdx) && !isNaN(photoIdx))
+        ? '<button onclick="event.stopPropagation();deleteStopPhoto('+stopIdx+','+dayIdx+','+photoIdx+')" '
+          + 'style="margin-top:4px;background:#e74c3c;color:#fff;border:none;border-radius:6px;padding:3px 8px;font-size:10px;font-weight:700;cursor:pointer;">Remove ✕</button>'
+        : '');
+  }
+
+  ph._retry = async function() {
     const s = days[dayIdx] && days[dayIdx].stops[stopIdx];
     const p = s && s.userPhotos && s.userPhotos[photoIdx];
-    if (!p) return;
+    if (!p) { showFailed(); return; }
     const path = _sbPath(p);
-    if (!path) return;
+    if (!path) { showFailed(); return; }
     ph.innerHTML = '<span style="font-size:14px;">⏳</span><span>Signing…</span>';
     try {
       const { data, error } = await supa.storage.from(PHOTO_BUCKET).createSignedUrls([path], 7200);
@@ -4874,13 +4883,12 @@ function _onPhotoError(img) {
         img.src = data[0].signedUrl;
         img.style.display = '';
         ph.remove();
-      } else {
-        ph.innerHTML = '<span style="font-size:18px;">📷</span><span style="font-weight:700;">Still failing</span>';
-      }
-    } catch(e2) {
-      ph.innerHTML = '<span style="font-size:18px;">📷</span><span>Retry failed</span>';
-    }
+      } else { showFailed(); }
+    } catch(e2) { showFailed(); }
   };
+
+  ph.onclick = function(e) { if (e.target === ph) ph._retry(); };
+  showRetry();
   div.appendChild(ph);
 }
 
@@ -5021,6 +5029,39 @@ async function _fixAllPhotoUrls() {
     await schedulePush();
     showToast('✅ Re-signed ' + fixed + ' photo URLs → pushed. Refresh to confirm.');
   } catch(e) { showToast('❌ Error: ' + e.message); }
+}
+
+// Remove duplicate photo paths: if the same sb: path appears in multiple stops,
+// keep it only in the stop where it was FIRST seen (lowest day/stop index).
+async function _deduplicatePhotos() {
+  const seen = new Map(); // path → "day:stop" of first occurrence
+  let removed = 0;
+  days.forEach(function(day, di) {
+    (day.stops || []).forEach(function(s, si) {
+      if (!s.userPhotos) return;
+      const deduped = [];
+      s.userPhotos.forEach(function(p) {
+        if (!p) return;
+        const key = _sbPath(p) || p; // use path as dedup key
+        if (!seen.has(key)) {
+          seen.set(key, di + ':' + si);
+          deduped.push(p);
+        } else {
+          removed++;
+          console.log('[dedup] removed from stop', s.name, '— first seen at', seen.get(key));
+        }
+      });
+      s.userPhotos = deduped;
+    });
+  });
+  if (removed === 0) {
+    showToast('✅ No duplicate photos found');
+    return;
+  }
+  saveToStorage();
+  await schedulePush();
+  renderStopList(); renderDetail();
+  showToast('✅ Removed ' + removed + ' duplicate photo' + (removed > 1 ? 's' : '') + ' · pushed to all devices');
 }
 
 async function _cleanBrokenPhotosNow() {
@@ -11870,47 +11911,7 @@ function _openPhoto(day, stop, idx) {
   openPhotoGallery(stop, day, idx);
 }
 
-function _onPhotoError(img) {
-  // Photo failed to load — show retry button. NEVER auto-delete: the sb: path is valid,
-  // the signed URL may have just expired or not yet been generated (race with _signAllPhotos).
-  const div = img.parentNode;
-  if (!div || div.querySelector('._photo-err')) return;
-  img.style.display = 'none';
-
-  const photoIdx = parseInt(div.dataset.idx);
-  const stopIdx  = parseInt(div.dataset.stop);
-  const dayIdx   = parseInt(div.dataset.day);
-
-  const ph = document.createElement('div');
-  ph.className = '_photo-err';
-  ph.style.cssText = 'width:100%;height:100%;background:#fff0f0;border:1.5px dashed #e74c3c;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#e74c3c;font-size:10px;gap:4px;position:relative;cursor:pointer;';
-  ph.title = 'Tap to retry';
-  ph.innerHTML = '<span style="font-size:18px;">📷</span><span style="font-weight:700;">Tap to retry</span>';
-
-  ph.onclick = async function(e) {
-    e.stopPropagation();
-    const s = days[dayIdx] && days[dayIdx].stops[stopIdx];
-    const p = s && s.userPhotos && s.userPhotos[photoIdx];
-    if (!p) return;
-    const path = _sbPath(p);
-    if (!path) return;
-    ph.innerHTML = '<span style="font-size:14px;">⏳</span><span>Signing…</span>';
-    try {
-      const { data, error } = await supa.storage.from(PHOTO_BUCKET).createSignedUrls([path], 7200);
-      if (!error && data && data[0] && data[0].signedUrl) {
-        _photoCache.set(path, data[0].signedUrl);
-        img.src = data[0].signedUrl;
-        img.style.display = '';
-        ph.remove();
-      } else {
-        ph.innerHTML = '<span style="font-size:18px;">📷</span><span>Still failing</span>';
-      }
-    } catch(e2) {
-      ph.innerHTML = '<span style="font-size:18px;">📷</span><span>Retry failed</span>';
-    }
-  };
-  div.appendChild(ph);
-}
+// Unified _onPhotoError — defined once above; second definition removed to avoid conflict
 function showMovePhotoSheet(fromStop, fromDay, photoIdx) {
   const photo = days[fromDay] && days[fromDay].stops[fromStop] && days[fromDay].stops[fromStop].userPhotos && days[fromDay].stops[fromStop].userPhotos[photoIdx];
   if (!photo) return;
