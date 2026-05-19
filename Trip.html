@@ -6516,6 +6516,46 @@ function _removeTourLandmark(idx, afterIdx, dayIdx, beforeIdx) {
   showToast('Removed · ' + _tourLandmarks.length + ' landmark' + (_tourLandmarks.length !== 1 ? 's' : '') + ' remaining');
 }
 
+function _addOneTourLandmark(idx, afterIdx, dayIdx, beforeIdx) {
+  if (!_tourLandmarks || !_tourLandmarks[idx]) { showToast('Landmark not found', true); return; }
+  var lm = _tourLandmarks[idx];
+  var dayStops = days[dayIdx].stops;
+  // Insert after the FROM stop, but also after any landmarks already placed before this one
+  // We use afterIdx + 1 + idx so each pick lands in original order; recompute insert from already-added flag
+  var insertAt = afterIdx + 1;
+  // Count how many landmarks before this one were already added (so this one slots in correctly)
+  for (var j = 0; j < idx; j++) {
+    if (_tourLandmarks[j] && _tourLandmarks[j]._added) insertAt++;
+  }
+  var stop = {
+    name: lm.name,
+    type: 'landmark',
+    description: lm.tldr || '',
+    location: lm.name,
+    lat: lm.lat, lng: lm.lng,
+    duration: 10,
+    wikiUrl: lm.wikiUrl || '',
+    image: lm.image || '',
+    addedByTour: true,
+    userPhotos: [], userPhotosMeta: []
+  };
+  dayStops.splice(insertAt, 0, stop);
+  lm._added = true;
+  saveToStorage(); schedulePush();
+  renderStopList();
+  // Update the button on the card to show "Added"
+  var btn = document.querySelector('button[data-tour-add-idx="'+idx+'"]');
+  if (btn) {
+    btn.innerHTML = '✓ Added';
+    btn.disabled = true;
+    btn.style.background = '#e8f5e9';
+    btn.style.color = '#1a7a3a';
+    btn.style.border = '1px solid #c8e6c9';
+    btn.style.cursor = 'default';
+  }
+  showToast('✅ ' + lm.name + ' added · tap to get directions');
+}
+
 function _saveTourToTrip(afterIdx, dayIdx, beforeIdx) {
   if (!_tourLandmarks || !_tourLandmarks.length) { showToast('No tour generated yet', true); return; }
   var dayStops = days[dayIdx].stops;
@@ -6613,6 +6653,7 @@ function renderTourCards(tour, fromStop, toStop, afterIdx, dayIdx, beforeIdx) {
       +'<div style="font-size:13px;font-weight:800;line-height:1.3;">'+lm.name+'</div>'
       +'<div style="display:flex;gap:5px;flex-shrink:0;align-items:center;">'
       +walkHereBtn
+      +'<button onclick="_addOneTourLandmark('+i+','+afterIdx+','+dayIdx+','+beforeIdx+')" data-tour-add-idx="'+i+'" style="display:inline-flex;align-items:center;gap:3px;padding:5px 10px;background:#e8f5e9;color:#1a7a3a;border:1px solid #c8e6c9;border-radius:8px;font-size:11px;font-weight:800;cursor:pointer;flex-shrink:0;">＋ Add</button>'
       +'<a href="'+lm.wikiUrl+'" target="_blank" style="font-size:11px;color:#1a73e8;text-decoration:none;padding:3px 7px;border:1px solid #d0e8ff;border-radius:8px;white-space:nowrap;">&#x1F4D6; Wiki</a>'
       +'<button onclick="speakTourLandmark('+i+')" style="background:none;border:none;font-size:15px;cursor:pointer;opacity:0.6;padding:2px;">&#x1F50A;</button>'
       +'<button onclick="_removeTourLandmark('+i+','+afterIdx+','+dayIdx+','+beforeIdx+')" title="Remove from tour" style="background:none;border:none;font-size:15px;cursor:pointer;color:#e74c3c;padding:2px;opacity:0.7;" title="Remove">✕</button>'
