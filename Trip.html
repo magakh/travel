@@ -980,6 +980,8 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
 .map-header h2 { font-size: 17px; font-weight: 700; margin-bottom: 3px; }
 .map-header p { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
 #routeMapIframe { position: sticky; top: 0; z-index: 40; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+.route-marker.active .route-marker-inner { transform: scale(1.4); box-shadow: 0 0 0 4px rgba(26,115,232,0.45), 0 4px 16px rgba(0,0,0,0.45) !important; }
+.route-marker.active { z-index: 1000 !important; }
 .map-open-btn {
   display: flex; align-items: center; justify-content: center; gap: 6px;
   width: 100%; padding: 12px; border-radius: 10px;
@@ -10927,21 +10929,67 @@ function buildRouteMapIframe(stops, color) {
     L.marker([h.lat, h.lng], {icon:hotelIcon}).addTo(map).bindPopup('<b>🏨 ' + h.name + '</b><br><span style="font-size:11px;color:#888;">' + (h.address||'Your hotel') + '</span>');
   }
 
+  window._routeMapMarkers = [];
   stops.forEach(function(s, i) {
     var sz = i===0 ? 32 : 26;
     var resInfo = s.reservation ? '<br><span style="color:#28a745;font-size:11px;font-weight:700;">✓ ' + (s.reservation.confirmed ? 'Confirmed' : 'Reserved') + (s.reservation.notes ? ' · ' + s.reservation.notes : '') + '</span>' : '';
-    var icon = L.divIcon({className:'', html:'<div style="background:'+(s.reservation&&s.reservation.confirmed?'#28a745':s.color)+';color:#fff;width:'+sz+'px;height:'+sz+'px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:'+(i===0?13:11)+'px;font-weight:900;border:2.5px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.35);">'+(i+1)+'</div>', iconSize:[sz,sz], iconAnchor:[sz/2,sz/2], popupAnchor:[0,-(sz/2+4)]});
+    var icon = L.divIcon({className:'route-marker route-marker-'+i, html:'<div class="route-marker-inner" style="background:'+(s.reservation&&s.reservation.confirmed?'#28a745':s.color)+';color:#fff;width:'+sz+'px;height:'+sz+'px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:'+(i===0?13:11)+'px;font-weight:900;border:2.5px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.35);transition:transform 0.2s,box-shadow 0.2s;">'+(i+1)+'</div>', iconSize:[sz,sz], iconAnchor:[sz/2,sz/2], popupAnchor:[0,-(sz/2+4)]});
     var popup = '<div style="min-width:180px"><b style="color:'+s.color+';font-size:13px;">Stop '+(i+1)+'</b><br><b style="font-size:14px;">'+s.name+'</b><br><span style="color:#666;font-size:12px;">'+s.time+' · '+s.duration+'</span><br><span style="font-size:11px;color:#888;">'+s.address+'</span>'+resInfo+(s.prebook&&!s.reservation?'<br><span style="color:#c0392b;font-size:11px;font-weight:700;">⚠ Pre-book needed</span>':'')+(s.free?'<br><span style="color:#1a7a3a;font-size:11px;font-weight:700;">✓ Free</span>':'')+'</div>';
-    L.marker([s.lat, s.lng], {icon:icon}).addTo(map).bindPopup(popup);
+    var marker = L.marker([s.lat, s.lng], {icon:icon}).addTo(map).bindPopup(popup);
+    marker.on('popupopen', function() {
+      // Scroll the matching event card into view
+      var card = document.getElementById('mcard'+i);
+      if (card) {
+        card.scrollIntoView({behavior:'smooth', block:'center'});
+        card.style.outline = '2px solid '+s.color;
+        setTimeout(() => { card.style.outline = ''; }, 1500);
+      }
+    });
+    window._routeMapMarkers[i] = marker;
   });
   // Include hotel in bounds so map shows both
   var boundsCoords = h ? [[h.lat, h.lng]].concat(coords) : coords;
   setTimeout(function() {
     map.invalidateSize();
     map.fitBounds(L.latLngBounds(boundsCoords), {padding:[40,40]});
+    _initRouteMapScrollSpy();
   }, 100);
 }
 
+let _routeMapSpy = null;
+function _initRouteMapScrollSpy() {
+  if (_routeMapSpy) { _routeMapSpy.disconnect(); _routeMapSpy = null; }
+  const cards = document.querySelectorAll('.mini-card[id^="mcard"]');
+  if (!cards.length || !window._routeMapMarkers) return;
+  const visibilityMap = new Map();
+  let activeIdx = -1;
+
+  _routeMapSpy = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      const idx = +e.target.id.replace('mcard', '');
+      if (e.isIntersecting) visibilityMap.set(idx, e.intersectionRatio);
+      else visibilityMap.delete(idx);
+    });
+    let bestIdx = -1, bestRatio = 0;
+    visibilityMap.forEach((r, i) => { if (r > bestRatio) { bestRatio = r; bestIdx = i; }});
+    if (bestIdx !== activeIdx && bestIdx >= 0) {
+      activeIdx = bestIdx;
+      // Highlight marker
+      document.querySelectorAll('.route-marker.active').forEach(m => m.classList.remove('active'));
+      const marker = document.querySelector('.route-marker-' + bestIdx);
+      if (marker) marker.classList.add('active');
+      // Gently pan map to the marker (only if it's outside current view)
+      if (window._routeMap && window._routeMapMarkers[bestIdx]) {
+        const ll = window._routeMapMarkers[bestIdx].getLatLng();
+        if (!window._routeMap.getBounds().contains(ll)) {
+          window._routeMap.panTo(ll, {animate:true, duration:0.5});
+        }
+      }
+    }
+  }, { threshold: [0, 0.25, 0.5, 0.75, 1.0], rootMargin: '-10% 0px -40% 0px' });
+
+  cards.forEach(c => _routeMapSpy.observe(c));
+}
 
 function _goToStop(di, si) {
   switchDay(di);
