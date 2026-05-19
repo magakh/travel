@@ -682,7 +682,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 //# sourceMappingURL=leaflet.js.map
 </script>
 <style>
-#routeMapDiv, #allMapDiv { width:100%; height:240px; z-index:1; }
+#routeMapDiv, #allMapDiv { width:100%; height:200px; z-index:1; }
 #allMapDiv { height: 420px; }
 </style>
 <style>
@@ -979,6 +979,7 @@ html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMa
 .map-header { padding: 14px 16px; border-bottom: 1px solid var(--border); background: var(--surface); }
 .map-header h2 { font-size: 17px; font-weight: 700; margin-bottom: 3px; }
 .map-header p { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+#routeMapIframe { position: sticky; top: 0; z-index: 40; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
 .map-open-btn {
   display: flex; align-items: center; justify-content: center; gap: 6px;
   width: 100%; padding: 12px; border-radius: 10px;
@@ -10873,7 +10874,7 @@ function renderRouteMap() {
       <p style="font-size:11px;color:#888;margin-bottom:8px;">${d.note || ''}</p>
       ${controls}
     </div>
-    <div id="routeMapIframe" style="width:100%;height:240px;background:#e8f0e4;display:flex;align-items:center;justify-content:center;">
+    <div id="routeMapIframe" style="width:100%;height:200px;background:#e8f0e4;display:flex;align-items:center;justify-content:center;">
       <span style="color:#888;font-size:13px;">Loading map...</span>
     </div>
     ${emptyState}
@@ -10892,7 +10893,7 @@ function buildRouteMapIframe(stops, color) {
   if (!container) return;
   // Destroy old Leaflet instance if any
   if (window._routeMap) { window._routeMap.remove(); window._routeMap = null; }
-  container.innerHTML = '<div id="routeMapDiv" style="width:100%;height:240px;"></div>';
+  container.innerHTML = '<div id="routeMapDiv" style="width:100%;height:200px;"></div>';
 
   var h = window.HOTEL_DATA;
 
