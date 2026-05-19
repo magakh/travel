@@ -10710,14 +10710,24 @@ Include EVERY stop id. day is 0-indexed. day: -1 means orphaned/unscheduled.`;
   document.body.appendChild(overlay);
 
   try {
-    const text = await callAnthropic({ prompt, maxTokens: 4000 });
-    // Strip code fences AND extract the JSON array — handles AI preamble like "I'll analyze..."
+    let text = await callAnthropic({ prompt, maxTokens: 4000 });
     let clean = text.replace(/```json|```/g, '').trim();
-    const firstBracket = clean.indexOf('[');
-    const lastBracket = clean.lastIndexOf(']');
-    if (firstBracket >= 0 && lastBracket > firstBracket) {
-      clean = clean.slice(firstBracket, lastBracket + 1);
+    let firstBracket = clean.indexOf('[');
+    let lastBracket = clean.lastIndexOf(']');
+
+    // If AI returned prose like "I'll analyze..." with no array, retry with stricter instruction
+    if (firstBracket < 0 || lastBracket <= firstBracket) {
+      console.warn('AI returned non-JSON, retrying with strict instruction');
+      const retryPrompt = 'IMPORTANT: Output ONLY a valid JSON array starting with [ and ending with ]. NO explanation, NO preamble, NO markdown. Just the raw JSON.\n\n' + prompt;
+      text = await callAnthropic({ prompt: retryPrompt, maxTokens: 4000 });
+      clean = text.replace(/```json|```/g, '').trim();
+      firstBracket = clean.indexOf('[');
+      lastBracket = clean.lastIndexOf(']');
+      if (firstBracket < 0 || lastBracket <= firstBracket) {
+        throw new Error('AI returned text instead of JSON. Try again in a moment.');
+      }
     }
+    clean = clean.slice(firstBracket, lastBracket + 1);
     const assignments = JSON.parse(clean);
 
     if (!Array.isArray(assignments) || !assignments.length) throw new Error('Empty response from AI');
