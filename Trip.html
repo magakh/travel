@@ -682,7 +682,7 @@ svg.leaflet-image-layer.leaflet-interactive path {
 //# sourceMappingURL=leaflet.js.map
 </script>
 <style>
-#routeMapDiv, #allMapDiv { width:100%; height:340px; z-index:1; }
+#routeMapDiv, #allMapDiv { width:100%; height:240px; z-index:1; }
 #allMapDiv { height: 420px; }
 </style>
 <style>
@@ -10816,7 +10816,7 @@ function renderRouteMap() {
       <p style="font-size:11px;color:#888;margin-bottom:8px;">${d.note || ''}</p>
       ${controls}
     </div>
-    <div id="routeMapIframe" style="width:100%;height:340px;background:#e8f0e4;display:flex;align-items:center;justify-content:center;">
+    <div id="routeMapIframe" style="width:100%;height:240px;background:#e8f0e4;display:flex;align-items:center;justify-content:center;">
       <span style="color:#888;font-size:13px;">Loading map...</span>
     </div>
     ${emptyState}
@@ -10835,7 +10835,7 @@ function buildRouteMapIframe(stops, color) {
   if (!container) return;
   // Destroy old Leaflet instance if any
   if (window._routeMap) { window._routeMap.remove(); window._routeMap = null; }
-  container.innerHTML = '<div id="routeMapDiv" style="width:100%;height:340px;"></div>';
+  container.innerHTML = '<div id="routeMapDiv" style="width:100%;height:240px;"></div>';
 
   var h = window.HOTEL_DATA;
 
