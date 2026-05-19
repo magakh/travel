@@ -9771,21 +9771,62 @@ function runFillItinerary() {
   }
 
   overlay.innerHTML =
-    '<div style="background:#fff;border-radius:16px;padding:20px;max-width:420px;width:100%;max-height:85vh;overflow-y:auto;">' +
-      '<h3 style="margin:0 0 6px 0;">🪄 Fill with AI</h3>' +
-      '<p style="color:#666;font-size:13px;margin:0 0 14px 0;">Choose which days to fill. AI will only add stops in empty time slots — existing stops stay untouched.</p>' +
-      '<div style="display:flex;gap:8px;margin-bottom:12px;">' +
-        '<button onclick="toggleAllFillDays(true)" style="flex:1;padding:8px;border-radius:8px;border:1px solid #ddd;background:#fff;font-size:12px;font-weight:700;cursor:pointer;">Select all</button>' +
-        '<button onclick="toggleAllFillDays(false)" style="flex:1;padding:8px;border-radius:8px;border:1px solid #ddd;background:#fff;font-size:12px;font-weight:700;cursor:pointer;">Clear all</button>' +
+    '<div style="background:#fff;border-radius:16px;padding:20px;max-width:440px;width:100%;max-height:88vh;overflow-y:auto;">' +
+      '<h3 style="margin:0 0 4px 0;">🪄 Fill empty slots with AI</h3>' +
+      '<p style="color:#666;font-size:12px;margin:0 0 14px 0;">AI adds stops only into empty windows — your existing stops stay untouched.</p>' +
+
+      // ── Days ──
+      '<div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Which days to fill</div>' +
+      '<div style="display:flex;gap:6px;margin-bottom:10px;">' +
+        '<button onclick="toggleAllFillDays(true)" style="flex:1;padding:6px;border-radius:8px;border:1px solid #ddd;background:#fff;font-size:11px;font-weight:700;cursor:pointer;">All</button>' +
+        '<button onclick="toggleAllFillDays(false)" style="flex:1;padding:6px;border-radius:8px;border:1px solid #ddd;background:#fff;font-size:11px;font-weight:700;cursor:pointer;">None</button>' +
       '</div>' +
       dayRows.join('') +
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;">' +
+
+      // ── Locations to include ──
+      '<div style="margin-top:14px;">' +
+        '<div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Locations to include (optional)</div>' +
+        '<textarea id="fillLocations" placeholder="e.g. Borough Market, Tate Modern, Dishoom Carnaby…&#10;One per line or comma-separated" ' +
+          'style="width:100%;height:72px;border:1px solid #ddd;border-radius:10px;padding:10px;font-size:13px;box-sizing:border-box;resize:none;font-family:inherit;"></textarea>' +
+        '<div style="margin-top:8px;display:flex;align-items:center;gap:8px;">' +
+          '<input type="file" id="fillPhotosInput" multiple accept="image/*" style="display:none;" onchange="_onFillPhotosChosen(this)">' +
+          '<button onclick="document.getElementById(&quot;fillPhotosInput&quot;).click()" ' +
+            'style="padding:7px 12px;border-radius:8px;border:1px solid #4285f4;background:#e8f0fe;color:#1a56c4;font-size:12px;font-weight:700;cursor:pointer;">📸 Upload list / guidebook photo</button>' +
+          '<span style="font-size:11px;color:#888;">Claude reads it automatically</span>' +
+        '</div>' +
+        '<div id="fillPhotoPreview" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;"></div>' +
+      '</div>' +
+
+      // ── Buttons ──
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px;">' +
         '<button onclick="document.getElementById(&quot;fill-picker-overlay&quot;).remove()" style="padding:12px;border-radius:10px;border:1px solid #ddd;background:#fff;font-weight:700;cursor:pointer;">Cancel</button>' +
         '<button id="fillGoBtn" onclick="submitFillDialog()" style="padding:12px;border-radius:10px;border:none;background:#5c4db1;color:#fff;font-weight:700;cursor:pointer;">🪄 Fill selected</button>' +
       '</div>' +
     '</div>';
   document.body.appendChild(overlay);
   overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+}
+
+// Preview uploaded photos in the dialog
+window._fillPhotoData = []; // base64 images
+function _onFillPhotosChosen(input) {
+  const files = Array.from(input.files || []).slice(0, 5);
+  const preview = document.getElementById('fillPhotoPreview');
+  if (!preview) return;
+  window._fillPhotoData = [];
+  preview.innerHTML = '';
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const b64 = e.target.result;
+      window._fillPhotoData.push(b64);
+      const img = document.createElement('img');
+      img.src = b64;
+      img.style.cssText = 'width:64px;height:64px;object-fit:cover;border-radius:8px;border:1.5px solid #4285f4;';
+      preview.appendChild(img);
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 function toggleAllFillDays(check) {
@@ -9803,11 +9844,48 @@ async function submitFillDialog() {
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Thinking…'; }
 
   try {
-    await doFillItinerary(selected);
+    // Collect typed locations
+    const typed = (document.getElementById('fillLocations')?.value || '')
+      .split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+
+    // Extract locations from any uploaded photos via Claude vision
+    let photoLocations = [];
+    if (window._fillPhotoData && window._fillPhotoData.length) {
+      if (btn) btn.textContent = '📸 Reading photos…';
+      photoLocations = await _extractLocationsFromPhotos(window._fillPhotoData);
+    }
+
+    const wantedLocations = [...new Set([...typed, ...photoLocations])];
+    await doFillItinerary(selected, wantedLocations);
+  } catch(e) {
+    showToast('Fill failed: ' + (e.message || 'unknown'), true);
   } finally {
     const ov = document.getElementById('fill-picker-overlay');
     if (ov) ov.remove();
+    window._fillPhotoData = [];
   }
+}
+
+// Use Claude vision to extract location names from photos
+async function _extractLocationsFromPhotos(photoDataUrls) {
+  try {
+    const imageBlocks = photoDataUrls.map(url => {
+      const [header, data] = url.split(',');
+      const mimeType = header.match(/data:([^;]+)/)?.[1] || 'image/jpeg';
+      return { type: 'image', source: { type: 'base64', media_type: mimeType, data } };
+    });
+    imageBlocks.push({ type: 'text', text: 'Extract all attraction, restaurant, museum, landmark, or place names from these images. Return ONLY a JSON array of strings, e.g. ["Tate Modern","Borough Market"]. No explanation, no markdown.' });
+
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 500, messages: [{ role: 'user', content: imageBlocks }] })
+    });
+    const data = await resp.json();
+    const text = (data.content || []).find(b => b.type === 'text')?.text || '[]';
+    const clean = text.replace(/```json|```/g, '').trim();
+    return JSON.parse(clean);
+  } catch(e) { console.warn('Photo location extraction failed:', e); return []; }
 }
 
 // Compute a day brief: start/end windows, existing stops, gaps
@@ -9972,7 +10050,7 @@ function recoverPartialStopsForDay(dayChunk) {
   return { dayIdx, stops };
 }
 
-async function doFillItinerary(selectedDayIndices) {
+async function doFillItinerary(selectedDayIndices, wantedLocations = []) {
   const city = getTripCity();
   const tc = getTripCenter();
   const numDays = APP_CONFIG.numDays || days.length;
@@ -9986,9 +10064,15 @@ async function doFillItinerary(selectedDayIndices) {
     return;
   }
 
+  // Collect ALL existing stop names to avoid duplicates
+  const existingNames = new Set();
+  days.forEach(day => (day.stops || []).forEach(s => {
+    if (s.name) existingNames.add(s.name.trim());
+  }));
+
   showToast('⏳ AI is planning — may take 30-60 seconds…');
 
-  const prompt = buildFillPrompt(city, tc, dayBriefs);
+  const prompt = buildFillPrompt(city, tc, dayBriefs, [...existingNames], wantedLocations);
   try {
     const text = await callAnthropic({ prompt, maxTokens: 8000 });
     const parsed = tolerantParseFillJson(text);
@@ -10024,12 +10108,22 @@ async function doFillItinerary(selectedDayIndices) {
   }
 }
 
-function buildFillPrompt(city, tc, dayBriefs) {
+function buildFillPrompt(city, tc, dayBriefs, existingNames = [], wantedLocations = []) {
   const centerStr = tc
     ? 'Hotel/base coordinates: lat ' + tc.lat.toFixed(4) + ', lng ' + tc.lng.toFixed(4) + '.'
     : 'No hotel coordinates provided — use well-known central locations.';
 
   const toFill = dayBriefs.filter(b => b.gaps && b.gaps.length);
+
+  // Per-day geographic anchor from existing stops (for clustering)
+  const clusterHints = toFill.map(d => {
+    const stops = d.existing.filter(s => s.lat && s.lng);
+    if (!stops.length) return null;
+    const avgLat = stops.reduce((s,x) => s + x.lat, 0) / stops.length;
+    const avgLng = stops.reduce((s,x) => s + x.lng, 0) / stops.length;
+    return 'Day ' + d.dayIdx + ': cluster near ' + avgLat.toFixed(4) + ', ' + avgLng.toFixed(4);
+  }).filter(Boolean).join('\n');
+
   const brief = toFill.map(d => {
     const existingLine = d.existing.length
       ? d.existing.map(s => '    - ' + s.name + ' (' + s.time + ' for ' + s.duration + ')').join('\n')
@@ -10044,19 +10138,29 @@ function buildFillPrompt(city, tc, dayBriefs) {
            (constraints.length ? '\n  Constraints: ' + constraints.join(' ') : '');
   }).join('\n\n');
 
-  return `You are an expert tour guide for ${city}. Fill empty time slots in an existing travel itinerary with popular tourist picks.
+  const excludeStr = existingNames.length
+    ? '\nSTRICTLY DO NOT ADD (already in schedule — any of these or known aliases):\n' + existingNames.map(n => '  • ' + n).join('\n')
+    : '';
+
+  const wantedStr = wantedLocations.length
+    ? '\nUSER WANTS TO INCLUDE THESE LOCATIONS (fit as many as possible; schedule each on the day whose existing stops are geographically closest to it):\n' + wantedLocations.map(n => '  • ' + n).join('\n')
+    : '';
+
+  return `You are an expert tour guide for ${city}. Fill empty time slots in an existing travel itinerary.
 
 ${centerStr}
+${clusterHints ? '\nGEOGRAPHIC CLUSTERING — keep each day close to its anchor:\n' + clusterHints : ''}
+${excludeStr}
+${wantedStr}
 
 ${brief}
 
-Fill each empty window intelligently:
+Fill each empty window:
+- NEVER add stops already scheduled (see exclusion list above)
+- Keep each day's stops GEOGRAPHICALLY CLUSTERED near its existing stops
+- When placing user-requested locations, put each on the day whose stops are geographically closest
 - Include meals where appropriate (breakfast ~9-10am, lunch ~12-2pm, dinner ~6-8pm)
-- Include landmarks/attractions suitable for the time of day
-- Keep stops CLOSE to existing stops on the same day (cluster geographically)
-- A typical stop is 45-90 minutes; a meal is 60-90 minutes
-- Don't cram too many stops into a window — leave transit time between them (add 15-30 min walk/transit between stops)
-- Don't duplicate what's already scheduled
+- Leave 15-30 min transit between stops; don't cram too many into a window
 - Stops must start and end WITHIN the allocated window
 
 CRITICAL OUTPUT RULES:
@@ -10078,8 +10182,8 @@ CRITICAL OUTPUT RULES:
           "free": true,
           "prebook": false,
           "color": "#1a7a3a",
-          "history": "<strong>Central Park</strong> opened in 1858 and spans 843 acres. 1-2 short sentences.",
-          "todo": "<p>3 practical sentences about what to do, see, or order.</p>",
+          "history": "<strong>Central Park</strong> opened in 1858. 1-2 sentences.",
+          "todo": "<p>3 practical sentences about what to do or see.</p>",
           "travel": "🚶 or 🚇 Local directions WITHIN ${city}, brief"
         }
       ]
@@ -10087,15 +10191,7 @@ CRITICAL OUTPUT RULES:
   ]
 }
 
-CRITICAL JSON ESCAPING:
-- ALL inner double quotes inside strings MUST be escaped as \\"
-- Keep history/todo/travel fields SHORT — 1-2 sentences each
-- Use simple HTML only (<strong>, <p>) — never nested quotes inside HTML attributes
-- NEVER write text like class="foo" — write class=\\"foo\\" or just avoid attributes
-
-Use accurate lat/lng (4+ decimal places). Use real, well-known places in ${city}. Only output days that you are filling (skip days with no gaps). Time format: "H:MM AM/PM". Duration: "45 min", "1 hour", "90 min".
-
-Keep your response COMPACT — longer responses get truncated. Each stop = 1 paragraph of content max.`;
+Use accurate lat/lng (4+ decimal places). Only output days you are filling. Time: "H:MM AM/PM". Duration: "45 min", "1 hour", "90 min". Keep each stop description SHORT.`;
 }
 
 // Normalize stops from AI output to the shape the app expects
