@@ -10670,6 +10670,10 @@ function buildInlineMap() {
 function refreshInlineMap() {
   if (_inlineMapOpen) {
     buildInlineMap(); // always rebuild to reflect latest data
+    // Re-attach scroll-spy: rebuild created fresh markers + renderStopList created
+    // fresh rows, so the old observer is watching dead elements. Wait for the
+    // map's invalidateSize/fitBounds (100ms) to place markers, then re-init.
+    setTimeout(_initInlineMapScrollSpy, 200);
   }
 }
 
