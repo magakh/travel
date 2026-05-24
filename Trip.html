@@ -11126,38 +11126,55 @@ function buildRouteMapIframe(stops, color) {
 }
 
 let _routeMapSpy = null;
+let _routeMapScroller = null;
+let _routeMapScrollHandler = null;
 function _initRouteMapScrollSpy() {
-  if (_routeMapSpy) { _routeMapSpy.disconnect(); _routeMapSpy = null; }
-  const cards = document.querySelectorAll('.mini-card[id^="mcard"]');
+  // Clean up any prior observer/listener
+  if (_routeMapSpy) { try { _routeMapSpy.disconnect(); } catch(e) {} _routeMapSpy = null; }
+  if (_routeMapScroller && _routeMapScrollHandler) {
+    _routeMapScroller.removeEventListener('scroll', _routeMapScrollHandler);
+  }
+  const cards = Array.from(document.querySelectorAll('.mini-card[id^="mcard"]'));
   if (!cards.length || !window._routeMapMarkers) return;
-  const visibilityMap = new Map();
+  const scroller = document.getElementById('mainArea') || window;
+  _routeMapScroller = scroller;
   let activeIdx = -1;
 
-  _routeMapSpy = new IntersectionObserver((entries) => {
-    entries.forEach(e => {
-      const idx = +e.target.id.replace('mcard', '');
-      if (e.isIntersecting) visibilityMap.set(idx, e.intersectionRatio);
-      else visibilityMap.delete(idx);
-    });
-    let bestIdx = -1, bestRatio = 0;
-    visibilityMap.forEach((r, i) => { if (r > bestRatio) { bestRatio = r; bestIdx = i; }});
+  // The map is sticky at the top, so cards scrolled up sit BEHIND it but still
+  // geometrically "intersect the viewport" — that's why a hidden upper card used
+  // to win. Instead, the active card is the one sitting just under the map's
+  // bottom edge (the topmost card actually visible below the sticky map).
+  const update = () => {
+    if (currentView !== 'routemap') return;
+    const mapEl = document.getElementById('routeMapIframe');
+    const mapBottom = mapEl ? mapEl.getBoundingClientRect().bottom : 0;
+    let bestIdx = -1, bestTop = -Infinity;
+    for (const el of cards) {
+      const r = el.getBoundingClientRect();
+      if (r.height === 0) continue; // detached/hidden
+      // Cards whose top is at/above the line just below the map are "passed";
+      // the one closest to that line (largest top ≤ line) is the current one.
+      if (r.top <= mapBottom + 64 && r.top > bestTop) { bestTop = r.top; bestIdx = +el.id.replace('mcard', ''); }
+    }
+    if (bestIdx === -1) bestIdx = +cards[0].id.replace('mcard', ''); // nothing reached the line yet → first card
     if (bestIdx !== activeIdx && bestIdx >= 0) {
       activeIdx = bestIdx;
-      // Highlight marker
       document.querySelectorAll('.route-marker.active').forEach(m => m.classList.remove('active'));
       const marker = document.querySelector('.route-marker-' + bestIdx);
       if (marker) marker.classList.add('active');
-      // Gently pan map to the marker (only if it's outside current view)
       if (window._routeMap && window._routeMapMarkers[bestIdx]) {
         const ll = window._routeMapMarkers[bestIdx].getLatLng();
         if (!window._routeMap.getBounds().contains(ll)) {
-          window._routeMap.panTo(ll, {animate:true, duration:0.5});
+          window._routeMap.panTo(ll, { animate: true, duration: 0.4 });
         }
       }
     }
-  }, { threshold: [0, 0.25, 0.5, 0.75, 1.0], rootMargin: '-10% 0px -40% 0px' });
+  };
 
-  cards.forEach(c => _routeMapSpy.observe(c));
+  let _raf = null;
+  _routeMapScrollHandler = () => { if (_raf) return; _raf = requestAnimationFrame(() => { _raf = null; update(); }); };
+  scroller.addEventListener('scroll', _routeMapScrollHandler, { passive: true });
+  update();
 }
 
 function _goToStop(di, si) {
