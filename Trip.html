@@ -4713,6 +4713,13 @@ function renderStopList() {
          ondrop="dragDrop(event,${i})"
          ondragend="dragEnd()"
          id="srow${i}">
+      ${s.isHotel ? '' : `
+      <div class="reorder-arrows" style="display:flex;flex-direction:column;gap:0;flex-shrink:0;align-self:center;margin-right:2px;">
+        <button onclick="event.stopPropagation();moveStop(${i},-1);" ${i===0?'disabled':''}
+          style="background:none;border:none;font-size:13px;line-height:1;color:${i===0?'#e8e8e8':'#9aa0a6'};cursor:${i===0?'default':'pointer'};padding:5px 5px 2px;" title="Move up">▲</button>
+        <button onclick="event.stopPropagation();moveStop(${i},1);" ${i===total-1?'disabled':''}
+          style="background:none;border:none;font-size:13px;line-height:1;color:${i===total-1?'#e8e8e8':'#9aa0a6'};cursor:${i===total-1?'default':'pointer'};padding:2px 5px 5px;" title="Move down">▼</button>
+      </div>`}
       <div class="stop-check ${completed.includes(currentDay+'-'+i) ? 'done' : ''}"
            onclick="event.stopPropagation(); toggleDone(${i})"></div>
       <div class="stop-meta" onclick="selectStop(${i})">
