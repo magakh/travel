@@ -1754,6 +1754,7 @@ function _toggleContentMenu() {
   const btn = document.getElementById('contentMenuBtn');
   if (btn) { const r = btn.getBoundingClientRect(); menu.style.top = (r.bottom + 6) + 'px'; menu.style.right = (window.innerWidth - r.right) + 'px'; menu.style.left = 'auto'; }
   menu.innerHTML = [
+    { icon:'📅', label:'Add day to calendar', fn:'exportDayToCalendar()' },
     { icon:'📋', label:'Book list',  fn:"showView('prebook')" },
     { icon:'✍️', label:'Trip story', fn:'showStoryTab()' },
   ].map(function(item) {
@@ -12292,6 +12293,69 @@ blogHtml must be valid HTML fragments (no <html>/<body> tags). Photo placeholder
     console.error('Story generation error:', e);
     showToast('❌ Story generation failed: ' + (e.message || 'unknown error'));
     if (btn) { btn.disabled = false; btn.textContent = '✨ Generate my trip story'; }
+  }
+}
+
+// ── ADD DAY TO CALENDAR (.ics → opens in Apple/Google Calendar) ──────
+// Builds a standard iCalendar file for the current day's timed stops and
+// triggers a download. On iPhone this opens straight into Apple Calendar
+// with an "Add All" option; on other platforms it imports the same way.
+function exportDayToCalendar() {
+  const d = days[currentDay];
+  if (!d || !d.stops || !d.stops.length) { showToast('No stops to add', true); return; }
+  const ds = getDayDate(currentDay); // "YYYY-MM-DD"
+  if (!ds) { showToast('This day has no date set', true); return; }
+  const [Y, M, D] = ds.split('-').map(Number);
+  const pad = n => String(n).padStart(2, '0');
+  // Local floating time (no timezone) so it lands on the clock time shown.
+  const fmtLocal = (mins) => {
+    const dayOffset = Math.floor(mins / 1440);
+    const within = ((mins % 1440) + 1440) % 1440;
+    const dt = new Date(Y, M - 1, D + dayOffset, Math.floor(within / 60), within % 60, 0);
+    return dt.getFullYear() + pad(dt.getMonth() + 1) + pad(dt.getDate()) + 'T' + pad(dt.getHours()) + pad(dt.getMinutes()) + '00';
+  };
+  const esc = s => String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+  const now = new Date();
+  const stamp = now.getUTCFullYear() + pad(now.getUTCMonth() + 1) + pad(now.getUTCDate()) + 'T' + pad(now.getUTCHours()) + pad(now.getUTCMinutes()) + pad(now.getUTCSeconds()) + 'Z';
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Trip//Travel//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH'];
+  let count = 0;
+  d.stops.forEach((s, i) => {
+    if (!s || s.isHotel || s.type === 'hotel' || !s.time) return;
+    const start = timeStrToMins(s.time);
+    if (isNaN(start)) return;
+    const dur = parseDurationMins(s.duration || '60 min') || 60;
+    const loc = s.address || s.location || s.name || '';
+    let desc = '';
+    if (s.type && s.type !== s.name) desc += s.type;
+    if (s.description) desc += (desc ? ' — ' : '') + s.description;
+    if (s.wikiUrl) desc += (desc ? '\n' : '') + s.wikiUrl;
+    lines.push('BEGIN:VEVENT');
+    lines.push('UID:' + TRIP_ID + '-d' + currentDay + '-s' + i + '-' + now.getTime() + '@trip');
+    lines.push('DTSTAMP:' + stamp);
+    lines.push('DTSTART:' + fmtLocal(start));
+    lines.push('DTEND:' + fmtLocal(start + dur));
+    lines.push('SUMMARY:' + esc(s.name || ('Stop ' + (i + 1))));
+    if (loc) lines.push('LOCATION:' + esc(loc));
+    if (desc) lines.push('DESCRIPTION:' + esc(desc));
+    if (Number.isFinite(Number(s.lat)) && Number.isFinite(Number(s.lng))) lines.push('GEO:' + Number(s.lat) + ';' + Number(s.lng));
+    lines.push('END:VEVENT');
+    count++;
+  });
+  if (!count) { showToast('No timed stops to add', true); return; }
+  lines.push('END:VCALENDAR');
+  const ics = lines.join('\r\n');
+  const fname = (TRIP_ID || 'trip') + '-day' + (currentDay + 1) + '.ics';
+  try {
+    const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = fname; a.rel = 'noopener';
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { try { document.body.removeChild(a); } catch (e) {} URL.revokeObjectURL(url); }, 1500);
+    showToast('📅 ' + count + ' events — opening calendar…');
+  } catch (e) {
+    // Fallback: data URI (older iOS)
+    window.location.href = 'data:text/calendar;charset=utf-8,' + encodeURIComponent(ics);
   }
 }
 
