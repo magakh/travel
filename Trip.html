@@ -1176,6 +1176,13 @@ body.viewer-mode .drag-h { opacity: 0.3; }
 body.viewer-mode .tc-suggest-btn { display: none !important; }
 body.viewer-mode #saveBtn { opacity: 0.4; pointer-events: none; }
 body.viewer-mode .stop-row[draggable] { -webkit-user-drag: none; }
+/* iOS ONLY (class set in _initStopDrag, which early-returns on Android/desktop):
+   stop iOS hijacking long-press for the text-selection magnifier so our
+   long-press drag-to-reorder can fire. Android never receives this class. */
+body.ios-touch-reorder .stop-row {
+  -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;
+}
+body.ios-touch-reorder .stop-row.dragging-src { opacity: 0.3; }
 .travel-connector {
   display: flex; align-items: center; gap: 8px;
   padding: 4px 10px 4px 48px;
@@ -2471,6 +2478,7 @@ function _initStopDrag() {
     || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   if (!isIOS) return;
   if (document.body.classList.contains('viewer-mode')) return;
+  document.body.classList.add('ios-touch-reorder'); // enables iOS-only no-select CSS (Android never reaches here)
 
   let ghost = null, dragSrc = null, dragActive = false;
   let srcIdx = -1, startY = 0, srcTop = 0, srcLeft = 0, dragTimer = null;
