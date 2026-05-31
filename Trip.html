@@ -11291,6 +11291,64 @@ function _initRouteMapScrollSpy() {
   update();
 }
 
+// Day picker invoked from the All Days Map popup. Each target day's button uses the
+// matching hsl() colour the all-days map uses, so the choice maps visually to the pin.
+function _movePromptFromAllDays(fromDay, stopIdx) {
+  if (window._allMap) try { window._allMap.closePopup(); } catch(e) {}
+  const stop = days[fromDay] && days[fromDay].stops && days[fromDay].stops[stopIdx];
+  if (!stop) return;
+  if (stop.isHotel) { showToast('Cannot move hotel stop', true); return; }
+  const existing = document.getElementById('moveDayOverlay');
+  if (existing) existing.remove();
+  const n = APP_CONFIG.numDays || days.length;
+  const labels = APP_CONFIG.dayLabels || [];
+  const others = [];
+  for (let di = 0; di < n; di++) if (di !== fromDay) others.push(di);
+  if (!others.length) { showToast('No other day to move to', true); return; }
+  const colorFor = (i) => 'hsl(' + Math.round(i * 360 / n) + ',70%,40%)';
+  const safeName = (stop.name || 'this stop').replace(/[<>&]/g, '');
+  const fromLbl = ((labels[fromDay] || (days[fromDay] && days[fromDay].title) || ('Day ' + (fromDay + 1))).split('—')[0].trim()).replace(/[<>&]/g, '');
+  const rows = others.map(di => {
+    const lbl = ((labels[di] || (days[di] && days[di].title) || ('Day ' + (di + 1))).split('—')[0].trim()).replace(/[<>&]/g, '');
+    const count = (days[di] && days[di].stops ? days[di].stops.filter(x => !x.isHotel).length : 0);
+    const color = colorFor(di);
+    return '<button onclick="document.getElementById(\'moveDayOverlay\').remove(); _doMoveBetweenDays(' + fromDay + ',' + stopIdx + ',' + di + ');"'
+      + ' style="width:100%;padding:13px 16px;text-align:left;border:none;border-bottom:1px solid #f0ede8;background:#fff;font-size:15px;font-weight:700;color:' + color + ';cursor:pointer;display:flex;justify-content:space-between;align-items:center;">'
+      + '<span style="display:flex;align-items:center;gap:10px;"><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:' + color + ';"></span>' + lbl + '</span>'
+      + '<span style="color:#aaa;font-size:12px;font-weight:500;">' + count + ' stop' + (count === 1 ? '' : 's') + ' ›</span></button>';
+  }).join('');
+  const ov = document.createElement('div');
+  ov.id = 'moveDayOverlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:30050;display:flex;align-items:flex-end;justify-content:center;';
+  ov.innerHTML = '<div style="background:#fff;border-radius:18px 18px 0 0;width:100%;max-width:480px;max-height:75vh;overflow-y:auto;box-shadow:0 -6px 30px rgba(0,0,0,0.25);">'
+    + '<div style="padding:16px 16px 8px;">'
+    + '<div style="font-weight:800;font-size:15px;">Move to which day?</div>'
+    + '<div style="font-size:12px;color:#888;margin-top:2px;">"' + safeName + '" — from ' + fromLbl + '</div>'
+    + '</div>'
+    + rows
+    + '<button onclick="document.getElementById(\'moveDayOverlay\').remove();" style="width:100%;padding:16px;border:none;background:#fafafa;font-size:14px;font-weight:700;color:#888;cursor:pointer;">Cancel</button>'
+    + '</div>';
+  ov.onclick = (e) => { if (e.target === ov) ov.remove(); };
+  document.body.appendChild(ov);
+}
+
+// Actually move a stop from one day to another (used by the all-days-map popup).
+// Recomputes times on BOTH source and target so neither day's schedule breaks,
+// persists, and re-renders the all-days map so pins/polylines reflect the change.
+function _doMoveBetweenDays(fromDay, stopIdx, targetDay) {
+  const stop = days[fromDay] && days[fromDay].stops && days[fromDay].stops[stopIdx];
+  if (!stop) return;
+  days[fromDay].stops.splice(stopIdx, 1);
+  days[targetDay].stops.push(stop);
+  try { reassignTimesForDay(fromDay); reassignTimesForDay(targetDay); } catch (e) {}
+  try { saveToStorage(); } catch (e) {}
+  try { if (typeof schedulePush === 'function') schedulePush(); } catch (e) {}
+  try { renderAll(); } catch (e) {}
+  try { if (currentView === 'allmap' && typeof renderAllMap === 'function') renderAllMap(); } catch (e) {}
+  const tLbl = ((APP_CONFIG.dayLabels || [])[targetDay] || (days[targetDay] && days[targetDay].title) || ('Day ' + (targetDay + 1))).split('—')[0].trim();
+  showToast('"' + (stop.name || 'Stop') + '" moved to ' + tLbl);
+}
+
 function _goToStop(di, si) {
   switchDay(di);
   setTimeout(() => { selectStop(si); }, 100);
@@ -11346,7 +11404,11 @@ function renderAllMap() {
     L.polyline(coords, {color:day.color, weight:4, opacity:0.8, dashArray:'8,5'}).addTo(map);
     day.stops.forEach(function(s, i) {
       var icon = L.divIcon({className:'', html:'<div style="background:'+day.color+';color:#fff;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;border:2.5px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.3);">'+(i+1)+'</div>', iconSize:[28,28], iconAnchor:[14,14], popupAnchor:[0,-18]});
-      var popup = '<b style="color:'+day.color+'">'+day.label+' · Stop '+(i+1)+'</b><br><b>'+s.name+'</b><br><span style="color:#666;font-size:12px;">'+s.time+' · '+s.duration+'</span><br><span style="font-size:11px;">'+s.address+'</span>'+(s.prebook?'<br><span style="color:#c0392b;font-size:11px;">⚠ Pre-book</span>':'')+(s.free?'<br><span style="color:#1a7a3a;font-size:11px;">Free</span>':'')+'<br><button onclick="_goToStop('+di+','+i+')" style="margin-top:6px;width:100%;padding:6px 10px;border-radius:6px;border:none;background:'+day.color+';color:#fff;font-size:11px;font-weight:700;cursor:pointer;">Open event ▶</button>';
+      var popup = '<b style="color:'+day.color+'">'+day.label+' · Stop '+(i+1)+'</b><br><b>'+s.name+'</b><br><span style="color:#666;font-size:12px;">'+s.time+' · '+s.duration+'</span><br><span style="font-size:11px;">'+s.address+'</span>'+(s.prebook?'<br><span style="color:#c0392b;font-size:11px;">⚠ Pre-book</span>':'')+(s.free?'<br><span style="color:#1a7a3a;font-size:11px;">Free</span>':'')
+        +'<div style="display:flex;gap:6px;margin-top:6px;">'
+        +'<button onclick="_goToStop('+di+','+i+')" style="flex:1;padding:7px 8px;border-radius:6px;border:none;background:'+day.color+';color:#fff;font-size:11px;font-weight:700;cursor:pointer;">Open ▶</button>'
+        +'<button onclick="_movePromptFromAllDays('+di+','+i+')" style="flex:1;padding:7px 8px;border-radius:6px;border:1.5px solid '+day.color+';background:#fff;color:'+day.color+';font-size:11px;font-weight:700;cursor:pointer;">📅 Move to day</button>'
+        +'</div>';
       L.marker([s.lat, s.lng], {icon:icon}).addTo(map).bindPopup(popup);
     });
   });
