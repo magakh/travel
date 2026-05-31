@@ -4760,7 +4760,7 @@ function renderAll() {
 
 // Build the time-row HTML for a stop — booking-aware
 function _stopTimeRowHtml(s, i, dayIdx, endTime) {
-  const numDot = '<span style="display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:50%;background:'+s.color+';color:#fff;font-size:10px;font-weight:800;flex-shrink:0;margin-right:5px;">'+(i+1)+'</span>';
+  const numDot = '<span style="display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:50%;background:'+(s.color || _colorForStop(i))+';color:#fff;font-size:10px;font-weight:800;flex-shrink:0;margin-right:5px;">'+(i+1)+'</span>';
   const wxSpan = '<span id="wx-'+dayIdx+'-'+i+'" style="margin-left:5px;font-size:11px;color:#5a7a8a;"></span>';
   const bk = s.reservation && s.reservation.time ? bookingTimeRowHtml(dayIdx, i) : null;
   if (bk) {
@@ -6730,6 +6730,7 @@ function _addOneTourLandmark(idx, afterIdx, dayIdx, beforeIdx) {
     wikiUrl: lm.wikiUrl || '',
     image: lm.image || '',
     addedByTour: true,
+    color: _colorForStop(insertAt),
     userPhotos: [], userPhotosMeta: []
   };
   dayStops.splice(insertAt, 0, stop);
@@ -6766,6 +6767,7 @@ function _saveTourToTrip(afterIdx, dayIdx, beforeIdx) {
       wikiUrl: lm.wikiUrl || '',
       image: lm.image || '',
       addedByTour: true,
+      color: _colorForStop(insertAt + added),
       userPhotos: [], userPhotosMeta: []
     };
     dayStops.splice(insertAt + added, 0, stop);
@@ -10817,34 +10819,63 @@ function toggleInlineMap() {
 }
 
 let _inlineScrollSpy = null;
+// Visually distinct palette used for stops that don't carry their own color
+// (e.g. landmarks added by Magic Tour) — picked deterministically by index so
+// neighbouring pins don't clash and re-renders stay stable.
+function _colorForStop(i) {
+  const palette = ['#1a73e8','#e65100','#1a7a3a','#7b1fa2','#c0392b','#0d9488','#d97706','#5c4db1','#0288d1','#558b2f','#ad1457','#00838f'];
+  i = Math.max(0, i|0);
+  return palette[i % palette.length];
+}
+
+let _inlineScroller = null;
+let _inlineScrollHandler = null;
 function _initInlineMapScrollSpy() {
   if (!_inlineMapOpen) return;
-  if (_inlineScrollSpy) { _inlineScrollSpy.disconnect(); _inlineScrollSpy = null; }
-
-  const rows = document.querySelectorAll('#stopList .stop-row[id^="srow"]');
+  if (_inlineScrollSpy) { try { _inlineScrollSpy.disconnect(); } catch(e) {} _inlineScrollSpy = null; }
+  if (_inlineScroller && _inlineScrollHandler) {
+    _inlineScroller.removeEventListener('scroll', _inlineScrollHandler);
+  }
+  const rows = Array.from(document.querySelectorAll('#stopList .stop-row[id^="srow"]'));
   if (!rows.length) return;
-  const visibilityMap = new Map();
+  const scroller = document.getElementById('mainArea') || window;
+  _inlineScroller = scroller;
   let activeIdx = -1;
 
-  _inlineScrollSpy = new IntersectionObserver((entries) => {
-    entries.forEach(e => {
-      const idx = +e.target.id.replace('srow', '');
-      if (e.isIntersecting) visibilityMap.set(idx, e.intersectionRatio);
-      else visibilityMap.delete(idx);
-    });
-    let bestIdx = -1, bestRatio = 0;
-    visibilityMap.forEach((r, i) => { if (r > bestRatio) { bestRatio = r; bestIdx = i; }});
-    if (bestIdx !== activeIdx) {
+  // The map is sticky at the top of the scrollable area, so cards scrolled up
+  // sit BEHIND it but still geometrically "intersect the viewport" — that's the
+  // sticky-occlusion bug. Instead, treat the topmost card whose top is at or
+  // above the line just under the map bottom as the current card.
+  const update = () => {
+    if (!_inlineMapOpen) return;
+    const mapEl = document.getElementById('inlineMapDiv');
+    const mapBottom = mapEl ? mapEl.getBoundingClientRect().bottom : 0;
+    let bestIdx = -1, bestTop = -Infinity;
+    for (const el of rows) {
+      const r = el.getBoundingClientRect();
+      if (r.height === 0) continue;
+      if (r.top <= mapBottom + 64 && r.top > bestTop) { bestTop = r.top; bestIdx = +el.id.replace('srow', ''); }
+    }
+    if (bestIdx === -1) bestIdx = +rows[0].id.replace('srow', '');
+    if (bestIdx !== activeIdx && bestIdx >= 0) {
       activeIdx = bestIdx;
       document.querySelectorAll('.inline-marker.active').forEach(m => m.classList.remove('active'));
-      if (bestIdx >= 0) {
-        const marker = document.querySelector('.inline-marker-' + bestIdx);
-        if (marker) marker.classList.add('active');
+      const marker = document.querySelector('.inline-marker-' + bestIdx);
+      if (marker) marker.classList.add('active');
+      // Pan the map to follow the scroll — always pan so the map clearly tracks
+      // the card the user is on. Smooth + short duration so it feels live.
+      const stops = days[currentDay] && days[currentDay].stops;
+      const s = stops && stops[bestIdx];
+      if (_inlineMap && s && Number.isFinite(Number(s.lat)) && Number.isFinite(Number(s.lng))) {
+        _inlineMap.panTo([Number(s.lat), Number(s.lng)], { animate: true, duration: 0.4 });
       }
     }
-  }, { threshold: [0, 0.25, 0.5, 0.75, 1.0], rootMargin: '-10% 0px -40% 0px' });
+  };
 
-  rows.forEach(r => _inlineScrollSpy.observe(r));
+  let _raf = null;
+  _inlineScrollHandler = () => { if (_raf) return; _raf = requestAnimationFrame(() => { _raf = null; update(); }); };
+  scroller.addEventListener('scroll', _inlineScrollHandler, { passive: true });
+  update();
 }
 
 function buildInlineMap() {
@@ -10900,10 +10931,10 @@ function buildInlineMap() {
 
   // Stop pins
   stops.forEach((s, i) => {
-    const pinColor = s.reservation && s.reservation.confirmed ? '#28a745' : s.color;
+    const pinColor = s.reservation && s.reservation.confirmed ? '#28a745' : (s.color || _colorForStop(i));
     const sz = 26;
     const icon = L.divIcon({ className:'inline-marker inline-marker-'+i, html:'<div class="inline-marker-inner" style="background:'+pinColor+';color:#fff;width:'+sz+'px;height:'+sz+'px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.3);transition:transform 0.2s,box-shadow 0.2s;">'+(i+1)+'</div>', iconSize:[sz,sz], iconAnchor:[sz/2,sz/2], popupAnchor:[0,-sz/2] });
-    const popupColor = s.color || '#1a73e8';
+    const popupColor = s.color || _colorForStop(i);
     const resInfo = s.reservation ? '<br><span style="color:#28a745;font-size:11px;font-weight:700;">✓ ' + (s.reservation.confirmed ? 'Confirmed' : 'Reserved') + '</span>' : '';
     const prebookInfo = (s.prebook && !(s.reservation && (s.reservation.confirmed || s.reservation.time))) ? '<br><span style="color:#c0392b;font-size:11px;font-weight:700;">⚠ Pre-book</span>' : '';
     const freeInfo = (s.free && !s.passedBy && !s.checkIn && !(s.reservation)) ? '<br><span style="color:#1a7a3a;font-size:11px;font-weight:700;">Free</span>' : '';
@@ -11150,7 +11181,7 @@ function renderRouteMap() {
         <button onclick="event.stopPropagation();moveStop(${i},1);" ${i===stops.length-1?'disabled':''}
           style="background:none;border:1px solid #ddd;border-radius:4px;width:22px;height:18px;cursor:pointer;font-size:10px;color:#666;padding:0;line-height:1;">&#9660;</button>
       </div>
-      <div class="mini-num" style="background:${s.color}">${i+1}</div>
+      <div class="mini-num" style="background:${s.color || _colorForStop(i)}">${i+1}</div>
       <div class="mini-info" style="flex:1;">
         <select onchange="event.stopPropagation(); moveStopFromMapToDay(${i}, parseInt(this.value));"
           style="font-size:11px;color:#1a73e8;border:1px solid #c5d8fa;background:#e8f0fd;border-radius:6px;cursor:pointer;padding:2px 4px;margin-bottom:3px;width:100%;font-weight:700;">
@@ -11243,15 +11274,16 @@ function buildRouteMapIframe(stops, color) {
   stops.forEach(function(s, i) {
     var sz = i===0 ? 32 : 26;
     var resInfo = s.reservation ? '<br><span style="color:#28a745;font-size:11px;font-weight:700;">✓ ' + (s.reservation.confirmed ? 'Confirmed' : 'Reserved') + (s.reservation.notes ? ' · ' + s.reservation.notes : '') + '</span>' : '';
-    var icon = L.divIcon({className:'route-marker route-marker-'+i, html:'<div class="route-marker-inner" style="background:'+(s.reservation&&s.reservation.confirmed?'#28a745':s.color)+';color:#fff;width:'+sz+'px;height:'+sz+'px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:'+(i===0?13:11)+'px;font-weight:900;border:2.5px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.35);transition:transform 0.2s,box-shadow 0.2s;">'+(i+1)+'</div>', iconSize:[sz,sz], iconAnchor:[sz/2,sz/2], popupAnchor:[0,-(sz/2+4)]});
-    var popup = '<div style="min-width:180px"><b style="color:'+s.color+';font-size:13px;">Stop '+(i+1)+'</b><br><b style="font-size:14px;">'+s.name+'</b><br><span style="color:#666;font-size:12px;">'+s.time+' · '+s.duration+'</span><br><span style="font-size:11px;color:#888;">'+s.address+'</span>'+resInfo+(s.prebook&&!s.reservation?'<br><span style="color:#c0392b;font-size:11px;font-weight:700;">⚠ Pre-book needed</span>':'')+(s.free?'<br><span style="color:#1a7a3a;font-size:11px;font-weight:700;">✓ Free</span>':'')+'</div>';
+    var _stopC = s.color || _colorForStop(i);
+    var icon = L.divIcon({className:'route-marker route-marker-'+i, html:'<div class="route-marker-inner" style="background:'+(s.reservation&&s.reservation.confirmed?'#28a745':_stopC)+';color:#fff;width:'+sz+'px;height:'+sz+'px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:'+(i===0?13:11)+'px;font-weight:900;border:2.5px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.35);transition:transform 0.2s,box-shadow 0.2s;">'+(i+1)+'</div>', iconSize:[sz,sz], iconAnchor:[sz/2,sz/2], popupAnchor:[0,-(sz/2+4)]});
+    var popup = '<div style="min-width:180px"><b style="color:'+_stopC+';font-size:13px;">Stop '+(i+1)+'</b><br><b style="font-size:14px;">'+s.name+'</b><br><span style="color:#666;font-size:12px;">'+s.time+' · '+s.duration+'</span><br><span style="font-size:11px;color:#888;">'+s.address+'</span>'+resInfo+(s.prebook&&!s.reservation?'<br><span style="color:#c0392b;font-size:11px;font-weight:700;">⚠ Pre-book needed</span>':'')+(s.free?'<br><span style="color:#1a7a3a;font-size:11px;font-weight:700;">✓ Free</span>':'')+'</div>';
     var marker = L.marker([s.lat, s.lng], {icon:icon}).addTo(map).bindPopup(popup);
     marker.on('popupopen', function() {
       // Scroll the matching event card into view
       var card = document.getElementById('mcard'+i);
       if (card) {
         card.scrollIntoView({behavior:'smooth', block:'center'});
-        card.style.outline = '2px solid '+s.color;
+        card.style.outline = '2px solid '+_stopC;
         setTimeout(() => { card.style.outline = ''; }, 1500);
       }
     });
