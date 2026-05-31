@@ -683,6 +683,16 @@ svg.leaflet-image-layer.leaflet-interactive path {
 </script>
 <style>
 #routeMapDiv, #allMapDiv { width:100%; height:200px; z-index:1; }
+.all-day-pin { transition: transform 0.2s, box-shadow 0.2s; }
+.all-day-pin.swap-source {
+  animation: swap-pulse 1.2s ease-in-out infinite;
+  box-shadow: 0 0 0 6px rgba(26,115,232,0.35), 0 4px 16px rgba(0,0,0,0.45) !important;
+  z-index: 1000;
+}
+@keyframes swap-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.25); }
+}
 #allMapDiv { height: 420px; }
 </style>
 <style>
@@ -11293,6 +11303,60 @@ function _initRouteMapScrollSpy() {
 
 // Day picker invoked from the All Days Map popup. Each target day's button uses the
 // matching hsl() colour the all-days map uses, so the choice maps visually to the pin.
+// ── SWAP STOPS ON ALL-DAYS MAP ───────────────────────────────────
+// Pick-then-pick: tap "🔀 Swap" on a stop, then tap any other stop's pin to
+// swap them. Works across the same day or different days. Times are recomputed
+// on every affected day so neither schedule breaks.
+function _startSwap(fromDay, fromIdx) {
+  if (window._allMap) try { window._allMap.closePopup(); } catch(e) {}
+  const stop = days[fromDay] && days[fromDay].stops && days[fromDay].stops[fromIdx];
+  if (!stop || stop.isHotel) { showToast('Cannot swap that stop', true); return; }
+  window._swapPick = { fromDay, fromIdx, name: stop.name || ('Stop ' + (fromIdx + 1)) };
+  // Highlight the source pin (pulse).
+  document.querySelectorAll('.all-day-pin.swap-source').forEach(el => el.classList.remove('swap-source'));
+  const src = document.querySelector('.all-day-pin-' + fromDay + '-' + fromIdx);
+  if (src) src.classList.add('swap-source');
+  // Show banner.
+  const banner = document.getElementById('swapBanner');
+  const nameSpan = document.getElementById('swapBannerName');
+  if (banner && nameSpan) {
+    const dayLbl = ((APP_CONFIG.dayLabels || [])[fromDay] || (days[fromDay] && days[fromDay].title) || ('Day ' + (fromDay + 1))).split('—')[0].trim();
+    nameSpan.textContent = '"' + (window._swapPick.name) + '" (' + dayLbl + ' · Stop ' + (fromIdx + 1) + ')';
+    banner.style.display = 'flex';
+  }
+}
+
+function _cancelSwap() {
+  window._swapPick = null;
+  const banner = document.getElementById('swapBanner');
+  if (banner) banner.style.display = 'none';
+  document.querySelectorAll('.all-day-pin.swap-source').forEach(el => el.classList.remove('swap-source'));
+}
+
+function _completeSwap(toDay, toIdx) {
+  const pick = window._swapPick;
+  if (!pick) return;
+  if (pick.fromDay === toDay && pick.fromIdx === toIdx) { _cancelSwap(); return; } // same stop, no-op
+  const aStop = days[pick.fromDay] && days[pick.fromDay].stops && days[pick.fromDay].stops[pick.fromIdx];
+  const bStop = days[toDay] && days[toDay].stops && days[toDay].stops[toIdx];
+  if (!aStop || !bStop) { _cancelSwap(); showToast('Could not swap', true); return; }
+  if (aStop.isHotel || bStop.isHotel) { _cancelSwap(); showToast('Cannot swap a hotel stop', true); return; }
+  // Swap the two stop objects in place.
+  days[pick.fromDay].stops[pick.fromIdx] = bStop;
+  days[toDay].stops[toIdx] = aStop;
+  try { reassignTimesForDay(pick.fromDay); if (toDay !== pick.fromDay) reassignTimesForDay(toDay); } catch (e) {}
+  try { saveToStorage(); } catch (e) {}
+  try { if (typeof schedulePush === 'function') schedulePush(); } catch (e) {}
+  try { renderAll(); } catch (e) {}
+  try { if (currentView === 'allmap' && typeof renderAllMap === 'function') renderAllMap(); } catch (e) {}
+  const aName = aStop.name || 'Stop';
+  const bName = bStop.name || 'Stop';
+  showToast('🔀 Swapped "' + aName + '" ↔ "' + bName + '"');
+  window._swapPick = null;
+  const banner = document.getElementById('swapBanner');
+  if (banner) banner.style.display = 'none';
+}
+
 function _movePromptFromAllDays(fromDay, stopIdx) {
   if (window._allMap) try { window._allMap.closePopup(); } catch(e) {}
   const stop = days[fromDay] && days[fromDay].stops && days[fromDay].stops[stopIdx];
@@ -11382,7 +11446,13 @@ function renderAllMap() {
       </div>
       <button onclick="runMultiDayOptimize()" style="width:100%;padding:11px;border-radius:10px;border:none;background:#5c4db1;color:#fff;font-size:13px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">✨ Optimize across all days — cluster by location, balance museums, fix meals</button>
     </div>
-    <div id="allMapDiv"></div>
+    <div style="position:relative;">
+      <div id="swapBanner" style="display:none;position:absolute;top:8px;left:8px;right:8px;z-index:1000;background:#1a73e8;color:#fff;padding:10px 12px;border-radius:10px;box-shadow:0 4px 14px rgba(0,0,0,0.25);font-size:13px;font-weight:700;display:none;align-items:center;gap:8px;">
+        <span style="flex:1;">🔀 Tap another stop to swap with <span id="swapBannerName">…</span></span>
+        <button onclick="_cancelSwap()" style="background:rgba(255,255,255,0.2);border:none;color:#fff;font-size:12px;font-weight:700;padding:6px 10px;border-radius:6px;cursor:pointer;">Cancel</button>
+      </div>
+      <div id="allMapDiv"></div>
+    </div>
   `;
 
   if (window._allMap) { window._allMap.remove(); window._allMap = null; }
@@ -11398,18 +11468,30 @@ function renderAllMap() {
     L.marker([hd.lat, hd.lng], {icon:hotelIcon}).addTo(map).bindPopup('<b>🏨 ' + hd.name + '</b><br><span style="font-size:11px;">' + (hd.address||'Your hotel') + '</span>');
     allBounds.push([hd.lat, hd.lng]);
   }
+  window._allMapMarkers = [];
   stopsData.forEach(function(day, di) {
+    window._allMapMarkers[di] = [];
     var coords = day.stops.map(function(s){return [s.lat, s.lng];});
     coords.forEach(function(c){allBounds.push(c);});
     L.polyline(coords, {color:day.color, weight:4, opacity:0.8, dashArray:'8,5'}).addTo(map);
     day.stops.forEach(function(s, i) {
-      var icon = L.divIcon({className:'', html:'<div style="background:'+day.color+';color:#fff;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;border:2.5px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.3);">'+(i+1)+'</div>', iconSize:[28,28], iconAnchor:[14,14], popupAnchor:[0,-18]});
+      var icon = L.divIcon({className:'', html:'<div class="all-day-pin all-day-pin-'+di+'-'+i+'" style="background:'+day.color+';color:#fff;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;border:2.5px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.3);">'+(i+1)+'</div>', iconSize:[28,28], iconAnchor:[14,14], popupAnchor:[0,-18]});
       var popup = '<b style="color:'+day.color+'">'+day.label+' · Stop '+(i+1)+'</b><br><b>'+s.name+'</b><br><span style="color:#666;font-size:12px;">'+s.time+' · '+s.duration+'</span><br><span style="font-size:11px;">'+s.address+'</span>'+(s.prebook?'<br><span style="color:#c0392b;font-size:11px;">⚠ Pre-book</span>':'')+(s.free?'<br><span style="color:#1a7a3a;font-size:11px;">Free</span>':'')
-        +'<div style="display:flex;gap:6px;margin-top:6px;">'
-        +'<button onclick="_goToStop('+di+','+i+')" style="flex:1;padding:7px 8px;border-radius:6px;border:none;background:'+day.color+';color:#fff;font-size:11px;font-weight:700;cursor:pointer;">Open ▶</button>'
-        +'<button onclick="_movePromptFromAllDays('+di+','+i+')" style="flex:1;padding:7px 8px;border-radius:6px;border:1.5px solid '+day.color+';background:#fff;color:'+day.color+';font-size:11px;font-weight:700;cursor:pointer;">📅 Move to day</button>'
+        +'<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;">'
+        +'<button onclick="_goToStop('+di+','+i+')" style="flex:1;min-width:80px;padding:7px 8px;border-radius:6px;border:none;background:'+day.color+';color:#fff;font-size:11px;font-weight:700;cursor:pointer;">Open ▶</button>'
+        +'<button onclick="_movePromptFromAllDays('+di+','+i+')" style="flex:1;min-width:90px;padding:7px 8px;border-radius:6px;border:1.5px solid '+day.color+';background:#fff;color:'+day.color+';font-size:11px;font-weight:700;cursor:pointer;">📅 Move to day</button>'
+        +'<button onclick="_startSwap('+di+','+i+')" style="flex:1;min-width:80px;padding:7px 8px;border-radius:6px;border:1.5px dashed '+day.color+';background:#fff;color:'+day.color+';font-size:11px;font-weight:700;cursor:pointer;">🔀 Swap</button>'
         +'</div>';
-      L.marker([s.lat, s.lng], {icon:icon}).addTo(map).bindPopup(popup);
+      var marker = L.marker([s.lat, s.lng], {icon:icon}).addTo(map).bindPopup(popup);
+      marker._swapDi = di; marker._swapSi = i;
+      // In swap mode, intercept the popup-open and complete the swap directly.
+      marker.on('popupopen', function() {
+        if (window._swapPick) {
+          marker.closePopup();
+          _completeSwap(di, i);
+        }
+      });
+      window._allMapMarkers[di][i] = marker;
     });
   });
   setTimeout(function() {
