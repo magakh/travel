@@ -1927,6 +1927,141 @@ function initSupabase() {
   } catch(e) { console.error('Supabase init failed', e); return false; }
 }
 
+// ── AUTH GATE (commercialization: login required to view or edit) ──
+let CURRENT_USER = null;   // Supabase auth user
+let USER_PROFILE = null;   // row from public.profiles (role, credits)
+let _authResolve = null;
+
+function _authRedirectUrl() {
+  return location.origin + location.pathname + location.search;
+}
+
+function requireAuth() {
+  return new Promise(async (resolve) => {
+    _authResolve = resolve;
+    // Catch sign-ins from any path (password, magic link return, OAuth)
+    try {
+      supa.auth.onAuthStateChange((event, session) => {
+        if (session && session.user && _authResolve) {
+          CURRENT_USER = session.user;
+          _hideAuthGate();
+          const r = _authResolve; _authResolve = null; r(session.user);
+        }
+      });
+    } catch(e) {}
+    try {
+      const { data } = await supa.auth.getSession();
+      if (data && data.session && data.session.user) {
+        CURRENT_USER = data.session.user;
+        const r = _authResolve; _authResolve = null;
+        if (r) r(data.session.user);
+        return;
+      }
+    } catch(e) { console.warn('getSession', e); }
+    _showAuthGate();
+  });
+}
+
+function _showAuthGate() {
+  if (document.getElementById('auth-gate')) return;
+  const div = document.createElement('div');
+  div.id = 'auth-gate';
+  div.style.cssText = 'position:fixed;inset:0;z-index:100000;background:#f5f3ee;display:flex;align-items:center;justify-content:center;padding:20px;';
+  div.innerHTML =
+    '<div style="background:#fff;border-radius:18px;box-shadow:0 6px 30px rgba(0,0,0,0.12);padding:28px 22px;width:100%;max-width:360px;">' +
+      '<div style="font-size:22px;font-weight:800;margin-bottom:4px;">' + (APP_CONFIG.title || 'Trip Planner') + '</div>' +
+      '<div style="font-size:13px;color:#888;margin-bottom:20px;">Sign in to view this trip</div>' +
+      '<input id="authEmail" type="email" placeholder="Email" autocomplete="email" style="width:100%;box-sizing:border-box;padding:12px;border:1px solid #ddd;border-radius:10px;font-size:15px;margin-bottom:10px;">' +
+      '<input id="authPassword" type="password" placeholder="Password" autocomplete="current-password" style="width:100%;box-sizing:border-box;padding:12px;border:1px solid #ddd;border-radius:10px;font-size:15px;margin-bottom:14px;">' +
+      '<button onclick="_authSignIn()" style="width:100%;padding:13px;background:#1a1a1a;color:#fff;border:none;border-radius:10px;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:8px;">Sign in</button>' +
+      '<button onclick="_authSignUp()" style="width:100%;padding:13px;background:#fff;color:#1a1a1a;border:1.5px solid #1a1a1a;border-radius:10px;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:14px;">Create account</button>' +
+      '<div style="text-align:center;"><a href="#" onclick="_authMagicLink();return false;" style="font-size:13px;color:#1a73e8;text-decoration:none;">✉️ Email me a magic link instead</a></div>' +
+      '<div id="authMsg" style="font-size:13px;margin-top:12px;text-align:center;min-height:18px;color:#666;"></div>' +
+    '</div>';
+  document.body.appendChild(div);
+}
+
+function _hideAuthGate() {
+  const g = document.getElementById('auth-gate');
+  if (g) g.remove();
+}
+
+function _authMsg(text, isErr) {
+  const el = document.getElementById('authMsg');
+  if (el) { el.textContent = text; el.style.color = isErr ? '#c0392b' : '#1a7a3a'; }
+}
+
+async function _authSignIn() {
+  const email = (document.getElementById('authEmail')||{}).value || '';
+  const pw = (document.getElementById('authPassword')||{}).value || '';
+  if (!email || !pw) { _authMsg('Enter email and password', true); return; }
+  _authMsg('Signing in…');
+  const { error } = await supa.auth.signInWithPassword({ email: email.trim(), password: pw });
+  if (error) _authMsg(error.message, true);
+  // success handled by onAuthStateChange
+}
+
+async function _authSignUp() {
+  const email = (document.getElementById('authEmail')||{}).value || '';
+  const pw = (document.getElementById('authPassword')||{}).value || '';
+  if (!email || !pw) { _authMsg('Enter email and a password (6+ characters)', true); return; }
+  _authMsg('Creating account…');
+  const { data, error } = await supa.auth.signUp({
+    email: email.trim(), password: pw,
+    options: { emailRedirectTo: _authRedirectUrl() }
+  });
+  if (error) { _authMsg(error.message, true); return; }
+  if (data && data.session) return; // confirm-email off — signed in immediately
+  _authMsg('✉️ Check your email to confirm your account, then come back here.');
+}
+
+async function _authMagicLink() {
+  const email = (document.getElementById('authEmail')||{}).value || '';
+  if (!email) { _authMsg('Enter your email first', true); return; }
+  _authMsg('Sending link…');
+  const { error } = await supa.auth.signInWithOtp({
+    email: email.trim(),
+    options: { emailRedirectTo: _authRedirectUrl() }
+  });
+  if (error) { _authMsg(error.message, true); return; }
+  _authMsg('✉️ Magic link sent — check your email and open it on this device.');
+}
+
+async function loadUserProfile(user) {
+  if (!user) return;
+  try {
+    const { data } = await supa.from('profiles').select('*').eq('id', user.id).maybeSingle();
+    USER_PROFILE = data || null;
+  } catch(e) { console.warn('loadUserProfile', e); }
+  _renderAccountRow();
+}
+
+function _renderAccountRow() {
+  const panel = document.getElementById('panel-settings');
+  if (!panel || !CURRENT_USER) return;
+  let row = document.getElementById('accountRow');
+  if (!row) {
+    row = document.createElement('div');
+    row.id = 'accountRow';
+    panel.appendChild(row);
+  }
+  const role = (USER_PROFILE && USER_PROFILE.role) || 'member';
+  const credits = USER_PROFILE ? USER_PROFILE.credits : null;
+  row.innerHTML =
+    '<div style="margin:18px 12px;padding:14px;background:#f7f5f0;border-radius:12px;font-size:13px;color:#444;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">' +
+      '<span>👤 ' + (CURRENT_USER.email || '') +
+        ' · <strong>' + role + '</strong>' +
+        (role !== 'founder' && credits !== null ? ' · ' + credits + ' trip credit' + (credits === 1 ? '' : 's') : '') +
+      '</span>' +
+      '<button onclick="signOutUser()" style="padding:7px 14px;background:#fff;border:1px solid #ccc;border-radius:8px;font-size:13px;cursor:pointer;">Sign out</button>' +
+    '</div>';
+}
+
+async function signOutUser() {
+  try { await supa.auth.signOut(); } catch(e) {}
+  location.reload();
+}
+
 // ── SAVE / LOAD ───────────────────────────────────────────────────
 function getSaveData() {
   return {
@@ -4683,6 +4818,10 @@ async function init() {
       '<div style="text-align:center;padding:40px;color:#c0392b;">Could not initialise Supabase — check URL and key in Settings</div>';
     return;
   }
+
+  // ── AUTH GATE — login required to view or edit anything ────────
+  const authedUser = await requireAuth();
+  loadUserProfile(authedUser); // non-blocking; populates role/credits + account row
 
   // ── SUPABASE IS THE SINGLE SOURCE OF TRUTH ──────────────────────
   // Cloud always wins. localStorage is only a silent offline fallback.
