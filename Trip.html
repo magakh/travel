@@ -2127,7 +2127,17 @@ function getTripConfig() {
   if (APP_CONFIG.perplexityKey) cfg.perplexityKey = APP_CONFIG.perplexityKey;
   if (APP_CONFIG.aiModel) cfg.aiModel = APP_CONFIG.aiModel;
   if (APP_CONFIG.aiProvider) cfg.aiProvider = APP_CONFIG.aiProvider;
+  if (APP_CONFIG.travelerNotes) cfg.travelerNotes = APP_CONFIG.travelerNotes;
   return cfg;
+}
+
+// One-line traveler context for AI prompts (free text, set once in the Fill dialog).
+// Returns '' when unset so it's safe to concatenate anywhere.
+function travelerCtxLine() {
+  const n = (APP_CONFIG.travelerNotes || '').trim();
+  if (!n) return '';
+  return ' TRAVELER CONTEXT — tailor suggestions, pacing and food picks to this group: "' +
+    n.replace(/["\\]/g, "'").slice(0, 300) + '".';
 }
 
 // Best-effort: what city is this trip about?
@@ -4429,7 +4439,7 @@ async function suggestDurationForStop(i) {
   // AI fallback for unusual places
   btn.textContent = '⏳ Looking up…'; btn.disabled = true;
   try {
-    const prompt = `How long do visitors typically spend at "${s.name}" (${s.type || 'attraction'}) in ${getTripCity()}? Reply with ONLY a JSON object: {"minutes": 60, "reason": "one short sentence"}. Use a realistic number based on the type of place.`;
+    const prompt = `How long do visitors typically spend at "${s.name}" (${s.type || 'attraction'}) in ${getTripCity()}?${travelerCtxLine()} Reply with ONLY a JSON object: {"minutes": 60, "reason": "one short sentence"}. Use a realistic number based on the type of place.`;
     const text = await callAI({ prompt, maxTokens: 80 });
     let raw = (text || '{}').replace(/```json|```/g, '').trim();
     const oS = raw.indexOf('{'), oE = raw.lastIndexOf('}');
@@ -9862,8 +9872,8 @@ async function runSuggest(midLat, midLng, afterIdx, dayIdx, beforeIdx) {
       : ' Near lat ' + midLat.toFixed(3) + ', lng ' + midLng.toFixed(3) + ' in ' + city + '.';
 
     const prompt = isWalk
-      ? 'You are a walking tour expert for ' + city + '. Suggest 6 excellent short walking experiences or scenic routes matching: "' + query + '".' + locationCtx + ' Return ONLY a JSON array (no markdown): [{"name":"...","type":"Walking route · neighbourhood","address":"...","lat":0.0,"lng":0.0,"why":"1 sentence why this walk is special","duration":"20 min","description":"2-3 sentences with substance about what makes this walk worthwhile","tips":"1-2 sentences of practical insider tips (best time, what to look for)","goodFor":"short label e.g. \\"Architecture lovers\\" or \\"Quiet morning stroll\\"","hours":"","hoursNote":"any timing/access notes if relevant, else empty string","priceLevel":""}]. Use real locations with accurate coordinates.'
-      : 'You are a travel expert for ' + city + '. Suggest 6 excellent real places matching: "' + query + '".' + locationCtx + ' Return ONLY a JSON array (no markdown): [{"name":"...","type":"...","address":"...","lat":0.0,"lng":0.0,"why":"1 sentence why it fits here","duration":"45 min","description":"2-3 sentences with substance — atmosphere, what to expect, what is special","tips":"1-2 sentences of practical insider tips (what to order, when to go, what to ask for)","goodFor":"short label e.g. \\"Solo lunch\\" or \\"Romantic dinner\\" or \\"Architecture lovers\\"","hours":"typical opening hours if known and confident, e.g. \\"Mon-Fri 9am-6pm, Sat-Sun 10am-5pm\\". Empty string if unsure.","hoursNote":"opening hours notes if known and relevant, e.g. \\"Closed Mondays\\" or \\"Best 10am-noon\\", else empty string","priceLevel":"$ or $$ or $$$ or $$$$ for restaurants/paid attractions, else empty string"}]. Use real places with accurate coordinates. The description, tips, hours, and hoursNote should reflect general knowledge — never invent specifics you are not confident about; prefer empty string over guessing.';
+      ? 'You are a walking tour expert for ' + city + '. Suggest 6 excellent short walking experiences or scenic routes matching: "' + query + '".' + locationCtx + travelerCtxLine() + ' Return ONLY a JSON array (no markdown): [{"name":"...","type":"Walking route · neighbourhood","address":"...","lat":0.0,"lng":0.0,"why":"1 sentence why this walk is special","duration":"20 min","description":"2-3 sentences with substance about what makes this walk worthwhile","tips":"1-2 sentences of practical insider tips (best time, what to look for)","goodFor":"short label e.g. \\"Architecture lovers\\" or \\"Quiet morning stroll\\"","hours":"","hoursNote":"any timing/access notes if relevant, else empty string","priceLevel":""}]. Use real locations with accurate coordinates.'
+      : 'You are a travel expert for ' + city + '. Suggest 6 excellent real places matching: "' + query + '".' + locationCtx + travelerCtxLine() + ' Return ONLY a JSON array (no markdown): [{"name":"...","type":"...","address":"...","lat":0.0,"lng":0.0,"why":"1 sentence why it fits here","duration":"45 min","description":"2-3 sentences with substance — atmosphere, what to expect, what is special","tips":"1-2 sentences of practical insider tips (what to order, when to go, what to ask for)","goodFor":"short label e.g. \\"Solo lunch\\" or \\"Romantic dinner\\" or \\"Architecture lovers\\"","hours":"typical opening hours if known and confident, e.g. \\"Mon-Fri 9am-6pm, Sat-Sun 10am-5pm\\". Empty string if unsure.","hoursNote":"opening hours notes if known and relevant, e.g. \\"Closed Mondays\\" or \\"Best 10am-noon\\", else empty string","priceLevel":"$ or $$ or $$$ or $$$$ for restaurants/paid attractions, else empty string"}]. Use real places with accurate coordinates. The description, tips, hours, and hoursNote should reflect general knowledge — never invent specifics you are not confident about; prefer empty string over guessing.';
 
     const text = await callAI({ prompt, maxTokens: 3000 });
     _suggestResults = extractJsonArray(text);
@@ -10549,6 +10559,15 @@ function runFillItinerary() {
         '<div id="fillPhotoPreview" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;"></div>' +
       '</div>' +
 
+      // ── Traveler notes (optional, remembered per trip) ──
+      '<div style="margin-top:14px;">' +
+        '<div style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">About your group (optional — remembered for this trip)</div>' +
+        '<input id="fillTravelerNotes" maxlength="300" value="' + String(APP_CONFIG.travelerNotes || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;') + '" ' +
+          'placeholder="e.g. couple 50s, vegetarian, slow pace, love markets & art" ' +
+          'style="width:100%;border:1px solid #ddd;border-radius:10px;padding:10px;font-size:13px;box-sizing:border-box;font-family:inherit;">' +
+        '<div style="font-size:11px;color:#888;margin-top:4px;">Used by all AI suggestions — fill, ✨ Add here, and durations.</div>' +
+      '</div>' +
+
       // ── Buttons ──
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px;">' +
         '<button onclick="document.getElementById(&quot;fill-picker-overlay&quot;).remove()" style="padding:12px;border-radius:10px;border:1px solid #ddd;background:#fff;font-weight:700;cursor:pointer;">Cancel</button>' +
@@ -10596,6 +10615,16 @@ async function submitFillDialog() {
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Thinking…'; }
 
   try {
+    // Persist traveler notes (trip-level, synced via config in the normal push path)
+    const notesEl = document.getElementById('fillTravelerNotes');
+    if (notesEl) {
+      const newNotes = notesEl.value.trim().slice(0, 300);
+      if (newNotes !== (APP_CONFIG.travelerNotes || '')) {
+        APP_CONFIG.travelerNotes = newNotes;
+        autoSave(); // config rides along in cloudSave's getTripConfig()
+      }
+    }
+
     // Collect typed locations
     const typed = (document.getElementById('fillLocations')?.value || '')
       .split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
@@ -10898,7 +10927,7 @@ function buildFillPrompt(city, tc, dayBriefs, existingNames = [], wantedLocation
     ? '\nUSER WANTS TO INCLUDE THESE LOCATIONS (fit as many as possible; schedule each on the day whose existing stops are geographically closest to it):\n' + wantedLocations.map(n => '  • ' + n).join('\n')
     : '';
 
-  return `You are an expert tour guide for ${city}. Fill empty time slots in an existing travel itinerary.
+  return `You are an expert tour guide for ${city}. Fill empty time slots in an existing travel itinerary.${travelerCtxLine()}
 
 ${centerStr}
 ${clusterHints ? '\nGEOGRAPHIC CLUSTERING — keep each day close to its anchor:\n' + clusterHints : ''}
