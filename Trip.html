@@ -1516,6 +1516,7 @@ body.ios-touch-reorder .stop-row.dragging-src { opacity: 0.3; }
       <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
           <h3 style="margin:0;font-size:14px;">🔑 AI settings</h3>
+          <button onclick="showApiKeyHelp()" style="background:none;border:1px solid #ddd;border-radius:20px;padding:3px 10px;font-size:12px;color:#555;cursor:pointer;">❓ How to get a key</button>
         </div>
 
         <!-- Provider selector -->
@@ -11959,28 +11960,67 @@ function clearApiKey() {
 
 function showApiKeyHelp() {
   const ov = document.createElement('div');
-  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:10001;display:flex;align-items:center;justify-content:center;padding:20px;';
-  ov.innerHTML = `<div style="background:#fff;border-radius:16px;padding:22px;max-width:400px;width:100%;max-height:85vh;overflow-y:auto;">
-    <h3 style="margin:0 0 12px 0;font-size:16px;">🔑 How to get an Anthropic API key</h3>
-    <ol style="padding-left:18px;margin:0 0 14px 0;font-size:13px;line-height:1.8;color:#333;">
-      <li>Go to <a href="https://platform.claude.com/settings/keys" target="_blank" style="color:#1a73e8;">platform.claude.com/settings/keys</a></li>
-      <li>Sign up or log in to your Anthropic account</li>
-      <li>Click <b>"Create Key"</b></li>
-      <li>Give it a name (e.g. "Travel App")</li>
-      <li>Copy the key — it starts with <code style="background:#f5f5f5;padding:2px 5px;border-radius:4px;">sk-ant-</code></li>
-      <li>Paste it in the field below and tap <b>Save key</b></li>
-    </ol>
-    <div style="background:#f0f7ff;border-radius:10px;padding:12px;font-size:12px;color:#333;margin-bottom:14px;line-height:1.6;">
-      <b>💡 About billing</b><br>
-      Anthropic charges per use. For typical trip planning (AI suggestions, filling itineraries), expect <b>a few cents per session</b>. Add a small credit at <a href="https://console.anthropic.com/settings/billing" target="_blank" style="color:#1a73e8;">console.anthropic.com/settings/billing</a> and set up auto top-up so it never runs out.
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:10001;display:flex;align-items:flex-end;justify-content:center;padding:0;';
+  ov.innerHTML = `<div style="background:#fff;border-radius:20px 20px 0 0;padding:24px;max-width:480px;width:100%;max-height:88vh;overflow-y:auto;">
+    <h3 style="margin:0 0 4px 0;font-size:17px;font-weight:800;">🔑 Getting an AI key</h3>
+    <p style="font-size:13px;color:#666;margin:0 0 18px 0;">Pick any provider. <b>We recommend starting with $5–10</b> — that's months of typical travel use.</p>
+
+    <!-- Claude -->
+    <div style="border:1.5px solid #7c3aed;border-radius:12px;padding:14px;margin-bottom:12px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <span style="font-size:18px;">🟣</span>
+        <b style="font-size:14px;">Claude (Anthropic)</b>
+        <span style="margin-left:auto;background:#f3e8ff;color:#7c3aed;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;">Recommended</span>
+      </div>
+      <ol style="padding-left:18px;margin:0 0 8px 0;font-size:12px;line-height:1.9;color:#333;">
+        <li>Go to <a href="https://console.anthropic.com" target="_blank" style="color:#7c3aed;">console.anthropic.com</a> → sign up</li>
+        <li>Go to <b>Billing</b> → add <b>$5–10</b> credit</li>
+        <li>Go to <b>API Keys</b> → click <b>Create Key</b></li>
+        <li>Copy key (starts with <code style="background:#f5f5f5;padding:1px 5px;border-radius:4px;">sk-ant-</code>) → paste in app</li>
+      </ol>
+      <div style="font-size:11px;color:#666;line-height:1.5;">
+        <b>Models:</b> Haiku = cheapest/fastest · Sonnet = best balance · Opus = highest quality<br>
+        <b>Cost:</b> ~$0.01–0.05 per AI action. $5 = hundreds of suggestions.
+      </div>
     </div>
-    <div style="background:#f5f5f5;border-radius:10px;padding:12px;font-size:12px;color:#555;margin-bottom:14px;line-height:1.6;">
-      <b>🤖 Which model to pick?</b><br>
-      <b>Haiku</b> — cheapest, very fast, great for simple searches<br>
-      <b>Sonnet</b> — best balance of quality &amp; cost (recommended)<br>
-      <b>Opus</b> — highest quality, slower &amp; more expensive
+
+    <!-- OpenAI -->
+    <div style="border:1.5px solid #10a37f;border-radius:12px;padding:14px;margin-bottom:12px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <span style="font-size:18px;">🟢</span>
+        <b style="font-size:14px;">OpenAI (GPT)</b>
+      </div>
+      <ol style="padding-left:18px;margin:0 0 8px 0;font-size:12px;line-height:1.9;color:#333;">
+        <li>Go to <a href="https://platform.openai.com" target="_blank" style="color:#10a37f;">platform.openai.com</a> → sign up</li>
+        <li>Go to <b>Billing</b> → add <b>$5–10</b> credit</li>
+        <li>Go to <b>API Keys</b> → click <b>Create new secret key</b></li>
+        <li>Copy key (starts with <code style="background:#f5f5f5;padding:1px 5px;border-radius:4px;">sk-</code>) → paste in app</li>
+      </ol>
+      <div style="font-size:11px;color:#666;line-height:1.5;">
+        <b>Models:</b> GPT-4o mini = cheapest · GPT-4o = best balance · o1-mini = reasoning<br>
+        <b>Cost:</b> Similar to Claude. $5 goes a long way.
+      </div>
     </div>
-    <button onclick="this.closest('div[style*=fixed]').remove()" style="width:100%;padding:12px;border-radius:10px;border:none;background:#1a1a1a;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">Got it</button>
+
+    <!-- Perplexity -->
+    <div style="border:1.5px solid #1a73e8;border-radius:12px;padding:14px;margin-bottom:18px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <span style="font-size:18px;">🔵</span>
+        <b style="font-size:14px;">Perplexity</b>
+        <span style="margin-left:auto;background:#e8f0fe;color:#1a73e8;font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;">Has web search</span>
+      </div>
+      <ol style="padding-left:18px;margin:0 0 8px 0;font-size:12px;line-height:1.9;color:#333;">
+        <li>Go to <a href="https://www.perplexity.ai/settings/api" target="_blank" style="color:#1a73e8;">perplexity.ai/settings/api</a> → sign up</li>
+        <li>Add <b>$5–10</b> credit under <b>Billing</b></li>
+        <li>Click <b>Generate</b> under API Keys</li>
+        <li>Copy key (starts with <code style="background:#f5f5f5;padding:1px 5px;border-radius:4px;">pplx-</code>) → paste in app</li>
+      </ol>
+      <div style="font-size:11px;color:#666;line-height:1.5;">
+        <b>Bonus:</b> Sonar models can search the web for real-time info about restaurants, hours, etc.
+      </div>
+    </div>
+
+    <button onclick="this.closest('div[style*=fixed]').remove()" style="width:100%;padding:13px;border-radius:12px;border:none;background:#1a1a1a;color:#fff;font-size:14px;font-weight:700;cursor:pointer;">Got it ✓</button>
   </div>`;
   document.body.appendChild(ov);
   ov.onclick = (e) => { if (e.target === ov) ov.remove(); };
