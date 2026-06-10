@@ -2832,8 +2832,11 @@ function startRealtime() {
         if (!row) return;
         const incomingSig = stateSignature(row);
         if (incomingSig === _lastKnownSignature) return; // our own save echoed back
-        if (_autoPushInFlight) return; // mid-save, skip
-        if (Date.now() - _localChangeAt < 5000) return; // very recent local edit, skip
+        // Reject stale events older than our last successful push
+        const incomingSavedAt = row.data && row.data.savedAt;
+        if (_ourLastSavedAt && incomingSavedAt && incomingSavedAt < _ourLastSavedAt) return;
+        if (_autoPushInFlight || _autoPushTimer) return; // save in progress or queued
+        if (Date.now() - _localChangeAt < 10000) return; // recent local edit, protect changes
         // Another device saved — apply and re-render
         const prevPhotoCount = days.reduce((n, d) => n + (d.stops||[]).reduce((m, s) => m + (s.userPhotos||[]).length, 0), 0);
         applyRemoteData(row);
@@ -7027,7 +7030,7 @@ let _walkQueue = [];
 let _walkNearbyResults = []; // all articles found nearby this cycle
 let _wakeLock = null;
 let _debugLocation = 'Locating…'; // current reverse-geocoded address for debug overlay
-const WALK_TRIGGER_METRES = 80;
+const WALK_TRIGGER_METRES = 40;
 
 // Keep speech alive when app is backgrounded — Chrome pauses speechSynthesis, we resume every 5s
 let _speechKeepAliveInterval = null;
