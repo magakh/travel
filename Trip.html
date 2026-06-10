@@ -1512,13 +1512,25 @@ body.ios-touch-reorder .stop-row.dragging-src { opacity: 0.3; }
 <input type="hidden" id="hotelLat"><input type="hidden" id="hotelLng">
 
 
-      <!-- Personal Anthropic API key + model selector -->
+      <!-- AI settings — multi-provider -->
       <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
           <h3 style="margin:0;font-size:14px;">🔑 AI settings</h3>
-          <button onclick="showApiKeyHelp()" style="background:none;border:1px solid #ddd;border-radius:20px;padding:3px 10px;font-size:12px;color:#555;cursor:pointer;">❓ How to get an API key</button>
         </div>
 
+        <!-- Provider selector -->
+        <div style="background:#fff;border-radius:12px;overflow:hidden;margin-bottom:10px;">
+          <div style="display:flex;align-items:center;padding:10px 14px;">
+            <span style="font-size:12px;color:#888;width:60px;flex-shrink:0;">Provider</span>
+            <select id="setAiProvider" onchange="onProviderChange()" style="border:none;padding:0;font-size:14px;flex:1;background:transparent;outline:none;color:#1a1a1a;cursor:pointer;">
+              <option value="claude">🟣 Claude (Anthropic)</option>
+              <option value="openai">🟢 OpenAI (GPT)</option>
+              <option value="perplexity">🔵 Perplexity</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Model selector (changes per provider) -->
         <div style="background:#fff;border-radius:12px;overflow:hidden;margin-bottom:10px;">
           <div style="display:flex;align-items:center;padding:10px 14px;">
             <span style="font-size:12px;color:#888;width:60px;flex-shrink:0;">Model</span>
@@ -1528,13 +1540,13 @@ body.ios-touch-reorder .stop-row.dragging-src { opacity: 0.3; }
               <option value="claude-opus-4-6">🧠 Opus 4.6 — most capable</option>
             </select>
           </div>
-          <div id="modelHint" style="padding:0 14px 8px;font-size:11px;color:#888;display:none;"></div>
         </div>
 
+        <!-- API key -->
         <div style="background:#fff;border-radius:12px;overflow:hidden;margin-bottom:10px;">
           <div style="display:flex;align-items:center;padding:10px 14px;">
             <span style="font-size:12px;color:#888;width:60px;flex-shrink:0;">API key</span>
-            <input id="setApiKey" type="password" placeholder="sk-ant-... (optional)" autocomplete="off" style="border:none;padding:0;font-size:13px;flex:1;background:transparent;outline:none;font-family:monospace;color:#1a1a1a;">
+            <input id="setApiKey" type="password" placeholder="Paste key here" autocomplete="off" style="border:none;padding:0;font-size:13px;flex:1;background:transparent;outline:none;font-family:monospace;color:#1a1a1a;">
           </div>
           <div id="apiKeyStatus" style="padding:0 14px 6px;font-size:11px;color:#888;"></div>
         </div>
@@ -1940,7 +1952,10 @@ function getTripConfig() {
   // This prevents one device overwriting another device's saved key
   const keyToSave = APP_CONFIG.anthropicKey || _remoteApiKey;
   if (keyToSave) cfg.anthropicKey = keyToSave;
+  if (APP_CONFIG.openaiKey) cfg.openaiKey = APP_CONFIG.openaiKey;
+  if (APP_CONFIG.perplexityKey) cfg.perplexityKey = APP_CONFIG.perplexityKey;
   if (APP_CONFIG.aiModel) cfg.aiModel = APP_CONFIG.aiModel;
+  if (APP_CONFIG.aiProvider) cfg.aiProvider = APP_CONFIG.aiProvider;
   return cfg;
 }
 
@@ -3492,7 +3507,7 @@ The array must contain exactly 3 objects with this shape:
 Only include real, well-known places in ${city}. Use accurate coordinates (4+ decimal places). For hours, tips, hoursNote, and priceLevel: prefer empty strings over guessed specifics — only include details you are confident about.`;
 
   try {
-    const text = await callAnthropic({ prompt, maxTokens: 2000 });
+    const text = await callAI({ prompt, maxTokens: 2000 });
     const results = extractJsonArray(text);
     if (!results || !results.length) throw new Error('AI returned no usable results — try rephrasing');
     renderSearchResults(results, dayIdx);
@@ -4132,7 +4147,7 @@ async function suggestDurationForStop(i) {
   btn.textContent = '⏳ Looking up…'; btn.disabled = true;
   try {
     const prompt = `How long do visitors typically spend at "${s.name}" (${s.type || 'attraction'}) in ${getTripCity()}? Reply with ONLY a JSON object: {"minutes": 60, "reason": "one short sentence"}. Use a realistic number based on the type of place.`;
-    const text = await callAnthropic({ prompt, maxTokens: 80 });
+    const text = await callAI({ prompt, maxTokens: 80 });
     let raw = (text || '{}').replace(/```json|```/g, '').trim();
     const oS = raw.indexOf('{'), oE = raw.lastIndexOf('}');
     if (oS >= 0 && oE > oS) raw = raw.slice(oS, oE + 1);
@@ -5970,7 +5985,7 @@ async function _processLandmarkPhoto(file) {
       ? 'Return ONLY valid JSON (no markdown):\n{"isFood":true/false,"tldr":"2-3 sentences about what makes this place special","whatToDo":"2-3 specific things to do here","whatToOrder":"if isFood=true: 2-3 signature dishes or drinks; otherwise omit or set null","funFact":"one surprising fact"}\n\nSet isFood=true ONLY if this is a restaurant, cafe, bar, pub, or food/drink venue. Set false for shops, museums, attractions, etc.\n\nPlace: "' + wTitle + '"' + locationHint + '\n' + context
       : 'Return ONLY valid JSON (no markdown):\n{"tldr":"2-3 vivid sentences a tourist standing here would love","funFact":"one surprising little-known fact","suggestion":"one specific thing to do RIGHT NOW"}\n\nAbout: "' + wTitle + '"' + locationHint + '\n' + context;
 
-    callAnthropic({ prompt: aiPrompt, maxTokens: 400 }).then(function(aiRaw) {
+    callAI({ prompt: aiPrompt, maxTokens: 400 }).then(function(aiRaw) {
       try {
         const parsed = JSON.parse(aiRaw.replace(/```json|```/g, '').trim());
         const card = document.getElementById('identifyCard');
@@ -6293,7 +6308,7 @@ function _suggestWhatToOrder() {
   if (!lm) return;
   const btn = document.querySelector('#identifyCard button[onclick="_suggestWhatToOrder()"]');
   if (btn) btn.textContent = '⏳ Thinking…';
-  callAnthropic({
+  callAI({
     prompt: 'You are a food expert. For "' + lm.name + '" restaurant, suggest the 3-4 must-order dishes or drinks with brief reasons. Be specific and vivid. Return plain text, no JSON.',
     maxTokens: 200
   }).then(function(txt) {
@@ -6641,7 +6656,7 @@ async function buildGuidedTour(fromStop, toStop, tolerance) {
         var ctx = c.extract && c.extract.length > 30 ? c.extract.slice(0,200) : '(use your knowledge about this place)';
         return (i+1)+'. '+c.name+': '+ctx;
       }).join('\n\n');
-    var text = await callAnthropic({prompt:prompt, maxTokens:1200});
+    var text = await callAI({prompt:prompt, maxTokens:1200});
     var tldrs = extractJsonArray(text);
     selected.forEach(function(c,i){ c.tldr = tldrs[i] || (c.extract ? c.extract.split(/[.!?]/)[0]+'.' : c.name+' — a notable landmark along this route.'); });
   } catch(e) {
@@ -7558,7 +7573,7 @@ way["building"~"parliament|government|cathedral|palace"](around:${r2},${lat},${l
     }
 
     // AI enrichment — replaces Wikipedia text with a proper synthesized summary
-    callAnthropic({
+    callAI({
       prompt: 'Return ONLY valid JSON, no markdown fences:\n{"summary":"A flowing 4-5 sentence narrative summary of this place for a tourist standing outside right now. Synthesize and rephrase — do NOT copy Wikipedia sentences verbatim. Include: when it was built, what makes it architecturally or historically significant, one human story or notable event. Write as a knowledgeable guide, not an encyclopaedia.","facts":"Exactly 2-3 surprising facts NOT in the summary. Each one punchy sentence. Separate with | character."}\n\nAbout: "' + hit.title + '"\nWikipedia article:\n' + extract.slice(0, 700),
       maxTokens: 500
     }).then(function(aiText) {
@@ -9242,7 +9257,7 @@ async function suggestDishes(stopIdx, dayIdx) {
   if (btn) { btn.textContent='⏳ Looking up dishes…'; btn.disabled=true; }
   try {
     const prompt = 'You are a food expert. For "'+s.name+'" at "'+( s.address||s.name)+'" in '+getTripCity()+', list the 4-5 best dishes or drinks to order. Return ONLY a JSON array of strings: ["Dish — one sentence description"]. Be specific to this actual restaurant.';
-    const text = await callAnthropic({ prompt, maxTokens:500 });
+    const text = await callAI({ prompt, maxTokens:500 });
     const dishes = extractJsonArray(text);
     if (dishes.length) { s.orderSuggestions=dishes; autoSave(); renderFoodSection(s,stopIdx,dayIdx); }
     else if (btn) { btn.textContent='✨ Suggest what to order'; btn.disabled=false; }
@@ -9468,7 +9483,7 @@ async function runSuggest(midLat, midLng, afterIdx, dayIdx, beforeIdx) {
       ? 'You are a walking tour expert for ' + city + '. Suggest 6 excellent short walking experiences or scenic routes matching: "' + query + '".' + locationCtx + ' Return ONLY a JSON array (no markdown): [{"name":"...","type":"Walking route · neighbourhood","address":"...","lat":0.0,"lng":0.0,"why":"1 sentence why this walk is special","duration":"20 min","description":"2-3 sentences with substance about what makes this walk worthwhile","tips":"1-2 sentences of practical insider tips (best time, what to look for)","goodFor":"short label e.g. \\"Architecture lovers\\" or \\"Quiet morning stroll\\"","hours":"","hoursNote":"any timing/access notes if relevant, else empty string","priceLevel":""}]. Use real locations with accurate coordinates.'
       : 'You are a travel expert for ' + city + '. Suggest 6 excellent real places matching: "' + query + '".' + locationCtx + ' Return ONLY a JSON array (no markdown): [{"name":"...","type":"...","address":"...","lat":0.0,"lng":0.0,"why":"1 sentence why it fits here","duration":"45 min","description":"2-3 sentences with substance — atmosphere, what to expect, what is special","tips":"1-2 sentences of practical insider tips (what to order, when to go, what to ask for)","goodFor":"short label e.g. \\"Solo lunch\\" or \\"Romantic dinner\\" or \\"Architecture lovers\\"","hours":"typical opening hours if known and confident, e.g. \\"Mon-Fri 9am-6pm, Sat-Sun 10am-5pm\\". Empty string if unsure.","hoursNote":"opening hours notes if known and relevant, e.g. \\"Closed Mondays\\" or \\"Best 10am-noon\\", else empty string","priceLevel":"$ or $$ or $$$ or $$$$ for restaurants/paid attractions, else empty string"}]. Use real places with accurate coordinates. The description, tips, hours, and hoursNote should reflect general knowledge — never invent specifics you are not confident about; prefer empty string over guessing.';
 
-    const text = await callAnthropic({ prompt, maxTokens: 3000 });
+    const text = await callAI({ prompt, maxTokens: 3000 });
     _suggestResults = extractJsonArray(text);
     if (!_suggestResults.length) throw new Error('AI returned no usable results');
 
@@ -9649,7 +9664,7 @@ async function runSuggestMore() {
     const prompt = isWalk
       ? 'You are a walking tour expert for ' + city + '. Suggest 4 MORE walking experiences near lat ' + midLat.toFixed(3) + ', lng ' + midLng.toFixed(3) + ' matching: \"' + query + '\". Exclude these already shown: ' + existing + '. Return ONLY a JSON array (no markdown): [{\"name\":\"...\",\"type\":\"Walking route · neighbourhood\",\"address\":\"...\",\"lat\":0.0,\"lng\":0.0,\"why\":\"1 sentence\",\"duration\":\"20 min\",\"description\":\"2-3 sentences\",\"tips\":\"1-2 sentences\",\"goodFor\":\"short label\",\"hours\":\"\",\"hoursNote\":\"\",\"priceLevel\":\"\"}].'
       : 'You are a travel expert for ' + city + '. Suggest 4 MORE real places matching: \"' + query + '\" near lat ' + midLat.toFixed(3) + ', lng ' + midLng.toFixed(3) + '. Exclude these already shown: ' + existing + '. Return ONLY a JSON array (no markdown): [{\"name\":\"...\",\"type\":\"...\",\"address\":\"...\",\"lat\":0.0,\"lng\":0.0,\"why\":\"1 sentence\",\"duration\":\"45 min\",\"description\":\"2-3 sentences\",\"tips\":\"1-2 sentences\",\"goodFor\":\"short label\",\"hours\":\"typical hours if known, e.g. Mon-Fri 9am-6pm. Empty string if unsure.\",\"hoursNote\":\"\",\"priceLevel\":\"\"}]. Prefer empty strings over guessed specifics.';
-    const text = await callAnthropic({ prompt, maxTokens: 2000 });
+    const text = await callAI({ prompt, maxTokens: 2000 });
     const more = extractJsonArray(text);
     if (more.length) {
       _suggestResults = _suggestResults.concat(more);
@@ -10371,7 +10386,7 @@ async function doFillItinerary(selectedDayIndices, wantedLocations = []) {
 
   const prompt = buildFillPrompt(city, tc, dayBriefs, [...existingNames], wantedLocations);
   try {
-    const text = await callAnthropic({ prompt, maxTokens: 8000 });
+    const text = await callAI({ prompt, maxTokens: 8000 });
     const parsed = tolerantParseFillJson(text);
     if (!parsed || !parsed.days || !Array.isArray(parsed.days)) {
       throw new Error('AI response unreadable — please try again');
@@ -11057,7 +11072,7 @@ Include EVERY stop id. day is 0-indexed. day: -1 means orphaned/unscheduled.`;
   document.body.appendChild(overlay);
 
   try {
-    let text = await callAnthropic({ prompt, maxTokens: 4000 });
+    let text = await callAI({ prompt, maxTokens: 4000 });
     let clean = text.replace(/```json|```/g, '').trim();
     let firstBracket = clean.indexOf('[');
     let lastBracket = clean.lastIndexOf(']');
@@ -11066,7 +11081,7 @@ Include EVERY stop id. day is 0-indexed. day: -1 means orphaned/unscheduled.`;
     if (firstBracket < 0 || lastBracket <= firstBracket) {
       console.warn('AI returned non-JSON, retrying with strict instruction');
       const retryPrompt = 'IMPORTANT: Output ONLY a valid JSON array starting with [ and ending with ]. NO explanation, NO preamble, NO markdown. Just the raw JSON.\n\n' + prompt;
-      text = await callAnthropic({ prompt: retryPrompt, maxTokens: 4000 });
+      text = await callAI({ prompt: retryPrompt, maxTokens: 4000 });
       clean = text.replace(/```json|```/g, '').trim();
       firstBracket = clean.indexOf('[');
       lastBracket = clean.lastIndexOf(']');
@@ -11595,7 +11610,7 @@ CRITICAL: Respond with ONLY valid JSON starting with { and ending with }. No mar
   try {
     // Run AI content + Wikipedia image fetch in parallel
     const [text, imgUrl] = await Promise.all([
-      callAnthropic({ prompt, maxTokens: 2500 }),
+      callAI({ prompt, maxTokens: 2500 }),
       fetchWikipediaImage(s.name)
     ]);
 
@@ -11646,7 +11661,7 @@ The "travel" field must give LOCAL directions WITHIN ${city} only. No airports o
 {"history":"3 rich paragraphs in HTML with <strong> tags. Cover: origins and founding, key historical events/famous figures, architectural or cultural significance. Separate paragraphs with \\n\\n","facts":["Specific fact with numbers/dates","Surprising or little-known detail","Famous person or event connection","Practical insider tip for visitors"],"todo":"<p><span class=\\"tip-icon\\">🏛️</span><strong>What to do:</strong> 4-5 practical sentences on highlights and must-sees</p>","travel":"🚶 or 🚇 local directions within ${city} ${fromHint}","type_label":"short description like Museum · Free","prebook":false,"free":true,"color":"#5c4db1"}`;
   try {
     const [text, wikiImg] = await Promise.all([
-      callAnthropic({ prompt, maxTokens: 2500 }),
+      callAI({ prompt, maxTokens: 2500 }),
       fetchWikipediaImage(name)
     ]);
     // Extract first { ... } block even if AI adds preamble
@@ -11844,7 +11859,7 @@ urgency values: "urgent" (book NOW, <1 week out), "medium" (1-4 weeks), "low" (f
 Use real venue names. Keep "why" short (1 sentence).`;
 
   try {
-    const text = await callAnthropic({ prompt, maxTokens: 2500 });
+    const text = await callAI({ prompt, maxTokens: 2500 });
     let raw = (text || '[]').replace(/```json|```/g, '').trim();
     const aStart = raw.indexOf('[');
     const aEnd = raw.lastIndexOf(']');
@@ -11897,34 +11912,32 @@ function getApiKey() {
 
 async function saveApiKey() {
   const v = (document.getElementById('setApiKey')?.value || '').trim();
+  const provider = getAiProvider();
   const status = document.getElementById('apiKeyStatus');
   if (!v) { if (status) status.innerHTML = '<span style="color:#c0392b;">Paste a key first.</span>'; return; }
-  if (!v.startsWith('sk-ant-')) { if (status) status.innerHTML = '<span style="color:#c0392b;">Should start with <code>sk-ant-</code></span>'; return; }
   if (status) status.innerHTML = '<span style="color:#888;">Testing key…</span>';
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type':'application/json','x-api-key':v,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true' },
-      body: JSON.stringify({ model:'claude-haiku-4-5-20251001', max_tokens:10, messages:[{role:'user',content:'hi'}] })
-    });
-    if (!res.ok) { const t=await res.text(); if (status) status.innerHTML='<span style="color:#c0392b;">Key rejected: '+res.status+' — '+t.slice(0,80)+'</span>'; return; }
-  } catch(e) { if (status) status.innerHTML='<span style="color:#c0392b;">Network error testing key</span>'; return; }
-
-  APP_CONFIG.anthropicKey = v;
-  _remoteApiKey = v;
-
-  // Save to Supabase config column directly so all devices on this trip get it immediately
-  if (supabaseReady() && EDITOR_MODE) {
-    try {
-      await supa.from('trips').update({ config: getTripConfig() }).eq('id', TRIP_ID);
-      showToast('API key saved — shared with all devices on this trip ✓');
-    } catch(e) {
-      showToast('API key saved locally ✓');
+    if (provider === 'claude') {
+      if (!v.startsWith('sk-ant-')) { if(status) status.innerHTML='<span style="color:#c0392b;">Claude keys start with sk-ant-</span>'; return; }
+      const r = await fetch('https://api.anthropic.com/v1/messages', { method:'POST', headers:{'Content-Type':'application/json','x-api-key':v,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'}, body: JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:10,messages:[{role:'user',content:'hi'}]}) });
+      if (!r.ok) { const t=await r.text(); if(status) status.innerHTML='<span style="color:#c0392b;">Key rejected: '+r.status+' — '+t.slice(0,80)+'</span>'; return; }
+    } else if (provider === 'openai') {
+      if (!v.startsWith('sk-')) { if(status) status.innerHTML='<span style="color:#c0392b;">OpenAI keys start with sk-</span>'; return; }
+      const r = await fetch('https://api.openai.com/v1/models', { headers:{'Authorization':'Bearer '+v} });
+      if (!r.ok) { if(status) status.innerHTML='<span style="color:#c0392b;">Key rejected: '+r.status+'</span>'; return; }
+    } else if (provider === 'perplexity') {
+      if (!v.startsWith('pplx-')) { if(status) status.innerHTML='<span style="color:#c0392b;">Perplexity keys start with pplx-</span>'; return; }
     }
-  } else {
-    showToast('API key saved ✓');
+  } catch(e) { if (status) status.innerHTML='<span style="color:#c0392b;">Network error: '+e.message+'</span>'; return; }
+  if (provider === 'claude') { APP_CONFIG.anthropicKey = v; _remoteApiKey = v; }
+  else if (provider === 'openai') APP_CONFIG.openaiKey = v;
+  else if (provider === 'perplexity') APP_CONFIG.perplexityKey = v;
+  APP_CONFIG.aiProvider = provider;
+  if (supabaseReady() && EDITOR_MODE) {
+    try { await supa.from('trips').update({ config: getTripConfig() }).eq('id', TRIP_ID); } catch(e) {}
   }
   refreshApiKeyStatus();
+  showToast('✓ ' + {claude:'Claude',openai:'OpenAI',perplexity:'Perplexity'}[provider] + ' key saved');
   document.getElementById('setApiKey').value = '';
 }
 
@@ -12011,7 +12024,83 @@ function refreshApiKeyStatus() {
 // Single path for all AI calls. Prefers the Supabase Edge Function (so the
 // Anthropic key lives server-side); falls back to direct Anthropic API if the
 // user has set a personal key in Settings. Throws on any failure.
-async function callAnthropic({ prompt, maxTokens, model }) {
+// ── MULTI-PROVIDER AI ROUTER ──────────────────────────────────────
+const AI_MODELS = {
+  claude:     ['claude-haiku-4-5-20251001|⚡ Haiku 4.5 — fastest',
+               'claude-sonnet-4-6|✨ Sonnet 4.6 — balanced',
+               'claude-opus-4-6|🧠 Opus 4.6 — most capable'],
+  openai:     ['gpt-4o-mini|⚡ GPT-4o mini — fastest',
+               'gpt-4o|✨ GPT-4o — balanced',
+               'o1-mini|🧠 o1-mini — reasoning'],
+  perplexity: ['llama-3.1-sonar-small-128k-online|⚡ Sonar Small — fastest',
+               'llama-3.1-sonar-large-128k-online|✨ Sonar Large — balanced',
+               'llama-3.1-sonar-huge-128k-online|🧠 Sonar Huge — most capable']
+};
+
+function getAiProvider() { return APP_CONFIG.aiProvider || 'claude'; }
+
+function getApiKey() {
+  const provider = getAiProvider();
+  if (provider === 'openai') return APP_CONFIG.openaiKey || '';
+  if (provider === 'perplexity') return APP_CONFIG.perplexityKey || '';
+  if (EDITOR_MODE) return APP_CONFIG.anthropicKey || _remoteApiKey || '';
+  return APP_CONFIG.anthropicKey || '';
+}
+
+function onProviderChange() {
+  const p = document.getElementById('setAiProvider')?.value || 'claude';
+  APP_CONFIG.aiProvider = p;
+  const modelSel = document.getElementById('setAiModel');
+  if (!modelSel) return;
+  modelSel.innerHTML = (AI_MODELS[p] || AI_MODELS.claude).map(m => {
+    const [val, label] = m.split('|');
+    return `<option value="${val}">${label}</option>`;
+  }).join('');
+  // Set default model for provider
+  APP_CONFIG.aiModel = modelSel.value;
+  // Update placeholder
+  const ph = { claude: 'sk-ant-...', openai: 'sk-...', perplexity: 'pplx-...' };
+  const inp = document.getElementById('setApiKey');
+  if (inp) inp.placeholder = ph[p] || 'Paste key here';
+}
+
+async function callAI({ prompt, maxTokens, model }) {
+  const provider = getAiProvider();
+  const key = getApiKey();
+  maxTokens = maxTokens || 1500;
+  model = model || APP_CONFIG.aiModel;
+
+  if (provider === 'openai') {
+    if (!key) throw new Error('No OpenAI key — add it in Settings → AI settings');
+    model = model || 'gpt-4o';
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+      body: JSON.stringify({ model, max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] })
+    });
+    if (!res.ok) { const t = await res.text(); throw new Error('OpenAI ' + res.status + ': ' + t.slice(0,150)); }
+    const d = await res.json();
+    return d.choices?.[0]?.message?.content || '';
+  }
+
+  if (provider === 'perplexity') {
+    if (!key) throw new Error('No Perplexity key — add it in Settings → AI settings');
+    model = model || 'llama-3.1-sonar-large-128k-online';
+    const res = await fetch('https://api.perplexity.ai/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+      body: JSON.stringify({ model, max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] })
+    });
+    if (!res.ok) { const t = await res.text(); throw new Error('Perplexity ' + res.status + ': ' + t.slice(0,150)); }
+    const d = await res.json();
+    return d.choices?.[0]?.message?.content || '';
+  }
+
+  // Default: Claude
+  return _callClaude({ prompt, maxTokens, model });
+}
+
+async function _callClaude({ prompt, maxTokens, model }) {
   model = model || APP_CONFIG.aiModel || 'claude-sonnet-4-6';
   maxTokens = maxTokens || 1500;
   const messages = [{ role: 'user', content: prompt }];
@@ -12077,7 +12166,7 @@ async function lookupCoords(query) {
   const fullQuery = (query.toLowerCase().includes(city.toLowerCase())) ? query : query + ', ' + city;
   const prompt = `Return the latitude and longitude for: "${fullQuery}"\nRespond with ONLY a JSON object: {"lat": 0.0000, "lng": 0.0000}\nUse accurate coordinates (4+ decimal places). If unknown, return {"lat": 0, "lng": 0}.`;
   try {
-    const text = await callAnthropic({ prompt, maxTokens: 100 });
+    const text = await callAI({ prompt, maxTokens: 100 });
     let raw = (text || '{}').replace(/```json|```/g, '').trim();
     const oStart = raw.indexOf('{'); const oEnd = raw.lastIndexOf('}');
     if (oStart >= 0 && oEnd > oStart) raw = raw.slice(oStart, oEnd + 1);
@@ -12212,7 +12301,7 @@ Format: {"lat": 40.7484, "lng": -73.9857}
 Use accurate coordinates (4+ decimal places). If the address is ambiguous or unrecognizable, return {"lat": 0, "lng": 0}.`;
 
   try {
-    const text = await callAnthropic({ prompt, maxTokens: 200 });
+    const text = await callAI({ prompt, maxTokens: 200 });
     let raw = (text || '{}').replace(/```json|```/g, '').trim();
     const oStart = raw.indexOf('{');
     const oEnd = raw.lastIndexOf('}');
@@ -12682,7 +12771,7 @@ blogHtml must be valid HTML fragments (no <html>/<body> tags). Photo placeholder
       if (btn) { btn.disabled = false; btn.textContent = '✨ Generate my trip story'; }
       return;
     }
-    const raw = await callAnthropic({ prompt, maxTokens: 8000, model: 'claude-sonnet-4-6' });
+    const raw = await callAI({ prompt, maxTokens: 8000, model: 'claude-sonnet-4-6' });
     // Strip markdown fences
     let clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
 
