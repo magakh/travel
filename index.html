@@ -160,10 +160,19 @@ let CURRENT_USER = null;
 let USER_PROFILE = null;
 
 // ── AUTH GATE — same account as the trip app (session is shared) ──
+
+function scrubAuthHash() {
+  try {
+    if (/access_token|refresh_token|type=recovery|type=signup|type=magiclink/.test(location.hash)) {
+      history.replaceState({}, '', location.pathname + location.search);
+    }
+  } catch(e) {}
+}
+
 function requireAuth() {
   return new Promise(async (resolve) => {
     let done = false;
-    const finish = (u) => { if (done) return; done = true; CURRENT_USER = u; const g = document.getElementById('auth-gate'); if (g) g.remove(); resolve(u); };
+    const finish = (u) => { if (done) return; done = true; CURRENT_USER = u; scrubAuthHash(); const g = document.getElementById('auth-gate'); if (g) g.remove(); resolve(u); };
     try { supa.auth.onAuthStateChange((ev, session) => { if (session && session.user) finish(session.user); }); } catch(e) {}
     try {
       const { data } = await supa.auth.getSession();

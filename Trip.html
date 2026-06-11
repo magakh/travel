@@ -1945,6 +1945,15 @@ let CURRENT_USER = null;   // Supabase auth user
 let USER_PROFILE = null;   // row from public.profiles (role, credits)
 let _authResolve = null;
 
+
+function _scrubAuthHash() {
+  try {
+    if (/access_token|refresh_token|type=recovery|type=signup|type=magiclink/.test(location.hash)) {
+      history.replaceState({}, '', location.pathname + location.search);
+    }
+  } catch(e) {}
+}
+
 function _authRedirectUrl() {
   return location.origin + location.pathname + location.search;
 }
@@ -1957,6 +1966,7 @@ function requireAuth() {
       supa.auth.onAuthStateChange((event, session) => {
         if (session && session.user && _authResolve) {
           CURRENT_USER = session.user;
+          _scrubAuthHash();
           _hideAuthGate();
           const r = _authResolve; _authResolve = null; r(session.user);
         }
@@ -1966,6 +1976,7 @@ function requireAuth() {
       const { data } = await supa.auth.getSession();
       if (data && data.session && data.session.user) {
         CURRENT_USER = data.session.user;
+        _scrubAuthHash();
         const r = _authResolve; _authResolve = null;
         if (r) r(data.session.user);
         return;
