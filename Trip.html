@@ -1914,6 +1914,7 @@ let _realtimeChannel = null;
 let _suppressNextRealtime = false;  // set true before our own writes so we don't echo
 let TRIP_PW_HASH = null;            // loaded from trip row
 let TRIP_OWNER_ID = null;           // uuid of the user who created this trip
+let IS_TRIP_MEMBER = false;         // current user was invited to this trip
 let EDITOR_MODE = false;
 try { EDITOR_MODE = localStorage.getItem('trip_' + TRIP_ID + '_editor') === '1'; } catch(e) {}
 
@@ -2120,7 +2121,24 @@ function _renderAccountRow() {
         (role !== 'founder' && credits !== null ? ' · ' + credits + ' trip credit' + (credits === 1 ? '' : 's') : '') +
       '</span>' +
       '<button onclick="signOutUser()" style="padding:7px 14px;background:#fff;border:1px solid #ccc;border-radius:8px;font-size:13px;cursor:pointer;">Sign out</button>' +
-    '</div>';
+    '</div>' +
+    (((TRIP_OWNER_ID && CURRENT_USER.id === TRIP_OWNER_ID) || role === 'founder')
+      ? '<div style="margin:0 12px 18px;"><button onclick="inviteToTrip()" style="width:100%;padding:12px;background:#1a73e8;color:#fff;border:none;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;">🔗 Invite people to this trip</button>' +
+        '<div style="font-size:12px;color:#888;margin-top:6px;line-height:1.4;">Anyone with the invite link joins as an editor and sees this trip in their My Trips — no password needed.</div></div>'
+      : '');
+}
+
+async function inviteToTrip() {
+  try {
+    const { data: r, error } = await supa.rpc('create_invite', { p_id: TRIP_ID });
+    if (error || !r || r.ok !== true) { showToast('Could not create invite link', true); return; }
+    const link = location.origin + '/Trip.html?trip=' + encodeURIComponent(TRIP_ID) + '&join=' + r.token;
+    if (navigator.share) {
+      try { await navigator.share({ title: (APP_CONFIG.title || 'My trip'), text: 'Join my trip on Travel Guide!', url: link }); return; } catch(e) { if (e && e.name === 'AbortError') return; }
+    }
+    try { await navigator.clipboard.writeText(link); showToast('🔗 Invite link copied — send it to your group!'); }
+    catch(e) { prompt('Copy this invite link:', link); }
+  } catch(e) { showToast('Could not create invite link', true); }
 }
 
 async function signOutUser() {
@@ -4960,6 +4978,22 @@ async function init() {
   const authedUser = await requireAuth();
   loadUserProfile(authedUser); // non-blocking; populates role/credits + account row
 
+  // ── TRIP MEMBERSHIP ── invite links (?join=TOKEN) and member detection
+  try {
+    const _joinTok = new URLSearchParams(location.search).get('join');
+    if (_joinTok) {
+      const { data: jr } = await supa.rpc('join_trip', { p_id: TRIP_ID, p_token: _joinTok });
+      if (jr && jr.ok === true && jr.added) showToast("🎉 You've been added to this trip!");
+      const u = new URL(location.href); u.searchParams.delete('join');
+      history.replaceState({}, '', u.toString());
+    }
+  } catch(e) {}
+  try {
+    const { data: mem } = await supa.from('trip_members').select('user_id')
+      .eq('trip_id', TRIP_ID).eq('user_id', authedUser.id).maybeSingle();
+    IS_TRIP_MEMBER = !!mem;
+  } catch(e) {}
+
   // ── SUPABASE IS THE SINGLE SOURCE OF TRUTH ──────────────────────
   // Cloud always wins. localStorage is only a silent offline fallback.
   let loaded = await cloudLoad();
@@ -4985,8 +5019,8 @@ async function init() {
   if (!loaded) {
     document.getElementById('stopList').innerHTML =
       '<div style="text-align:center;padding:40px;color:#333;">' +
-      '<p>No data found for trip <strong>' + TRIP_ID + '</strong>.</p>' +
-      '<p style="font-size:13px;color:#666;margin-top:12px;">Unlock with 🔒 and add stops, or create a new trip in ⚙ Settings.</p>' +
+      '<p>Trip <strong>' + TRIP_ID + '</strong> was not found — or you don\'t have access to it.</p>' +
+      '<p style="font-size:13px;color:#666;margin-top:12px;">If someone shared this trip with you, ask them for an <strong>invite link</strong> (Settings → Invite people). Or create your own trip at <a href="/" style="color:#1a73e8;">travel-guide.ai</a>.</p>' +
       '</div>';
   }
 
@@ -5000,11 +5034,13 @@ async function init() {
   } catch(e) {}
 
   // Owner auto-unlock: the user who created this trip edits without a password
-  if (!EDITOR_MODE && TRIP_OWNER_ID && CURRENT_USER && CURRENT_USER.id === TRIP_OWNER_ID) {
+  if (!EDITOR_MODE && CURRENT_USER && ((TRIP_OWNER_ID && CURRENT_USER.id === TRIP_OWNER_ID) || IS_TRIP_MEMBER)) {
     EDITOR_MODE = true;
     try { localStorage.setItem('trip_' + TRIP_ID + '_editor', '1'); } catch(e) {}
     updateLockUI();
-    showToast('✏️ Your trip — editing unlocked');
+    showToast(IS_TRIP_MEMBER && !(TRIP_OWNER_ID && CURRENT_USER.id === TRIP_OWNER_ID)
+      ? "✏️ You're a member of this trip — editing unlocked"
+      : '✏️ Your trip — editing unlocked');
   }
 
   // Member auto-unlock: invited members edit without a password too
