@@ -2058,7 +2058,7 @@ async function _authOAuth(provider) {
   _authMsg('Redirecting to ' + provider + '…');
   const { error } = await supa.auth.signInWithOAuth({
     provider: provider,
-    options: { redirectTo: _authRedirectUrl() }
+    options: { redirectTo: _authRedirectUrl(), queryParams: { prompt: 'select_account' } }
   });
   if (error) _authMsg(error.message, true);
   // browser redirects away; onAuthStateChange resolves the gate on return
@@ -2262,7 +2262,8 @@ async function _menuInviteLink(tripId) {
 }
 
 async function signOutUser() {
-  try { await supa.auth.signOut(); } catch(e) {}
+  try { await Promise.race([supa.auth.signOut(), new Promise(r => setTimeout(r, 2500))]); } catch(e) {}
+  try { Object.keys(localStorage).forEach(k => { if (k.indexOf('sb-') === 0) localStorage.removeItem(k); }); } catch(e) {}
   location.reload();
 }
 
