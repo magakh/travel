@@ -158,6 +158,9 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let allTrips = [];
+
+function isFounder() { return USER_PROFILE && USER_PROFILE.role === 'founder'; }
+function canManage(trip) { return isFounder() || (trip.owner_id && CURRENT_USER && trip.owner_id === CURRENT_USER.id); }
 let ownerEmails = {};
 let CURRENT_USER = null;
 let USER_PROFILE = null;
@@ -363,6 +366,104 @@ async function removeShare(id, email) {
     if (!r || r.ok !== true) { alert('Could not remove — only the owner can.'); return; }
     loadShareList(id);
   } catch(e) { alert('Could not remove.'); }
+}
+
+async function loadTrips() {
+  const user = await requireAuth();
+  try {
+    const { data: prof } = await supa.from('profiles').select('*').eq('id', user.id).maybeSingle();
+    USER_PROFILE = prof || null;
+  } catch(e) {}
+
+  const acct = document.getElementById('acctRow');
+  if (acct) {
+    const nm = (USER_PROFILE && USER_PROFILE.name) || (user.user_metadata && (user.user_metadata.name || user.user_metadata.full_name)) || (user.email || '').split('@')[0];
+    acct.innerHTML = '<div style="font-weight:800;color:#7fd29a;font-size:14px;">👋 ' + nm + ' ▾</div>' +
+      '<div style="font-size:11px;color:#888;">' + (user.email || '') + (isFounder() ? ' · founder' : '') + '</div>';
+  }
+
+  let data, error;
+  if (isFounder()) {
+    const r = await supa.from('trips').select('id, owner_id, title, subtitle, config, data, updated_at').order('updated_at', { ascending: false });
+    data = r.data; error = r.error;
+    allTrips = data || [];
+    try {
+      const { data: profs } = await supa.from('profiles').select('id, email');
+      ownerEmails = {};
+      (profs || []).forEach(p => { ownerEmails[p.id] = p.email; });
+    } catch(e) {}
+  } else {
+    const r = await supa.from('trips').select('id, owner_id, title, subtitle, config, data, updated_at');
+    data = r.data; error = r.error;
+    let memberIds = new Set();
+    try {
+      const { data: mems } = await supa.from('trip_members').select('trip_id');
+      (mems || []).forEach(m => memberIds.add(m.trip_id));
+    } catch(e) {}
+    allTrips = (data || [])
+      .filter(t => (t.owner_id && t.owner_id === user.id) || memberIds.has(t.id))
+      .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
+  }
+  if (error) {
+    document.getElementById('tripsContainer').innerHTML =
+      '<div class="loading">Failed to load trips: ' + (error.message || 'unknown error') + '</div>';
+    return;
+  }
+  renderTrips();
+}
+
+function renderTrips() {
+  const container = document.getElementById('tripsContainer');
+  document.getElementById('tripCount').textContent = allTrips.length + ' trip' + (allTrips.length !== 1 ? 's' : '');
+
+  if (allTrips.length === 0) {
+    container.innerHTML = '<div class="empty"><p>No trips yet. Create your first one!</p></div>';
+    return;
+  }
+
+  if (isFounder()) {
+    const groups = {};
+    allTrips.forEach(t => {
+      const who = (t.owner_id && ownerEmails[t.owner_id]) || 'unassigned';
+      (groups[who] = groups[who] || []).push(t);
+    });
+    container.innerHTML = Object.keys(groups).sort().map(who =>
+      '<div style="margin:18px 16px 0;font-size:13px;font-weight:800;color:#5b9cff;">👤 ' + who + ' · ' + groups[who].length + ' trip' + (groups[who].length !== 1 ? 's' : '') + '</div>' +
+      '<div class="trips-grid">' + groups[who].map(t => tripCardHtml(t)).join('') + '</div>'
+    ).join('');
+    return;
+  }
+  container.innerHTML = '<div class="trips-grid">' + allTrips.map(t => tripCardHtml(t)).join('') + '</div>';
+}
+
+function tripCardHtml(trip) {
+  const cfg = trip.config || {};
+  const data = trip.data || {};
+  const days = data.days || [];
+  const numDays = cfg.numDays || days.length || 0;
+  const totalStops = days.reduce((sum, d) => sum + (d.stops || []).length, 0);
+  const labels = cfg.dayLabels || [];
+  const dateRange = labels.length >= 2 ? labels[0] + ' – ' + labels[labels.length - 1] : (numDays + ' days');
+  const updated = trip.updated_at ? new Date(trip.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+  const safeTitle = (trip.title || trip.id).replace(/'/g, "\\'");
+  return `
+    <div class="trip-card" onclick="openTrip('${trip.id}')">
+      <div class="trip-card-body">
+        <div class="trip-slug">${trip.id}</div>
+        <div class="trip-title">${trip.title || trip.id}</div>
+        <div class="trip-subtitle">${trip.subtitle || cfg.subtitle || ''}</div>
+        <div class="trip-meta">
+          <span class="trip-badge">📅 ${dateRange}</span>
+          <span class="trip-badge">📍 ${totalStops} stops</span>
+        </div>
+        ${updated ? `<div class="trip-stops">Last updated ${updated}</div>` : ''}
+      </div>
+      <div class="trip-actions" onclick="event.stopPropagation()">
+        <button class="btn-open" onclick="openTrip('${trip.id}')">Open →</button>
+        ${canManage(trip) ? `<button class="btn-share" onclick="shareTrip('${trip.id}')">👥 Share</button>` : ''}
+        ${canManage(trip) ? `<button class="btn-delete" onclick="confirmDelete('${trip.id}', '${safeTitle}')">🗑</button>` : ''}
+      </div>
+    </div>`;
 }
 
 function openTrip(id) {
