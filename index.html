@@ -49,26 +49,26 @@ if (location.hostname === 'magakh.github.io') {
   .trip-card:hover { border-color: #555; }
 
   .trip-card-body {
-    padding: 18px;
+    padding: 12px 14px;
   }
   .trip-slug {
-    font-size: 10px; font-weight: 700; color: #666;
-    text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px;
+    font-size: 9px; font-weight: 700; color: #666;
+    text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 3px;
   }
-  .trip-title { font-size: 18px; font-weight: 800; color: #fff; margin-bottom: 4px; }
-  .trip-subtitle { font-size: 12px; color: #888; margin-bottom: 12px; }
+  .trip-title { font-size: 15px; font-weight: 800; color: #fff; margin-bottom: 2px; }
+  .trip-subtitle { font-size: 11px; color: #888; margin-bottom: 8px; }
   .trip-meta {
-    display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px;
+    display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px;
   }
   .trip-badge {
     background: #2a2a2a; border: 1px solid #444; border-radius: 20px;
     padding: 3px 10px; font-size: 11px; font-weight: 600; color: #ccc;
   }
-  .trip-stops { font-size: 12px; color: #666; margin-bottom: 14px; }
+  .trip-stops { font-size: 11px; color: #666; margin-bottom: 6px; }
 
   .trip-actions {
     display: flex; gap: 8px;
-    padding: 12px 18px;
+    padding: 8px 14px 12px;
     background: #161616;
     border-top: 1px solid #2a2a2a;
   }
@@ -138,13 +138,16 @@ input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.8); cur
 </head>
 <body>
 
-<div class="header">
-  <div>
-    <h1>✈️ My Trips</h1>
-    <p id="tripCount">Loading...</p>
-    <div id="acctRow" onclick="showAccountMenu()" style="position:absolute;top:60px;right:20px;text-align:right;font-size:13px;color:#ccc;cursor:pointer;line-height:1.4;z-index:10;"></div>
+<div class="header" style="display:block;">
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+    <button class="new-btn" onclick="showNewTripModal()">+ New trip</button>
+    <div id="acctRow" onclick="showAccountMenu()" style="text-align:right;font-size:13px;color:#ccc;cursor:pointer;line-height:1.4;"></div>
   </div>
-  <button class="new-btn" onclick="showNewTripModal()">+ New trip</button>
+  <div style="height:1px;background:#2a2a2a;margin:12px 0 10px;"></div>
+  <div style="display:flex;align-items:baseline;gap:10px;">
+    <h1 style="margin:0;">✈️ My Trips</h1>
+    <p id="tripCount" style="margin:0;">Loading...</p>
+  </div>
 </div>
 
 <div id="tripsContainer" class="loading">Loading trips...</div>
