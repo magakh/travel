@@ -128,6 +128,7 @@
   <div>
     <h1>✈️ My Trips</h1>
     <p id="tripCount">Loading...</p>
+    <p id="acctRow" style="font-size:12px;color:#888;margin:4px 0 0;"></p>
   </div>
   <button class="new-btn" onclick="showNewTripModal()">+ New trip</button>
 </div>
@@ -140,11 +141,81 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let allTrips = [];
+let CURRENT_USER = null;
+let USER_PROFILE = null;
+
+// ── AUTH GATE — same account as the trip app (session is shared) ──
+function requireAuth() {
+  return new Promise(async (resolve) => {
+    let done = false;
+    const finish = (u) => { if (done) return; done = true; CURRENT_USER = u; const g = document.getElementById('auth-gate'); if (g) g.remove(); resolve(u); };
+    try { supa.auth.onAuthStateChange((ev, session) => { if (session && session.user) finish(session.user); }); } catch(e) {}
+    try {
+      const { data } = await supa.auth.getSession();
+      if (data && data.session && data.session.user) { finish(data.session.user); return; }
+    } catch(e) {}
+    showAuthGate();
+  });
+}
+
+function showAuthGate() {
+  if (document.getElementById('auth-gate')) return;
+  const div = document.createElement('div');
+  div.id = 'auth-gate';
+  div.style.cssText = 'position:fixed;inset:0;z-index:100000;background:#0d0d0d;display:flex;align-items:center;justify-content:center;padding:20px;';
+  div.innerHTML =
+    '<div style="background:#181818;border:1px solid #2a2a2a;border-radius:18px;padding:28px 22px;width:100%;max-width:360px;">' +
+      '<div style="font-size:22px;font-weight:800;margin-bottom:4px;color:#fff;">🧳 Travel Guide</div>' +
+      '<div style="font-size:13px;color:#888;margin-bottom:20px;">Sign in to see your trips</div>' +
+      '<input id="authEmail" type="email" placeholder="Email" autocomplete="email" style="width:100%;box-sizing:border-box;padding:12px;border:1px solid #333;background:#0d0d0d;color:#fff;border-radius:10px;font-size:15px;margin-bottom:10px;">' +
+      '<input id="authPassword" type="password" placeholder="Password" autocomplete="current-password" style="width:100%;box-sizing:border-box;padding:12px;border:1px solid #333;background:#0d0d0d;color:#fff;border-radius:10px;font-size:15px;margin-bottom:14px;">' +
+      '<button onclick="authSignIn()" style="width:100%;padding:13px;background:#2563eb;color:#fff;border:none;border-radius:10px;font-weight:700;font-size:15px;cursor:pointer;margin-bottom:8px;">Sign in</button>' +
+      '<div style="text-align:center;margin-top:6px;"><a href="#" onclick="authMagicLink();return false;" style="font-size:13px;color:#5b9cff;text-decoration:none;">✉️ Email me a magic link instead</a></div>' +
+      '<div id="authMsg" style="font-size:13px;margin-top:12px;text-align:center;min-height:18px;color:#888;"></div>' +
+      '<div style="font-size:12px;color:#666;margin-top:14px;text-align:center;">New here? Create your account by opening a trip link, or sign up in the trip app.</div>' +
+    '</div>';
+  document.body.appendChild(div);
+}
+
+function authMsg(t, isErr) { const el = document.getElementById('authMsg'); if (el) { el.textContent = t; el.style.color = isErr ? '#ff6b5b' : '#4ade80'; } }
+
+async function authSignIn() {
+  const email = (document.getElementById('authEmail')||{}).value || '';
+  const pw = (document.getElementById('authPassword')||{}).value || '';
+  if (!email || !pw) { authMsg('Enter email and password', true); return; }
+  authMsg('Signing in…');
+  const { error } = await supa.auth.signInWithPassword({ email: email.trim(), password: pw });
+  if (error) authMsg(error.message, true);
+}
+
+async function authMagicLink() {
+  const email = (document.getElementById('authEmail')||{}).value || '';
+  if (!email) { authMsg('Enter your email first', true); return; }
+  authMsg('Sending link…');
+  const { error } = await supa.auth.signInWithOtp({ email: email.trim(), options: { emailRedirectTo: location.origin + location.pathname } });
+  if (error) { authMsg(error.message, true); return; }
+  authMsg('✉️ Magic link sent — check your email.');
+}
+
+async function signOutUser() { try { await supa.auth.signOut(); } catch(e) {} location.reload(); }
+
+function isFounder() { return USER_PROFILE && USER_PROFILE.role === 'founder'; }
+function canManage(trip) { return isFounder() || (trip.owner_id && CURRENT_USER && trip.owner_id === CURRENT_USER.id); }
 
 async function loadTrips() {
-  const { data, error } = await supa.from('trips').select('id, title, subtitle, config, data, updated_at').order('updated_at', { ascending: false });
+  const user = await requireAuth();
+  try {
+    const { data: prof } = await supa.from('profiles').select('*').eq('id', user.id).maybeSingle();
+    USER_PROFILE = prof || null;
+  } catch(e) {}
+  const acct = document.getElementById('acctRow');
+  if (acct) acct.innerHTML = '👤 ' + (user.email || '') + (isFounder() ? ' · founder' : (USER_PROFILE ? ' · ' + (USER_PROFILE.credits||0) + ' credits' : '')) +
+    ' &nbsp;<a href="#" onclick="signOutUser();return false;" style="color:#5b9cff;text-decoration:none;">Sign out</a>';
+
+  const { data, error } = await supa.from('trips').select('id, owner_id, title, subtitle, config, data, updated_at').order('updated_at', { ascending: false });
   if (error) { document.getElementById('tripsContainer').innerHTML = '<div class="loading">Failed to load trips.</div>'; return; }
-  allTrips = data || [];
+  // Founders see everything; everyone else sees the trips they own
+  allTrips = (data || []).filter(t => isFounder() || (t.owner_id && t.owner_id === user.id));
   renderTrips();
 }
 
@@ -181,7 +252,7 @@ function renderTrips() {
         </div>
         <div class="trip-actions" onclick="event.stopPropagation()">
           <button class="btn-open" onclick="openTrip('${trip.id}')">Open →</button>
-          <button class="btn-delete" onclick="confirmDelete('${trip.id}', '${(trip.title || trip.id).replace(/'/g, "\\'")}')">🗑</button>
+          ${canManage(trip) ? `<button class="btn-delete" onclick="confirmDelete('${trip.id}', '${(trip.title || trip.id).replace(/'/g, "\\'")}')">🗑</button>` : ''}
         </div>
       </div>`;
   }).join('') + '</div>';
@@ -211,16 +282,12 @@ async function deleteTrip(id, overlay) {
   deleteBtn.textContent = 'Deleting...';
   deleteBtn.disabled = true;
 
-  // .select() returns the rows actually deleted — empty means RLS blocked it silently
-  const { data: deleted, error } = await supa.from('trips').delete().eq('id', id).select('id');
+  const { data: res, error } = await supa.rpc('delete_trip', { p_id: id });
   overlay.remove();
 
-  if (error) {
-    alert('Delete failed: ' + error.message);
-    return;
-  }
-  if (!deleted || deleted.length === 0) {
-    alert('Delete blocked — Supabase RLS policy prevents anonymous deletes.\n\nGo to Supabase → Table Editor → trips → RLS Policies and add a DELETE policy for the anon role.');
+  if (error) { alert('Delete failed: ' + error.message); return; }
+  if (!res || res.ok !== true) {
+    alert(res && res.reason === 'not_owner' ? 'Only the trip owner can delete this trip.' : 'Delete failed.');
     return;
   }
 
@@ -289,9 +356,21 @@ async function createTrip(btn) {
     data: { days, completed: [], hotel: null, savedAt: new Date().toISOString() }
   };
 
-  const { error } = await supa.from('trips').insert(payload);
-  if (error) { alert('Failed: ' + (error.message || 'Trip ID may already exist.')); btn.textContent = 'Create →'; btn.disabled = false; return; }
-
+  const { data: cr, error } = await supa.rpc('create_trip', {
+    p_id: slug, p_title: title, p_subtitle: subtitle,
+    p_config: payload.config, p_data: payload.data
+  });
+  if (error || !cr || cr.ok !== true) {
+    const reason = cr && cr.reason;
+    let msg = 'Failed to create trip.';
+    if (reason === 'slug_taken') msg = 'That Trip ID already exists — pick another.';
+    else if (reason === 'no_credits') msg = 'You are out of trip credits. Credit packs are coming soon!';
+    else if (reason === 'no_profile') msg = 'No account profile found — sign out and back in.';
+    else if (error) msg = 'Failed: ' + error.message;
+    alert(msg);
+    btn.textContent = 'Create →'; btn.disabled = false;
+    return;
+  }
   window.location.href = 'Trip.html?trip=' + encodeURIComponent(slug);
 }
 
