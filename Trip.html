@@ -5133,11 +5133,18 @@ async function init() {
       history.replaceState({}, '', u.toString());
     }
   } catch(e) {}
-  try {
-    const { data: mem } = await supa.from('trip_members').select('user_id')
-      .eq('trip_id', TRIP_ID).eq('user_id', authedUser.id).maybeSingle();
-    IS_TRIP_MEMBER = !!mem;
-  } catch(e) {}
+  // Non-blocking: membership only affects edit rights, not first paint
+  supa.from('trip_members').select('user_id')
+    .eq('trip_id', TRIP_ID).eq('user_id', authedUser.id).maybeSingle()
+    .then(({ data: mem }) => {
+      IS_TRIP_MEMBER = !!mem;
+      if (IS_TRIP_MEMBER && !EDITOR_MODE) {
+        EDITOR_MODE = true;
+        try { localStorage.setItem('trip_' + TRIP_ID + '_editor', '1'); } catch(e) {}
+        try { updateLockState(); } catch(e) {}
+        try { renderAll(); } catch(e) {}
+      }
+    }).catch(() => {});
 
   // ── SUPABASE IS THE SINGLE SOURCE OF TRUTH ──────────────────────
   // Cloud always wins — but paint instantly from the local cache while
@@ -5160,7 +5167,8 @@ async function init() {
   }
 
   // One-time migration: import legacy JSON if Supabase is empty
-  if (!loaded || days.reduce((n, d) => n + (d.stops||[]).length, 0) === 0) {
+  const LEGACY_TRIPS = ['london2026', 'newyork2026', 'stlouismo'];
+  if (LEGACY_TRIPS.includes(TRIP_ID) && (!loaded || days.reduce((n, d) => n + (d.stops||[]).length, 0) === 0)) {
     try {
       const jsonUrl = 'https://raw.githubusercontent.com/magakh/travel/main/sync_' + TRIP_ID + '.json?cb=' + Date.now();
       const jsonResp = await fetch(jsonUrl, { cache: 'no-store' });
