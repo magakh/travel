@@ -1974,8 +1974,8 @@ function _showAuthGate() {
   div.style.cssText = 'position:fixed;inset:0;z-index:100000;background:#f5f3ee;display:flex;align-items:center;justify-content:center;padding:20px;';
   div.innerHTML =
     '<div style="background:#fff;border-radius:18px;box-shadow:0 6px 30px rgba(0,0,0,0.12);padding:28px 22px;width:100%;max-width:360px;">' +
-      '<div style="font-size:22px;font-weight:800;margin-bottom:4px;">' + (APP_CONFIG.title || 'Trip Planner') + '</div>' +
-      '<div style="font-size:13px;color:#888;margin-bottom:20px;">Sign in to view this trip</div>' +
+      '<div style="font-size:22px;font-weight:800;margin-bottom:4px;">🧳 Travel Guide</div>' +
+      '<div style="font-size:13px;color:#888;margin-bottom:20px;">Sign in to view this trip' + (typeof TRIP_ID === 'string' && TRIP_ID ? ' · <strong>' + TRIP_ID + '</strong>' : '') + '</div>' +
       '<input id="authName" type="text" placeholder="Your name (for new accounts)" autocomplete="name" style="width:100%;box-sizing:border-box;padding:12px;border:1px solid #ddd;border-radius:10px;font-size:15px;margin-bottom:10px;">' +
       '<input id="authEmail" type="email" placeholder="Email" autocomplete="email" style="width:100%;box-sizing:border-box;padding:12px;border:1px solid #ddd;border-radius:10px;font-size:15px;margin-bottom:10px;">' +
       '<input id="authPassword" type="password" placeholder="Password" autocomplete="current-password" style="width:100%;box-sizing:border-box;padding:12px;border:1px solid #ddd;border-radius:10px;font-size:15px;margin-bottom:14px;">' +
