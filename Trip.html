@@ -2234,19 +2234,17 @@ function _showAccountMenu() {
 async function _fillAccountInvites() {
   const box = document.getElementById('acctInvites');
   if (!box || !CURRENT_USER) return;
+  const isOwner = TRIP_OWNER_ID && TRIP_OWNER_ID === CURRENT_USER.id;
+  const isFndr = USER_PROFILE && USER_PROFILE.role === 'founder';
+  if (!isOwner && !isFndr) { box.innerHTML = '<span style="color:#999;">Only the trip owner can invite people to this trip.</span>'; return; }
   try {
-    const { data: owned } = await supa.from('trips').select('id, title').eq('owner_id', CURRENT_USER.id);
-    if (!owned || owned.length === 0) { box.innerHTML = 'You don\'t own any trips yet.'; return; }
-    const ids = owned.map(t => t.id);
-    const { data: mems } = await supa.from('trip_members').select('trip_id, email').in('trip_id', ids);
-    const byTrip = {};
-    (mems || []).forEach(m => { (byTrip[m.trip_id] = byTrip[m.trip_id] || []).push(m.email); });
-    box.innerHTML = owned.map(t =>
+    const { data: mems } = await supa.from('trip_members').select('email').eq('trip_id', TRIP_ID).order('added_at');
+    box.innerHTML =
       '<div style="margin-bottom:10px;">' +
-        '<div style="font-weight:700;font-size:13px;">' + (t.title || t.id) +
-          ' <a href="#" onclick="_menuInviteLink(\'' + t.id + '\');return false;" style="font-size:12px;color:#1a73e8;text-decoration:none;font-weight:700;">🔗 new invite link</a></div>' +
-        '<div style="font-size:12px;color:#888;">' + ((byTrip[t.id] || []).join(', ') || 'No invitations sent yet') + '</div>' +
-      '</div>').join('');
+        '<div style="font-weight:700;font-size:13px;">' + (APP_CONFIG.title || TRIP_ID) +
+          ' <a href="#" onclick="_menuInviteLink(\'' + TRIP_ID + '\');return false;" style="font-size:12px;color:#1a73e8;text-decoration:none;font-weight:700;">🔗 new invite link</a></div>' +
+        '<div style="font-size:12px;color:#888;">' + ((mems || []).map(m => m.email).join(', ') || 'No invitations sent yet') + '</div>' +
+      '</div>';
   } catch(e) { box.textContent = 'Could not load invitations.'; }
 }
 
@@ -5142,7 +5140,17 @@ async function init() {
   } catch(e) {}
 
   // ── SUPABASE IS THE SINGLE SOURCE OF TRUTH ──────────────────────
-  // Cloud always wins. localStorage is only a silent offline fallback.
+  // Cloud always wins — but paint instantly from the local cache while
+  // the (potentially large) cloud payload downloads in the background.
+  let _paintedFromCache = false;
+  try {
+    if (tryLoadLocal()) {
+      _paintedFromCache = true;
+      renderAll();
+      try { renderDetail(); } catch(e) {}
+    }
+  } catch(e) {}
+
   let loaded = await cloudLoad();
 
   if (!loaded) {
