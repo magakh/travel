@@ -77,7 +77,9 @@ if (location.hostname === 'magakh.github.io') {
     background: #1a73e8; color: #fff; font-size: 13px; font-weight: 700;
     cursor: pointer;
   }
-  .btn-delete {
+  input[type="date"] { color-scheme: dark; cursor: pointer; }
+input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.8); cursor: pointer; padding: 6px; }
+.btn-delete {
     padding: 10px 14px; border-radius: 10px;
     border: 1px solid #c0392b; background: transparent;
     color: #c0392b; font-size: 13px; font-weight: 700; cursor: pointer;
@@ -358,9 +360,9 @@ function showNewTripModal() {
       <label class="form-label">Subtitle (optional)</label>
       <input class="form-input" id="nt-subtitle" placeholder="e.g. museums & bistros">
       <label class="form-label">Start date</label>
-      <input class="form-input" id="nt-start" type="date">
+      <input class="form-input" id="nt-start" type="date" onclick="try{this.showPicker()}catch(e){}">
       <label class="form-label">End date</label>
-      <input class="form-input" id="nt-end" type="date">
+      <input class="form-input" id="nt-end" type="date" onclick="try{this.showPicker()}catch(e){}">
       <div class="modal-actions">
         <button class="btn-cancel" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
         <button class="btn-create" onclick="createTrip(this)">Create →</button>
