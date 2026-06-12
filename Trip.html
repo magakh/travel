@@ -1289,7 +1289,7 @@ body.ios-touch-reorder .stop-row.dragging-src { opacity: 0.3; }
       </div>
       <button id="lockBtn" onclick="showLockDialog()" title="Edit / Lock mode" style="background:none;border:none;cursor:pointer;padding:2px 3px;opacity:0.7;flex-shrink:0;line-height:1;display:flex;align-items:center;"></button>
     </div>
-    <div style="display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;flex-shrink:1;align-self:flex-start;padding-top:2px;">
+    <div style="display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;flex:1 1 0;min-width:90px;align-self:flex-start;padding-top:2px;">
       <button class="prebook-pill" id="saveBtn" onclick="_autoPushInFlight=false;_forceSave();" title="Save to cloud" style="border-color:#88d8a0;color:#88d8a0;pointer-events:auto !important;">💾</button>
       <div style="position:relative;flex-shrink:0;">
         <button onclick="_toggleActivityMenu()" id="activityMenuBtn" class="prebook-pill" style="border-color:#888;color:#ccc;font-size:15px;padding:4px 10px;gap:4px;display:flex;align-items:center;">⚡ ▾</button>
@@ -1299,9 +1299,9 @@ body.ios-touch-reorder .stop-row.dragging-src { opacity: 0.3; }
       </div>
       <button onclick="showView('settings')" id="dtabSettings" style="background:none;border:none;cursor:pointer;color:#888;font-size:18px;padding:4px 6px;flex-shrink:0;line-height:1;" title="Settings">⚙</button>
     </div>
-    <div id="userGreeting" onclick="_showAccountMenu()" style="display:none;flex-shrink:0;margin-left:auto;text-align:right;line-height:1.35;padding-top:2px;cursor:pointer;">
-      <div id="userGreetingName" style="font-size:12px;font-weight:800;color:#88d8a0;white-space:nowrap;"></div>
-      <div id="userGreetingEmail" style="font-size:10px;color:#999;white-space:nowrap;"></div>
+    <div id="userGreeting" onclick="_showAccountMenu()" style="display:none;flex-shrink:0;margin-left:auto;text-align:right;line-height:1.35;padding-top:2px;cursor:pointer;max-width:40vw;overflow:hidden;">
+      <div id="userGreetingName" style="font-size:12px;font-weight:800;color:#88d8a0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
+      <div id="userGreetingEmail" style="font-size:10px;color:#999;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
     </div>
   </div>
 
