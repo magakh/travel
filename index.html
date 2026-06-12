@@ -409,7 +409,8 @@ async function loadTrips() {
     } catch(e) {}
     allTrips = (data || [])
       .filter(t => (t.owner_id && t.owner_id === user.id) || memberIds.has(t.id))
-      .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
+      .map(t => { t._shared = !(t.owner_id && t.owner_id === user.id); return t; })
+      .sort(byTripDate);
   }
   if (error) {
     document.getElementById('tripsContainer').innerHTML =
@@ -417,6 +418,21 @@ async function loadTrips() {
     return;
   }
   renderTrips();
+}
+
+function tripStart(t) { return (t.config && t.config.startDate) || '9999-12-31'; }
+function byTripDate(a, b) {
+  const d = tripStart(a).localeCompare(tripStart(b));
+  return d !== 0 ? d : (b.updated_at || '').localeCompare(a.updated_at || '');
+}
+
+function _section(title, trips, open) {
+  return '<details ' + (open ? 'open ' : '') + 'style="margin:6px 10px;">' +
+    '<summary style="cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;padding:10px 6px;font-size:13px;font-weight:800;color:#5b9cff;user-select:none;">' +
+      '<span style="font-size:11px;">▶</span>' + title + ' · ' + trips.length + ' trip' + (trips.length !== 1 ? 's' : '') +
+    '</summary>' +
+    '<div class="trips-grid" style="padding-top:0;">' + trips.map(t => tripCardHtml(t)).join('') + '</div>' +
+  '</details>';
 }
 
 function renderTrips() {
@@ -429,18 +445,23 @@ function renderTrips() {
   }
 
   if (isFounder()) {
+    const myEmail = (CURRENT_USER && CURRENT_USER.email) || '';
     const groups = {};
     allTrips.forEach(t => {
       const who = (t.owner_id && ownerEmails[t.owner_id]) || 'unassigned';
       (groups[who] = groups[who] || []).push(t);
     });
-    container.innerHTML = Object.keys(groups).sort().map(who =>
-      '<div style="margin:18px 16px 0;font-size:13px;font-weight:800;color:#5b9cff;">👤 ' + who + ' · ' + groups[who].length + ' trip' + (groups[who].length !== 1 ? 's' : '') + '</div>' +
-      '<div class="trips-grid">' + groups[who].map(t => tripCardHtml(t)).join('') + '</div>'
-    ).join('');
+    container.innerHTML = Object.keys(groups)
+      .sort((a, b) => (a === myEmail ? -1 : b === myEmail ? 1 : a.localeCompare(b)))
+      .map(who => _section('👤 ' + who, groups[who].sort(byTripDate), who === myEmail))
+      .join('');
     return;
   }
-  container.innerHTML = '<div class="trips-grid">' + allTrips.map(t => tripCardHtml(t)).join('') + '</div>';
+  const own = allTrips.filter(t => !t._shared);
+  const shared = allTrips.filter(t => t._shared);
+  let html = '<div class="trips-grid">' + own.map(t => tripCardHtml(t)).join('') + '</div>';
+  if (shared.length) html += _section('🤝 Shared with me', shared, false);
+  container.innerHTML = html;
 }
 
 function tripCardHtml(trip) {
