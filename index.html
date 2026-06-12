@@ -411,6 +411,15 @@ async function loadTrips() {
       .filter(t => (t.owner_id && t.owner_id === user.id) || memberIds.has(t.id))
       .map(t => { t._shared = !(t.owner_id && t.owner_id === user.id); return t; })
       .sort(byTripDate);
+    try {
+      const sharedIds = allTrips.filter(t => t._shared).map(t => t.id);
+      if (sharedIds.length) {
+        const { data: owners } = await supa.rpc('trip_owner_emails', { p_ids: sharedIds });
+        const map = {};
+        (owners || []).forEach(o => { map[o.trip_id] = o.owner_email; });
+        allTrips.forEach(t => { if (t._shared) t._ownerEmail = map[t.id] || null; });
+      }
+    } catch(e) {}
   }
   if (error) {
     document.getElementById('tripsContainer').innerHTML =
@@ -487,11 +496,7 @@ function renderTrips() {
       .join('');
     return;
   }
-  const own = shown.filter(t => !t._shared);
-  const shared = shown.filter(t => t._shared);
-  let html = tabBar + '<div class="trips-grid">' + own.map(t => tripCardHtml(t)).join('') + '</div>';
-  if (shared.length) html += _section('🤝 Shared with me', shared, false);
-  container.innerHTML = html;
+  container.innerHTML = tabBar + '<div class="trips-grid">' + shown.map(t => tripCardHtml(t)).join('') + '</div>';
 }
 
 function tripCardHtml(trip) {
@@ -515,6 +520,7 @@ function tripCardHtml(trip) {
           <span class="trip-badge">📍 ${totalStops} stops</span>
         </div>
         ${updated ? `<div class="trip-stops">Last updated ${updated}</div>` : ''}
+        ${trip._shared ? `<div class="trip-stops" style="color:#7fd29a;">🤝 Shared by ${trip._ownerEmail || 'the trip owner'}</div>` : ''}
       </div>
       <div class="trip-actions" onclick="event.stopPropagation()">
         <button class="btn-open" onclick="openTrip('${trip.id}')">Open →</button>
