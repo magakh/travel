@@ -411,6 +411,16 @@ async function loadTrips() {
       .filter(t => (t.owner_id && t.owner_id === user.id) || memberIds.has(t.id))
       .map(t => { t._shared = !(t.owner_id && t.owner_id === user.id); return t; })
       .sort(byTripDate);
+    const sharedIds = allTrips.filter(t => t._shared).map(t => t.id);
+    if (sharedIds.length) {
+      try {
+        const { data: owners } = await supa.rpc('trip_owner_contacts', { p_ids: sharedIds });
+        (owners || []).forEach(o => {
+          const t = allTrips.find(x => x.id === o.trip_id);
+          if (t) t._owner = o.owner_name || o.owner_email;
+        });
+      } catch(e) {}
+    }
     try {
       const sharedIds = allTrips.filter(t => t._shared).map(t => t.id);
       if (sharedIds.length) {
@@ -519,6 +529,7 @@ function tripCardHtml(trip) {
           <span class="trip-badge">📅 ${dateRange}</span>
           <span class="trip-badge">📍 ${totalStops} stops</span>
         </div>
+        ${trip._shared ? `<div class="trip-stops" style="color:#7fa8e0;">🤝 Owner: ${trip._owner || 'another traveler'}</div>` : ''}
         ${updated ? `<div class="trip-stops">Last updated ${updated}</div>` : ''}
         ${trip._shared ? `<div class="trip-stops" style="color:#7fd29a;">🤝 Shared by ${trip._ownerEmail || 'the trip owner'}</div>` : ''}
       </div>
