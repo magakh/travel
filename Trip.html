@@ -2113,31 +2113,6 @@ function _renderGreeting() {
   el.style.display = 'block';
 }
 
-function _renderAccountRow() {
-  const panel = document.getElementById('panel-settings');
-  if (!panel || !CURRENT_USER) return;
-  let row = document.getElementById('accountRow');
-  if (!row) {
-    row = document.createElement('div');
-    row.id = 'accountRow';
-    panel.appendChild(row);
-  }
-  const role = (USER_PROFILE && USER_PROFILE.role) || 'member';
-  const credits = USER_PROFILE ? USER_PROFILE.credits : null;
-  const nm = _displayName();
-  row.innerHTML =
-    '<div style="margin:18px 12px;padding:14px;background:#f7f5f0;border-radius:12px;font-size:13px;color:#444;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">' +
-      '<span>👤 ' + (nm ? '<strong>' + nm + '</strong> · ' : '') + (CURRENT_USER.email || '') +
-        ' · <strong>' + role + '</strong>' +
-        (role !== 'founder' && credits !== null ? ' · ' + credits + ' trip credit' + (credits === 1 ? '' : 's') : '') +
-      '</span>' +
-      '<button onclick="signOutUser()" style="padding:7px 14px;background:#fff;border:1px solid #ccc;border-radius:8px;font-size:13px;cursor:pointer;">Sign out</button>' +
-    '</div>' +
-    (((TRIP_OWNER_ID && CURRENT_USER.id === TRIP_OWNER_ID) || role === 'founder')
-      ? '<div style="margin:0 12px 18px;"><button onclick="inviteToTrip()" style="width:100%;padding:12px;background:#1a73e8;color:#fff;border:none;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;">🔗 Invite people to this trip</button>' +
-        '<div style="font-size:12px;color:#888;margin-top:6px;line-height:1.4;">Anyone with the invite link joins as an editor and sees this trip in their My Trips — no password needed.</div></div>'
-      : '');
-}
 
 async function inviteToTrip() {
   try {
@@ -3469,49 +3444,6 @@ function showLockDialog() {
   document.body.appendChild(ov);
 }
 
-function _legacyLockDialog() {
-  if (EDITOR_MODE) {
-    showConfirm('Lock editing? You will need the password to edit again.', () => {
-      lockEditor();
-      showToast('Locked — view only');
-    });
-    return;
-  }
-  const overlay = document.createElement('div');
-  overlay.id = 'lock-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;';
-  overlay.innerHTML =
-    '<div style="background:#fff;border-radius:16px;padding:20px;max-width:360px;width:100%;">' +
-      '<h3 style="margin:0 0 8px 0;font-size:17px;">' + (TRIP_PW_HASH ? '🔓 Unlock editing' : '🔓 Set trip password') + '</h3>' +
-      '<p style="margin:0 0 14px 0;font-size:13px;color:#666;">' +
-        (TRIP_PW_HASH
-          ? 'Enter the password shared with your group.'
-          : 'No password set yet for this trip. Set one now — share it with your group.') +
-      '</p>' +
-      '<input id="lockPw" type="password" style="width:100%;box-sizing:border-box;padding:11px;border:1px solid #ddd;border-radius:8px;font-size:14px;margin-bottom:14px;" placeholder="Password" autofocus>' +
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">' +
-        '<button onclick="document.getElementById(&quot;lock-overlay&quot;).remove()" style="padding:12px;border-radius:10px;border:1px solid #ddd;background:#fff;font-weight:700;font-size:14px;cursor:pointer;">Cancel</button>' +
-        '<button onclick="submitLockDialog()" style="padding:12px;border-radius:10px;border:none;background:#1a1a1a;color:#fff;font-weight:700;font-size:14px;cursor:pointer;">' + (TRIP_PW_HASH ? 'Unlock' : 'Set & unlock') + '</button>' +
-      '</div>' +
-    '</div>';
-  document.body.appendChild(overlay);
-  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
-  setTimeout(() => document.getElementById('lockPw')?.focus(), 60);
-  const inp = document.getElementById('lockPw');
-  if (inp) inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitLockDialog(); });
-}
-
-async function submitLockDialog() {
-  const pw = document.getElementById('lockPw')?.value || '';
-  const ok = await unlockEditor(pw);
-  if (ok) {
-    const ov = document.getElementById('lock-overlay');
-    if (ov) ov.remove();
-    showToast('Unlocked — you can edit ✓');
-  } else {
-    showToast('Wrong password', true);
-  }
-}
 
 // ── IMPORT FROM LEGACY JSON ──────────────────────────────────────
 // On first-ever load of a trip slug that doesn't exist in Supabase, try
@@ -9814,7 +9746,7 @@ function showFeatureTour() {
       ${[
         ['📸','Add photos','Tap "Add photos" under any stop. View them in a full-screen gallery with swipe navigation. Delete by tapping 🗑 in the gallery.'],
         ['✍️','Trip story','Tap 📋 → "Trip story" to generate a narrative of your whole trip — great for sharing or journaling.'],
-        ['💾','Real-time sync','Every change saves instantly and syncs to all devices. Share the trip URL + password for live co-editing.'],
+        ['💾','Real-time sync','Every change saves instantly and syncs to all devices. Invite your group (name menu → Invitations, or 👥 Share on the trip tile) for live co-editing.'],
       ].map(([icon,title,desc]) => `
         <div style="display:flex;gap:12px;align-items:flex-start;padding:9px 0;border-bottom:1px solid #f0f0f0;">
           <span style="font-size:18px;width:26px;text-align:center;flex-shrink:0;">${icon}</span>
@@ -9877,7 +9809,7 @@ function showGettingStarted() {
         {
           n:'5', color:'#555', bg:'#f5f5f5',
           title:'Share the trip',
-          body:`Share the URL of this page (<code>Trip.html?trip=yourtrip</code>) with anyone. Viewers see the schedule live. Give them the password if you want them to edit too. All changes sync instantly.`,
+          body:`Invite people from the <b>👥 Share</b> button on the trip tile (by email or invite link), or from your <b>name menu → Invitations</b> inside the trip. Invited people sign in with their own account, see the trip in their My Trips, and can edit with you live. All changes sync instantly.`,
         },
       ].map(s => `
         <div style="border-left:3px solid ${s.color};background:${s.bg};border-radius:0 12px 12px 0;padding:14px;margin-bottom:12px;">
