@@ -421,6 +421,20 @@ async function loadTrips() {
 }
 
 function tripStart(t) { return (t.config && t.config.startDate) || '9999-12-31'; }
+
+function tripEnd(t) {
+  const sd = t.config && t.config.startDate;
+  if (!sd) return '9999-12-31'; // undated trips count as upcoming
+  const n = (t.config && t.config.numDays) || ((t.data && t.data.days) || []).length || 1;
+  const d = new Date(sd + 'T12:00:00');
+  d.setDate(d.getDate() + Math.max(0, n - 1));
+  return d.toISOString().slice(0, 10);
+}
+
+function isPastTrip(t) { return tripEnd(t) < new Date().toISOString().slice(0, 10); }
+
+let currentTab = 'upcoming';
+function setTripsTab(tab) { currentTab = tab; renderTrips(); }
 function byTripDate(a, b) {
   const d = tripStart(a).localeCompare(tripStart(b));
   return d !== 0 ? d : (b.updated_at || '').localeCompare(a.updated_at || '');
@@ -444,22 +458,38 @@ function renderTrips() {
     return;
   }
 
+  const past = allTrips.filter(isPastTrip);
+  const upcoming = allTrips.filter(t => !isPastTrip(t));
+  const tabBar =
+    '<div style="display:flex;gap:6px;margin:10px 12px 4px;">' +
+      ['upcoming', 'past'].map(tab => {
+        const on = currentTab === tab;
+        const label = tab === 'upcoming' ? '🛫 Upcoming (' + upcoming.length + ')' : '🕰 Past trips (' + past.length + ')';
+        return '<button onclick="setTripsTab(\'' + tab + '\')" style="flex:1;padding:9px 6px;border-radius:10px;border:1px solid ' + (on ? '#1a73e8' : '#333') + ';background:' + (on ? '#13233f' : 'transparent') + ';color:' + (on ? '#9cc0ff' : '#888') + ';font-size:13px;font-weight:700;cursor:pointer;">' + label + '</button>';
+      }).join('') +
+    '</div>';
+  const shown = currentTab === 'past' ? past : upcoming;
+  if (shown.length === 0) {
+    container.innerHTML = tabBar + '<div class="empty"><p>' + (currentTab === 'past' ? 'No past trips yet.' : 'No upcoming trips — create one!') + '</p></div>';
+    return;
+  }
+
   if (isFounder()) {
     const myEmail = (CURRENT_USER && CURRENT_USER.email) || '';
     const groups = {};
-    allTrips.forEach(t => {
+    shown.forEach(t => {
       const who = (t.owner_id && ownerEmails[t.owner_id]) || 'unassigned';
       (groups[who] = groups[who] || []).push(t);
     });
-    container.innerHTML = Object.keys(groups)
+    container.innerHTML = tabBar + Object.keys(groups)
       .sort((a, b) => (a === myEmail ? -1 : b === myEmail ? 1 : a.localeCompare(b)))
       .map(who => _section('👤 ' + who, groups[who].sort(byTripDate), who === myEmail))
       .join('');
     return;
   }
-  const own = allTrips.filter(t => !t._shared);
-  const shared = allTrips.filter(t => t._shared);
-  let html = '<div class="trips-grid">' + own.map(t => tripCardHtml(t)).join('') + '</div>';
+  const own = shown.filter(t => !t._shared);
+  const shared = shown.filter(t => t._shared);
+  let html = tabBar + '<div class="trips-grid">' + own.map(t => tripCardHtml(t)).join('') + '</div>';
   if (shared.length) html += _section('🤝 Shared with me', shared, false);
   container.innerHTML = html;
 }
