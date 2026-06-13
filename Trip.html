@@ -1474,7 +1474,15 @@ body.ios-touch-reorder .stop-row.dragging-src { opacity: 0.3; }
         </div>
       </div>
 
-      <!-- ── TRIP BASICS ── -->
+            <!-- ── SETTINGS TABS ── -->
+      <div id="settingsTabBar" style="display:flex;gap:6px;margin-bottom:14px;background:#e9e9eb;border-radius:12px;padding:4px;">
+        <button id="settabBtn-trip" onclick="showSettingsTab('trip')" style="flex:1;padding:9px 4px;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;background:#fff;color:#1a1a1a;">🧳 Trip</button>
+        <button id="settabBtn-data" onclick="showSettingsTab('data')" style="flex:1;padding:9px 4px;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;background:transparent;color:#666;">💾 Data</button>
+        <button id="settabBtn-ai" onclick="showSettingsTab('ai')" style="flex:1;padding:9px 4px;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;background:transparent;color:#666;">🤖 AI</button>
+      </div>
+
+      <div id="settab-trip">
+<!-- ── TRIP BASICS ── -->
       <div style="background:#fff;border-radius:12px;overflow:hidden;margin-bottom:12px;">
         <div style="display:flex;align-items:center;padding:10px 14px;border-bottom:1px solid #f0f0f0;">
           <span style="font-size:12px;color:#888;width:80px;flex-shrink:0;">Title</span>
@@ -1523,7 +1531,29 @@ body.ios-touch-reorder .stop-row.dragging-src { opacity: 0.3; }
 <input type="hidden" id="hotelLat"><input type="hidden" id="hotelLng">
 
 
-      <!-- AI settings — multi-provider -->
+      <!-- ── SAVE ── -->
+      <button class="gen-btn" onclick="saveAllSettings()" style="background:#1a1a1a;margin-top:14px;">💾 Save all settings</button>
+      <p class="gen-hint">Trip settings sync to all your devices automatically.</p>
+
+            </div>
+
+      <div id="settab-data" style="display:none">
+      <div style="background:#fff;border-radius:12px;padding:14px;margin-bottom:12px;">
+        <p style="font-size:12px;color:#888;margin:0 0 10px;">Back up this trip to a file, or restore from one.</p>
+        <div style="display:flex;gap:8px;">
+          <button onclick="exportFile()" style="flex:1;padding:10px 12px;border-radius:8px;border:1px solid #ddd;background:#fafafa;color:#333;font-size:13px;font-weight:700;cursor:pointer;">📤 Export</button>
+          <button onclick="document.getElementById('import-input').click()" style="flex:1;padding:10px 12px;border-radius:8px;border:1px solid #ddd;background:#fafafa;color:#333;font-size:13px;font-weight:700;cursor:pointer;">📥 Import</button>
+        </div>
+        <button onclick="_deduplicatePhotos()" style="display:none;"></button>
+      </div>
+      <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
+        <p style="font-size:12px;color:#888;margin-bottom:8px;">Danger zone</p>
+        <button onclick="confirmResetAll()" style="width:100%;padding:12px;border-radius:10px;border:1px solid #c0392b;background:#fde8e8;color:#c0392b;font-size:13px;font-weight:700;cursor:pointer;">🗑 Reset all data</button>
+      </div>
+      </div>
+
+      <div id="settab-ai" style="display:none">
+<!-- AI settings — multi-provider -->
       <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
           <h3 style="margin:0;font-size:14px;">🔑 AI settings</h3>
@@ -1568,24 +1598,7 @@ body.ios-touch-reorder .stop-row.dragging-src { opacity: 0.3; }
         </div>
       </div>
 
-      <!-- ── SAVE ── -->
-      <button class="gen-btn" onclick="saveAllSettings()" style="background:#1a1a1a;margin-top:14px;">💾 Save all settings</button>
-      <p class="gen-hint">Trip settings sync to all your devices automatically.</p>
-
-      <!-- ── DATA ── -->
-      <div>
-        <div style="display:flex;gap:8px;margin-bottom:8px;">
-          <button onclick="exportFile()" style="flex:1;padding:8px 12px;border-radius:8px;border:1px solid #444;background:#1e1e1e;color:#ccc;font-size:12px;font-weight:700;cursor:pointer;">📤 Export</button>
-          <button onclick="document.getElementById('import-input').click()" style="flex:1;padding:8px 12px;border-radius:8px;border:1px solid #444;background:#1e1e1e;color:#ccc;font-size:12px;font-weight:700;cursor:pointer;">📥 Import</button>
-        </div>
-        <button onclick="_deduplicatePhotos()" style="display:none;"></button>
-
-      <!-- ── DANGER ZONE ── -->
-      <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px;">
-        <p style="font-size:12px;color:#888;margin-bottom:8px;">Danger zone</p>
-        <button onclick="confirmResetAll()" style="width:100%;padding:12px;border-radius:10px;border:1px solid #c0392b;background:#fde8e8;color:#c0392b;font-size:13px;font-weight:700;cursor:pointer;">🗑 Reset all data</button>
-      </div>
-      </div>
+            </div>
     </div>
   </div>
 
@@ -1912,7 +1925,6 @@ function _updateUnitsBtn() {
 let supa = null;
 let _realtimeChannel = null;
 let _suppressNextRealtime = false;  // set true before our own writes so we don't echo
-let TRIP_PW_HASH = null;            // loaded from trip row
 let TRIP_OWNER_ID = null;           // uuid of the user who created this trip
 let IS_TRIP_MEMBER = false;         // current user was invited to this trip
 let EDITOR_MODE = false;
@@ -2319,7 +2331,16 @@ async function _addMember() {
   try {
     const { data: r, error } = await supa.rpc('add_trip_member', { p_id: TRIP_ID, p_email: email });
     if (error || !r || r.ok !== true) { showToast((r && r.reason === 'not_owner') ? 'Only the trip owner can invite' : 'Invite failed', true); return; }
-    showToast('✉️ ' + email + ' invited! Share the trip link with them.');
+    let mailed = false;
+    try {
+      const resp = await fetch(APP_CONFIG.supabaseUrl.replace(/\/$/, '') + '/functions/v1/send-invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (await _aiAuthToken()), 'apikey': APP_CONFIG.supabaseKey },
+        body: JSON.stringify({ email: email, trip_id: TRIP_ID, link: location.origin + '/Trip.html?trip=' + TRIP_ID })
+      });
+      mailed = resp.ok;
+    } catch(e) {}
+    showToast(mailed ? '✉️ ' + email + ' invited — email sent!' : '✉️ ' + email + ' invited! Send them the trip link.');
     _renderMembersBox();
   } catch(e) { showToast('Invite failed', true); }
 }
@@ -2523,7 +2544,6 @@ function _mergePhotos(a, b) {
 // Apply remote data to local state (from cloudLoad or realtime event)
 function applyRemoteData(row) {
   if (!row) return;
-  TRIP_PW_HASH = row.edit_password_hash || null;
   if ('owner_id' in row) TRIP_OWNER_ID = row.owner_id || null;
   const cfg = row.config || {};
   if (cfg.anthropicKey) _remoteApiKey = cfg.anthropicKey; // preserve across devices
@@ -3376,30 +3396,7 @@ function isUserBusy() {
   return false;
 }
 
-// ── PASSWORD GATE ────────────────────────────────────────────────
-async function unlockEditor(pw) {
-  if (!pw) return false;
-  if (!supabaseReady()) { showToast('Configure Supabase in Settings first', true); return false; }
-  const hash = await sha256Hex(pw);
-  if (!TRIP_PW_HASH) {
-    // First-time: claim this password as the trip's edit password
-    const { error } = await supa.from('trips').update({ edit_password_hash: hash }).eq('id', TRIP_ID);
-    if (error) { showToast('Could not set password', true); return false; }
-    TRIP_PW_HASH = hash;
-  } else if (hash !== TRIP_PW_HASH) {
-    return false;
-  }
-  EDITOR_MODE = true;
-  try { localStorage.setItem('trip_' + TRIP_ID + '_editor', '1'); } catch(e) {}
-  updateLockUI();
-  return true;
-}
-
-function lockEditor() {
-  EDITOR_MODE = false;
-  try { localStorage.removeItem('trip_' + TRIP_ID + '_editor'); } catch(e) {}
-  updateLockUI();
-}
+// (legacy per-trip edit password removed — editing is membership-based)
 
 function updateLockUI() {
   const lock = document.getElementById('lockBtn');
@@ -4427,7 +4424,7 @@ function updateConnectorLabels(day, stops) {
 
     const pill = (mode, emoji, mins) => {
       const isActive = selected === mode;
-      return `<button class="tc-mode-pill${isActive?' active':''}" onclick="event.stopPropagation();selectTravelMode('${key}','${mode}',${mins},${day},${fromStopIdx})">${emoji} ${mins} min</button>`;
+      return `<button class="tc-mode-pill${isActive?' active':''}" onclick="event.stopPropagation();selectTravelMode('${key}','${mode}',${mins},${day},${fromStopIdx})">${emoji} ${_fmtTravelMins(mins)}</button>`;
     };
 
     const pillsHtml = `<div class="tc-mode-pills">${pill('walk','🚶',walkMins)}${pill('car','🚗',carMins)}${pill('train','🚇',trainMins)}</div>`;
@@ -4469,7 +4466,7 @@ function getWalkMinsBetween(a, b) {
 }
 function cascadeTimesFrom(fromIdx) { recalcTimesFrom(fromIdx); }
 function loadTravelTimes(stops) { return loadWalkTimes(); }
-function fmtWalkMins(m) { return m ? '🚶 '+m+' min walk' : '🚶 Nearby'; }
+function fmtWalkMins(m) { return m ? '🚶 '+_fmtTravelMins(m)+' walk' : '🚶 Nearby'; }
 
 // ── RESERVATIONS ──────────────────────────────────────────────────
 function editReservation(i) {
@@ -7410,7 +7407,7 @@ function renderTourCards(tour, fromStop, toStop, afterIdx, dayIdx, beforeIdx) {
     // Compact stats + Google Maps pill row
     +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">'
     +'<div style="flex:1;"><span style="font-size:13px;font-weight:800;">'+landmarks.length+' landmark'+(landmarks.length>1?'s':'')+'</span>'
-    +' <span style="font-size:11px;color:#888;">~'+totalMins+' min'+(extra>0?' (+'+extra+')':'')+'</span></div>'
+    +' <span style="font-size:11px;color:#888;">~'+_fmtTravelMins(totalMins)+(extra>0?' (+'+extra+')':'')+'</span></div>'
     +'<div style="display:flex;gap:4px;flex-shrink:0;">'+gmLinksHtml+'</div>'
     +'</div>'
     // Two compact button rows
@@ -10437,6 +10434,15 @@ function insertSuggestedStop(resultIdx, afterIdx, dayIdx) {
 
 
 // ── SETTINGS ──────────────────────────────────────────────────────
+function showSettingsTab(t) {
+  ['trip','data','ai'].forEach(k => {
+    const pane = document.getElementById('settab-' + k);
+    const btn = document.getElementById('settabBtn-' + k);
+    if (pane) pane.style.display = (k === t) ? '' : 'none';
+    if (btn) { btn.style.background = (k === t) ? '#fff' : 'transparent'; btn.style.color = (k === t) ? '#1a1a1a' : '#666'; }
+  });
+}
+
 function loadSettingsUI() {
   const c = APP_CONFIG;
   document.getElementById('setTitle').value = c.title || '';
